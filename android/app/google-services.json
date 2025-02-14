@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "145652846516",
+    "firebase_url": "https://duckbuck-0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "duckbuck-0",
+    "storage_bucket": "duckbuck-0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:145652846516:android:f4bb79873f602d51e56ce1",
+        "android_client_info": {
+          "package_name": "in.duckbuck.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "145652846516-oaj5cr5k72gvv46hn3s93v47g941v9h0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.duckbuck.app",
+            "certificate_hash": "51e88aa1fd6f73ce5e2cd4579c9c8897cad4b0fa"
+          }
+        },
+        {
+          "client_id": "145652846516-85g1pj9s670imln9k6jd18lamb3p3voa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmtKQo0sSCqNO5SMIIbGrEw0-GetPiVqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "145652846516-85g1pj9s670imln9k6jd18lamb3p3voa.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "145652846516-m60hvb1n45na08p2per36ck1n8s4jo1d.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.duckbuck"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
