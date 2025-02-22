@@ -31,20 +31,34 @@ class FriendsProvider extends ChangeNotifier {
           final List<Map<String, dynamic>> requests = [];
 
           for (var friend in friendsList) {
-            _listenToFriendProfile(
-                friend['uid']); // Start listening to friend's profile
+            _listenToFriendProfile(friend['uid']);
 
-            final details = await _friendService.fetchDetails(friend['uid']);
-            final enrichedFriend = {
-              ...friend,
-              'name': details['name'],
-              'photoURL': details['photoURL'],
-            };
+            // First get the friend's details from users collection
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(friend['uid'])
+                .get();
 
-            if (friend['status'] == 'accepted') {
-              acceptedFriends.add(enrichedFriend);
-            } else if (friend['status'] == 'pending') {
-              requests.add(enrichedFriend);
+            debugPrint('Fetching user doc for UID: ${friend['uid']}');
+
+            if (userDoc.exists) {
+              final userData = userDoc.data() ?? {};
+              final enrichedFriend = {
+                ...friend,
+                'name': userData['name'] ?? '',
+                'photoURL': userData['photoURL'] ?? '',
+                'channelName': userData['channelName'] ??
+                    '', // Get channelName from user doc
+              };
+
+              debugPrint(
+                  'Friend data enriched: ${enrichedFriend['channelName']}');
+
+              if (friend['status'] == 'accepted') {
+                acceptedFriends.add(enrichedFriend);
+              } else if (friend['status'] == 'pending') {
+                requests.add(enrichedFriend);
+              }
             }
           }
 

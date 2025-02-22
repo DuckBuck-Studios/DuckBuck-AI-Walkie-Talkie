@@ -2,16 +2,30 @@ import 'package:duckbuck/Authentication/providers/auth_provider.dart';
 import 'package:duckbuck/Authentication/screens/welcome.dart';
 import 'package:duckbuck/Home/providers/UserProvider.dart';
 import 'package:duckbuck/Home/providers/friend_provider.dart';
-import 'package:duckbuck/Home/providers/voice_note_provider.dart';
 import 'package:duckbuck/Home/providers/pfp_provider.dart';
 import 'package:duckbuck/home/home.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:duckbuck/Home/fcm_service/fcm_notification_handler.dart';
+
+// This needs to be outside of any class
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  await FCMNotificationHandler.handleBackgroundMessage(message);
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  // Set the background message handler before initializing FCM
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Initialize FCM handler
+  await FCMNotificationHandler.initialize();
 
   runApp(
     MultiProvider(
@@ -20,7 +34,6 @@ void main() async {
         ChangeNotifierProvider(create: (_) => FriendsProvider()),
         ChangeNotifierProvider(create: (context) => UserProvider()),
         ChangeNotifierProvider(create: (context) => PfpProvider()),
-        ChangeNotifierProvider(create: (_) => VoiceMessageProvider()),
       ],
       child: const MyApp(),
     ),
