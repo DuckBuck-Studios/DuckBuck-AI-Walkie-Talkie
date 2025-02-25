@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../service/agora_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:uuid/uuid.dart';
 
 class FCMNotificationHandler {
@@ -14,10 +16,17 @@ class FCMNotificationHandler {
   static bool _isInitialized = false;
   static final _uuid = Uuid();
   static bool _isJoiningChannel = false;
+  static int _retryAttempts = 0;
+  static const int _maxRetryAttempts = 3;
+  static const Duration _retryDelay = Duration(seconds: 2);
+  static StreamSubscription? _connectivitySubscription;
+  static bool _isNetworkAvailable = true;
 
   // Store pending call information
   static Map<String, dynamic>? _pendingCall;
   static int? _pendingCallUid;
+  static Timer? _pendingCallTimer;
+  static const Duration _pendingCallTimeout = Duration(minutes: 5);
 
   /// Check if we have the necessary permissions
   static Future<bool> _checkPermissions() async {
@@ -55,6 +64,9 @@ class FCMNotificationHandler {
     if (_isInitialized) return;
 
     debugPrint('🚀 Initializing FCM Notification Handler');
+
+    // Setup connectivity monitoring
+    _setupConnectivityMonitoring();
 
     try {
       await _agoraService.initializeAgora();
@@ -94,6 +106,18 @@ class FCMNotificationHandler {
     debugPrint('✅ FCM Notification Handler initialized successfully');
   }
 
+  /// Setup connectivity monitoring
+  static void _setupConnectivityMonitoring() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+      _isNetworkAvailable = result != ConnectivityResult.none;
+      debugPrint('🌐 Network status changed: ${_isNetworkAvailable ? 'Connected' : 'Disconnected'}');
+      
+      if (_isNetworkAvailable && _pendingCall != null) {
+        _joinPendingCallIfExists();
+      }
+    });
+  }
+
   /// Join pending call if exists
   static Future<void> _joinPendingCallIfExists() async {
     if (_pendingCall != null && _pendingCallUid != null) {
@@ -101,20 +125,34 @@ class FCMNotificationHandler {
       final channelName = _pendingCall!['channelName'];
       final userUid = _pendingCallUid!;
 
-      // Clear pending call data
-      _pendingCall = null;
-      _pendingCallUid = null;
+      // Clear pending call data and timer
+      _clearPendingCall();
 
       // Attempt to join the channel
       await _attemptChannelJoin(channelName, userUid, false);
     }
   }
 
-  /// Store pending call information
+  /// Clear pending call data and timer
+  static void _clearPendingCall() {
+    _pendingCall = null;
+    _pendingCallUid = null;
+    _pendingCallTimer?.cancel();
+    _pendingCallTimer = null;
+  }
+
+  /// Store pending call information with timeout
   static void _storePendingCall(Map<String, dynamic> callData, int userUid) {
     _pendingCall = callData;
     _pendingCallUid = userUid;
     debugPrint('📝 Stored pending call information for later');
+
+    // Set timeout for pending call
+    _pendingCallTimer?.cancel();
+    _pendingCallTimer = Timer(_pendingCallTimeout, () {
+      debugPrint('⏰ Pending call timed out');
+      _clearPendingCall();
+    });
   }
 
   /// Generate a random 6-digit UID
@@ -123,10 +161,16 @@ class FCMNotificationHandler {
     return 100000 + random.nextInt(900000);
   }
 
-  /// Attempt to join channel with retry logic
+  /// Attempt to join channel with enhanced retry logic
   static Future<void> _attemptChannelJoin(String channelName, int userUid, bool isBackground) async {
     if (_isJoiningChannel) {
       debugPrint('⚠️ Already attempting to join channel, skipping duplicate attempt');
+      return;
+    }
+
+    if (!_isNetworkAvailable) {
+      debugPrint('❌ No network connection available');
+      _storePendingCall({'channelName': channelName}, userUid);
       return;
     }
 
@@ -239,10 +283,37 @@ class FCMNotificationHandler {
   static Future<void> dispose() async {
     try {
       await _agoraService.leaveChannel();
-      _pendingCall = null;
-      _pendingCallUid = null;
+      _clearPendingCall();
+      _connectivitySubscription?.cancel();
+      _isInitialized = false;
+      _retryAttempts = 0;
     } catch (e) {
       debugPrint('⚠️ Error disposing FCM Notification Handler: $e');
+    }
+  }
+
+  /// Reset retry attempts
+  static void _resetRetryAttempts() {
+    _retryAttempts = 0;
+  }
+
+  /// Implement exponential backoff for retries
+  static Future<void> _retry(Future<void> Function() operation) async {
+    while (_retryAttempts < _maxRetryAttempts) {
+      try {
+        await operation();
+        _resetRetryAttempts();
+        return;
+      } catch (e) {
+        _retryAttempts++;
+        if (_retryAttempts >= _maxRetryAttempts) {
+          debugPrint('❌ Max retry attempts reached');
+          rethrow;
+        }
+        final delay = Duration(milliseconds: _retryDelay.inMilliseconds * (1 << _retryAttempts));
+        debugPrint('🔄 Retry attempt $_retryAttempts after ${delay.inSeconds}s');
+        await Future.delayed(delay);
+      }
     }
   }
 }
