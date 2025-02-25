@@ -46,6 +46,7 @@ dependencies:
   qr_flutter: ^4.1.0
   flutter_native_splash: ^2.4.4
   firebase_messaging: ^15.2.3
+  flutter_callkit_incoming: ^2.5.0
   
 
 dev_dependencies:

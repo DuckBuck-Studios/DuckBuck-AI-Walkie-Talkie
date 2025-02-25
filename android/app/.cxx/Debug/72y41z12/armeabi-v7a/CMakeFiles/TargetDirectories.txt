@@ -1,0 +1,2 @@
+/Users/rudra/Documents/Github/DuckBuck/android/app/.cxx/Debug/72y41z12/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/rudra/Documents/Github/DuckBuck/android/app/.cxx/Debug/72y41z12/armeabi-v7a/CMakeFiles/rebuild_cache.dir

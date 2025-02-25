@@ -8,18 +8,18 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:145652846516:android:f4bb79873f602d51e56ce1",
+        "mobilesdk_app_id": "1:145652846516:android:d64b1dbfc67488f0e56ce1",
         "android_client_info": {
-          "package_name": "in.duckbuck.app"
+          "package_name": "com.example.duckbuck"
         }
       },
       "oauth_client": [
         {
-          "client_id": "145652846516-oaj5cr5k72gvv46hn3s93v47g941v9h0.apps.googleusercontent.com",
+          "client_id": "145652846516-hrt714nkcn8q9vp9tbi20aja2p0sqgr9.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "in.duckbuck.app",
-            "certificate_hash": "51e88aa1fd6f73ce5e2cd4579c9c8897cad4b0fa"
+            "package_name": "com.example.duckbuck",
+            "certificate_hash": "9b716fae1f4fc82929e942eaadd43fde039752ab"
           }
         },
         {

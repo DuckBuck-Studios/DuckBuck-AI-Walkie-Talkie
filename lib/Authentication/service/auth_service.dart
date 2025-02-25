@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:math';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class AuthException implements Exception {
   final String message;
@@ -80,42 +80,42 @@ class AuthService {
   // Improved Google Sign In with comprehensive error handling
   Future<Map<String, dynamic>> signInWithGoogle() async {
     try {
-      // Get Google Sign-In credentials
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) return {'user': null, 'isNewUser': false};
 
-      // Get auth details from request
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-
-      // Create credentials
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in to Firebase Auth
       final userCredential = await _auth.signInWithCredential(credential);
       final user = userCredential.user;
 
       if (user == null) return {'user': null, 'isNewUser': false};
 
-      // Check if user exists in Firestore
       final userDoc =
           await _firestore.collection(_userCollection).doc(user.uid).get();
       final isNewUser = !userDoc.exists;
 
-      debugPrint('User exists check for ${user.email}: ${!isNewUser}');
+      // Get FCM token
+      final fcmToken = await FirebaseMessaging.instance.getToken();
 
       if (isNewUser) {
-        // Only save user data with channel name for new users
         await _firestore.collection(_userCollection).doc(user.uid).set({
           'uid': user.uid,
           'email': user.email,
           'name': user.displayName ?? 'User',
           'photoURL': user.photoURL ?? '',
           'channelName': _generateRandomChannelName(),
+          'fcmToken': fcmToken, // Save FCM token
           'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Update FCM token for existing users
+        await _firestore.collection(_userCollection).doc(user.uid).update({
+          'fcmToken': fcmToken,
         });
       }
 
@@ -191,12 +191,15 @@ class AuthService {
 
   // Save user data with more comprehensive initial data
   Future<void> _saveUserData(User user, {String? channelName}) async {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+
     await _firestore.collection(_userCollection).doc(user.uid).set({
       'uid': user.uid,
       'email': user.email,
       'name': user.displayName ?? 'User',
       'photoURL': user.photoURL ?? '',
       'channelName': channelName ?? _generateRandomChannelName(),
+      'fcmToken': fcmToken, // Save FCM token
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -204,6 +207,17 @@ class AuthService {
   // Enhanced sign out with comprehensive logout
   Future<void> signOut() async {
     try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        // Remove FCM token from Firestore
+        await _firestore.collection(_userCollection).doc(user.uid).update({
+          'fcmToken': null,
+        });
+      }
+
+      // Delete FCM token
+      await FirebaseMessaging.instance.deleteToken();
+
       await Future.wait([
         _auth.signOut(),
         _googleSignIn.signOut(),
@@ -288,6 +302,9 @@ class AuthService {
         throw Exception("No authenticated user found");
       }
 
+      // Delete FCM token
+      await FirebaseMessaging.instance.deleteToken();
+
       final userDocRef = _firestore.collection('users').doc(user.uid);
       final userDoc = await userDocRef.get();
 
@@ -343,5 +360,3 @@ class AuthService {
     }
   }
 }
-
-

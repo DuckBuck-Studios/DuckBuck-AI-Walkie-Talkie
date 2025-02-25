@@ -438,6 +438,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.5.2"
+  flutter_callkit_incoming:
+    dependency: "direct main"
+    description:
+      name: flutter_callkit_incoming
+      sha256: c1e90252b45d84ec5b0792f77aaf3c07222ceade3698307d1a890e514690f7fc
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.0"
   flutter_launcher_icons:
     dependency: "direct main"
     description:
