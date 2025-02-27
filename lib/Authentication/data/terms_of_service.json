@@ -1,0 +1,30 @@
+{
+  "title": "Terms of Service",
+  "sections": [
+    {
+      "title": "1. Acceptance of Terms",
+      "content": "By accessing and using DuckBuck, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service."
+    },
+    {
+      "title": "2. Use of Service",
+      "content": [
+        "You must be at least 13 years old to use DuckBuck",
+        "You are responsible for maintaining the security of your account",
+        "You agree not to use the service for any illegal purposes",
+        "You will not attempt to breach or circumvent any security measures"
+      ]
+    },
+    {
+      "title": "3. User Content",
+      "content": [
+        "You retain rights to content you create and share",
+        "You grant DuckBuck license to use, store, and display your content",
+        "You agree not to share inappropriate or harmful content"
+      ]
+    },
+    {
+      "title": "4. Service Modifications",
+      "content": "We reserve the right to modify or discontinue the service at any time."
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:duckbuck/Home/providers/pfp_provider.dart';
+import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:provider/provider.dart';
+import '../providers/call_provider.dart';
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../service/agora_service.dart';
@@ -35,35 +36,43 @@ class ProfileCard extends StatefulWidget {
   State<ProfileCard> createState() => _ProfileCardState();
 }
 
-class _ProfileCardState extends State<ProfileCard> {
-  late PageController _friendsPageController;
-  double _dragStart = 0;
+class _ProfileCardState extends State<ProfileCard>
+    with SingleTickerProviderStateMixin {
   final AgoraService _agoraService = AgoraService();
-  bool _isJoining = false;
-  bool _isInCall = false;
-  bool _isMuted = false;
-  bool _isSpeakerOn = true;
+  double _dragDistance = 0;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _radiusAnimation;
 
   @override
   void initState() {
     super.initState();
-    _friendsPageController = PageController(
-      viewportFraction: 0.3,
-      initialPage: widget.currentFriendIndex,
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
     );
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+
+    _radiusAnimation = Tween<double>(
+      begin: 20.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
   void dispose() {
-    _friendsPageController.dispose();
+    _animationController.dispose();
     super.dispose();
-  }
-
-  void _handleVerticalDrag(DragUpdateDetails details) {
-    if (_dragStart == 0) {
-      _dragStart = details.globalPosition.dy;
-    }
-    widget.onDragUpdate(_dragStart - details.globalPosition.dy);
   }
 
   // Generate random 6-digit UID
@@ -72,75 +81,106 @@ class _ProfileCardState extends State<ProfileCard> {
     return 100000 + random.nextInt(900000);
   }
 
-  Future<void> _joinChannel() async {
-    if (_isJoining) return;
+  Future<void> _initiateCall(BuildContext context) async {
+    HapticFeedback.heavyImpact();
+    final callProvider = context.read<CallProvider>();
 
-    setState(() => _isJoining = true);
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        debugPrint('No user logged in');
-        return;
-      }
+    // Start the animation to full screen
+    _animationController.forward();
 
-      // Use existing channel name instead of creating new one
-      final channelName = widget.channelName;
-      final userUid = _generateUID();
+    await callProvider.initiateCall(
+      receiverId: widget.friendId,
+      receiverName: widget.name,
+      channelName: widget.channelName,
+    );
+  }
 
-      debugPrint('Joining channel: $channelName with UID: $userUid');
-
-      // Initialize Agora if not already initialized
-      await _agoraService.initializeAgora();
-
-      // Join the channel
-      await _agoraService.joinChannel(channelName, userUid);
-
-      // Send FCM notification to friend
-      await FCMService.sendCallNotificationToUser(
-        receiverUid: widget.friendId,
-        callerName: currentUser.displayName ?? 'Someone',
-        callerId: currentUser.uid,
-        channelName: channelName,
-      );
-
+  void _handleHorizontalDrag(DragUpdateDetails details, bool isInCall) {
+    if (!isInCall) {
       setState(() {
-        _isInCall = true;
-        _isJoining = false;
+        _dragDistance += details.primaryDelta ?? 0;
       });
-      debugPrint('Successfully joined channel and sent notification');
-    } catch (e) {
-      debugPrint('Error joining channel: $e');
-      setState(() => _isInCall = false);
-    } finally {
-      if (mounted) {
-        setState(() => _isJoining = false);
+    }
+  }
+
+  void _handleHorizontalDragEnd(DragEndDetails details, bool isInCall) {
+    if (isInCall) return;
+
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity > 1000 && widget.currentFriendIndex > 0) {
+      widget.onFriendSelected(widget.currentFriendIndex - 1);
+      HapticFeedback.mediumImpact();
+    } else if (velocity < -1000 &&
+        widget.currentFriendIndex < widget.friends.length - 1) {
+      widget.onFriendSelected(widget.currentFriendIndex + 1);
+      HapticFeedback.mediumImpact();
+    }
+    setState(() => _dragDistance = 0);
+  }
+
+  Widget _buildCallControls(CallProvider callProvider) {
+    // For receiver, show different UI based on whether they've started speaking
+    if (!callProvider.isInitiator) {
+      if (!callProvider.hasStartedSpeaking) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Text(
+            'Tap and hold to start speaking',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        );
       }
+
+      // After starting to speak, show same controls as caller
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: callProvider.toggleMute,
+              icon: Icon(
+                callProvider.isMuted ? Icons.mic_off : Icons.mic,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            IconButton(
+              onPressed: callProvider.toggleSpeaker,
+              icon: Icon(
+                callProvider.isSpeakerOn ? Icons.volume_up : Icons.volume_off,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            IconButton(
+              onPressed: callProvider.endCall,
+              icon: const Icon(
+                Icons.call_end,
+                color: Colors.red,
+                size: 24,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-  }
 
-  void _toggleMute() {
-    setState(() => _isMuted = !_isMuted);
-    _agoraService.toggleMute();
-    debugPrint('Mute toggled: $_isMuted');
-  }
-
-  Future<void> _toggleSpeaker() async {
-    setState(() => _isSpeakerOn = !_isSpeakerOn);
-    await _agoraService.setSpeakerphoneOn(_isSpeakerOn);
-    debugPrint('Speaker toggled: $_isSpeakerOn');
-  }
-
-  Future<void> _leaveChannel() async {
-    try {
-      await _agoraService.leaveChannel();
-      setState(() => _isInCall = false);
-      debugPrint('Left channel successfully');
-    } catch (e) {
-      debugPrint('Error leaving channel: $e');
-    }
-  }
-
-  Widget _buildCallControls() {
+    // For initiator, show all controls
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
       decoration: BoxDecoration(
@@ -150,31 +190,26 @@ class _ProfileCardState extends State<ProfileCard> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Mute Button
           IconButton(
-            onPressed: _toggleMute,
+            onPressed: callProvider.toggleMute,
             icon: Icon(
-              _isMuted ? Icons.mic_off : Icons.mic,
+              callProvider.isMuted ? Icons.mic_off : Icons.mic,
               color: Colors.white,
               size: 24,
             ),
           ),
           const SizedBox(width: 16),
-
-          // Speaker Button
           IconButton(
-            onPressed: _toggleSpeaker,
+            onPressed: callProvider.toggleSpeaker,
             icon: Icon(
-              _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
+              callProvider.isSpeakerOn ? Icons.volume_up : Icons.volume_off,
               color: Colors.white,
               size: 24,
             ),
           ),
           const SizedBox(width: 16),
-
-          // Leave Button
           IconButton(
-            onPressed: _leaveChannel,
+            onPressed: callProvider.endCall,
             icon: const Icon(
               Icons.call_end,
               color: Colors.red,
@@ -182,6 +217,31 @@ class _ProfileCardState extends State<ProfileCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCallStatus(CallProvider callProvider) {
+    String statusText = '';
+    switch (callProvider.callState) {
+      case CallState.calling:
+        statusText = 'Calling...';
+        break;
+      case CallState.connected:
+        statusText = callProvider.callDuration;
+        break;
+      case CallState.error:
+        statusText = callProvider.errorMessage ?? 'Error';
+        break;
+      default:
+        statusText = 'Long press to join call';
+    }
+
+    return Text(
+      statusText,
+      style: const TextStyle(
+        color: Colors.white70,
+        fontSize: 14,
       ),
     );
   }
@@ -201,206 +261,131 @@ class _ProfileCardState extends State<ProfileCard> {
       );
     }
 
-    final pfpProvider = Provider.of<PfpProvider>(context);
-    final isMinimized = pfpProvider.isMinimized;
-    final screenSize = MediaQuery.of(context).size;
+    return Consumer<CallProvider>(
+      builder: (context, callProvider, child) {
+        final screenSize = MediaQuery.of(context).size;
+        final isInCall = callProvider.isInCall || callProvider.isCalling;
 
-    return GestureDetector(
-      onVerticalDragUpdate: _handleVerticalDrag,
-      onVerticalDragEnd: (_) => _dragStart = 0,
-      child: Stack(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: isMinimized ? screenSize.width * 0.6 : screenSize.width,
-            height: isMinimized ? screenSize.height * 0.6 : screenSize.height,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background Image
-                Image(
-                  image: widget.profileUrl.isNotEmpty
-                      ? NetworkImage(widget.profileUrl)
-                      : const AssetImage('assets/background.png')
-                          as ImageProvider,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Image.asset('assets/background.png',
-                        fit: BoxFit.cover);
-                  },
-                ),
+        // If in a call, keep the animation at the end state
+        if (isInCall && !_animationController.isCompleted) {
+          _animationController.forward();
+        } else if (!isInCall && _animationController.isCompleted) {
+          _animationController.reverse();
+        }
 
-                // Gradient Overlay
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.1),
-                        Colors.black.withOpacity(0.7),
+        return Center(
+          child: GestureDetector(
+            onLongPress: isInCall ? null : () => _initiateCall(context),
+            onLongPressStart: !callProvider.isInitiator &&
+                    isInCall &&
+                    !callProvider.hasStartedSpeaking
+                ? (_) => callProvider.startSpeaking()
+                : null,
+            onLongPressEnd: null,
+            onHorizontalDragUpdate: (details) =>
+                _handleHorizontalDrag(details, isInCall),
+            onHorizontalDragEnd: (details) =>
+                _handleHorizontalDragEnd(details, isInCall),
+            child: AnimatedBuilder(
+              animation: _animationController,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset:
+                      Offset(_dragDistance * (1 - _scaleAnimation.value), 0),
+                  child: Container(
+                    width: screenSize.width * _scaleAnimation.value,
+                    height: screenSize.height * _scaleAnimation.value,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius:
+                          BorderRadius.circular(_radiusAnimation.value),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        ),
                       ],
                     ),
-                  ),
-                ),
-
-                // Profile Name
-                if (!isMinimized)
-                  Positioned(
-                    bottom: 40,
-                    left: 0,
-                    right: 0,
-                    child: Column(
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Text(
-                          widget.name,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 3,
-                                color: Colors.black.withOpacity(0.5),
-                                offset: const Offset(0, 3),
+                        ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(_radiusAnimation.value),
+                          child: Image(
+                            image: widget.profileUrl.isNotEmpty
+                                ? NetworkImage(widget.profileUrl)
+                                : const AssetImage('assets/background.png')
+                                    as ImageProvider,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.asset('assets/background.png',
+                                  fit: BoxFit.cover);
+                            },
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.1),
+                                Colors.black.withOpacity(0.7),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (callProvider.isSpeaking)
+                          Container(
+                            color: Colors.green.withOpacity(0.3),
+                            child: const Center(
+                              child: Icon(
+                                Icons.mic,
+                                color: Colors.white,
+                                size: 48,
                               ),
+                            ),
+                          ),
+                        Positioned(
+                          bottom: 40,
+                          left: 0,
+                          right: 0,
+                          child: Column(
+                            children: [
+                              Text(
+                                isInCall
+                                    ? (callProvider.receiverName ??
+                                        callProvider.callerName ??
+                                        widget.name)
+                                    : widget.name,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildCallStatus(callProvider),
+                              if (isInCall)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: _buildCallControls(callProvider),
+                                ),
                             ],
                           ),
                         ),
-                        if (widget.channelName.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              widget.channelName,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                                shadows: [
-                                  Shadow(
-                                    blurRadius: 2,
-                                    color: Colors.black.withOpacity(0.5),
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
-
-                // Add Join Channel Button
-                if (!isMinimized)
-                  Positioned(
-                    bottom: 200,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: _isInCall
-                          ? _buildCallControls()
-                          : ElevatedButton(
-                              onPressed: _isJoining ? null : _joinChannel,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                              child: _isJoining
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                Colors.black),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Join Call',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                            ),
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
           ),
-
-          // Friend Carousel
-          Positioned(
-            bottom: 100,
-            left: 0,
-            right: 0,
-            child: SizedBox(
-              height: 100,
-              child: PageView.builder(
-                controller: _friendsPageController,
-                onPageChanged: widget.onFriendSelected,
-                itemCount: widget.friends.length,
-                itemBuilder: (context, index) {
-                  return AnimatedBuilder(
-                    animation: _friendsPageController,
-                    builder: (context, child) {
-                      double value = 1.0;
-                      if (_friendsPageController.position.haveDimensions) {
-                        value = _friendsPageController.page! - index;
-                        value = (1 - (value.abs() * 0.3)).clamp(0.0, 1.0);
-                      }
-                      return Center(
-                        child: SizedBox(
-                          height: Curves.easeOut.transform(value) * 100,
-                          width: Curves.easeOut.transform(value) * 100,
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: index == widget.currentFriendIndex
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.5),
-                          width: 2,
-                        ),
-                      ),
-                      child: ClipOval(
-                        child: Image.network(
-                          widget.friends[index]['photoURL'] ?? '',
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Image.asset(
-                              'assets/background.png',
-                              fit: BoxFit.cover,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

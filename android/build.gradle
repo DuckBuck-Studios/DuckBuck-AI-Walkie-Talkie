@@ -5,6 +5,10 @@ allprojects {
     }
 }
 
+project.ext {
+    ndkVersion = "28.0.13004108"
+}
+
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"

@@ -1,11 +1,13 @@
+import 'dart:ui';
 import 'package:duckbuck/Authentication/screens/permissions_screen.dart';
 import 'package:duckbuck/Authentication/service/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-import 'package:flutter/rendering.dart';
+import 'package:image_picker/image_picker.dart'; 
+import 'package:shimmer/shimmer.dart';
+import 'package:neopop/neopop.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -18,6 +20,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
   bool _showPreview = false;
+  final Color gheeColor = const Color(0xFFEEDCB5);
 
   @override
   void initState() {
@@ -28,41 +31,118 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Color(0xFF2A0845),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              _buildOptionButton(
-                icon: Icons.camera_alt_rounded,
-                text: 'Take a Selfie',
-                onTap: () => _pickImage(ImageSource.camera),
-              ),
-              SizedBox(height: 16),
-              _buildOptionButton(
-                icon: Icons.photo_library_rounded,
-                text: 'Choose from Gallery',
-                onTap: () => _pickImage(ImageSource.gallery),
-              ),
-              SizedBox(height: 24),
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.26,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.withOpacity(0.08),
+              Colors.purple.withOpacity(0.08),
             ],
           ),
-        );
-      },
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.15),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              spreadRadius: -5,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: 12.0,
+              sigmaY: 12.0,
+            ),
+            child: Container(
+              color: Colors.transparent,
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: NeoPopButton(
+                      color: const Color(0xFF8D6E63),
+                      depth: 8,
+                      shadowColor: Colors.black.withOpacity(0.5),
+                      onTapUp: () => _pickImage(ImageSource.camera),
+                      onTapDown: () => HapticFeedback.lightImpact(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.camera_alt_rounded, color: Colors.white, size: 24),
+                            SizedBox(width: 12),
+                            Text(
+                              'Take a Selfie',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: NeoPopButton(
+                      color: const Color(0xFF8D6E63),
+                      depth: 8,
+                      shadowColor: Colors.black.withOpacity(0.5),
+                      onTapUp: () => _pickImage(ImageSource.gallery),
+                      onTapDown: () => HapticFeedback.lightImpact(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.photo_library_rounded, color: Colors.white, size: 24),
+                            SizedBox(width: 12),
+                            Text(
+                              'Choose from Gallery',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -134,63 +214,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Set as Profile Button
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _setProfilePicture,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade900,
-                foregroundColor: Colors.white,
+            child: NeoPopButton(
+              color: Colors.purple.shade900,
+              onTapUp: _isLoading ? null : () => _setProfilePicture(),
+              onTapDown: () => HapticFeedback.lightImpact(),
+              child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
+                child: _isLoading
+                    ? SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Set as Profile Picture',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
               ),
-              child: _isLoading
-                  ? SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Set as Profile Picture',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
             ),
           ),
 
-          const SizedBox(height: 12), // Spacing between buttons
+          const SizedBox(height: 12),
 
           // Cancel Button
           SizedBox(
             width: double.infinity,
-            child: TextButton(
-              onPressed: () {
+            child: NeoPopButton(
+              color: Colors.white.withOpacity(0.05),
+              onTapUp: () {
                 HapticFeedback.lightImpact();
                 setState(() {
                   _showPreview = false;
                   _image = null;
                 });
               },
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.05),
+              onTapDown: () => HapticFeedback.lightImpact(),
+              child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                child: const Text(
+                  'Cancel',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -240,82 +317,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.black,
-              Color(0xFF2A0845),
-              Color(0xFF6441A5),
-            ],
-          ),
+          color: const Color(0xFFFFE0B2),
         ),
         child: SafeArea(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.add_a_photo_outlined,
-                size: 80,
-                color: Colors.white.withOpacity(0.9),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Add a Profile Picture',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 16),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'Share your best smile with your friends. A great profile picture helps people connect with you better.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 16,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              Spacer(),
-              Padding(
-                padding: EdgeInsets.all(24),
-                child: GestureDetector(
-                  onTap: _showImageSourceDialog,
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Shimmer.fromColors(
+                          baseColor: const Color(0xFF8D6E63),
+                          highlightColor: const Color(0xFFBCAAA4),
+                          child: Icon(
+                            Icons.add_a_photo_outlined,
+                            size: 100,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        Shimmer.fromColors(
+                          baseColor: const Color(0xFF8D6E63),
+                          highlightColor: const Color(0xFFBCAAA4),
+                          child: Text(
+                            'Add a Profile Picture',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            'Share your best smile with your friends. A great profile picture helps people connect with you better.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: const Color(0xFF5D4037),
+                              fontSize: 16,
+                              height: 1.5,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    child: Text(
-                      'Choose Picture',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF2A0845),
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  color: const Color(0xFFFFE0B2),
+                  child: NeoPopButton(
+                    color: const Color(0xFF8D6E63),
+                    depth: 8,
+                    shadowColor: Colors.black.withOpacity(0.5),
+                    onTapUp: () => _showImageSourceDialog(),
+                    onTapDown: () => HapticFeedback.lightImpact(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Choose Picture',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.photo_camera_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    
   }
 }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:duckbuck/Authentication/service/auth_service.dart';
 import 'package:duckbuck/Authentication/screens/profile_screen.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
+import 'package:neopop/utils/color_utils.dart';
+import 'package:shimmer/shimmer.dart';
 
 class NameScreen extends StatefulWidget {
   const NameScreen({Key? key}) : super(key: key);
@@ -10,11 +13,14 @@ class NameScreen extends StatefulWidget {
   State<NameScreen> createState() => _NameScreenState();
 }
 
-class _NameScreenState extends State<NameScreen> {
+class _NameScreenState extends State<NameScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
   bool _isButtonEnabled = false;
+  late AnimationController _buttonController;
+  late Animation<double> _buttonAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -27,6 +33,27 @@ class _NameScreenState extends State<NameScreen> {
     );
 
     _nameController.addListener(_validateInput);
+
+    _buttonController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _buttonAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _buttonController,
+      curve: Curves.easeInOut,
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(
+      parent: _buttonController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   void _validateInput() {
@@ -45,11 +72,27 @@ class _NameScreenState extends State<NameScreen> {
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => ProfileScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              )),
+              child: child,
+            );
           },
+          transitionDuration: const Duration(milliseconds: 300),
         ),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _buttonController.dispose();
+    super.dispose();
   }
 
   @override
@@ -57,16 +100,7 @@ class _NameScreenState extends State<NameScreen> {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.black,
-              Colors.black,
-              Colors.purple.shade900,
-            ],
-            stops: const [0.0, 0.6, 1.0],
-          ),
+          color: Color(0xFFFFE0B2), // Warm ghee color
         ),
         child: SafeArea(
           child: Column(
@@ -77,20 +111,26 @@ class _NameScreenState extends State<NameScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        "whats your name?",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
+                      Shimmer.fromColors(
+                        baseColor: Color(0xFF4A4A4A),
+                        highlightColor: Color(0xFF8B8B8B),
+                        child: Text(
+                          "whats your name?",
+                          style: TextStyle(
+                            color: Color(0xFF4A4A4A),
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                       SizedBox(height: 8),
                       Text(
                         "this is how your friends will see you",
                         style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
+                          color: Color(0xFF6B6B6B),
+                          fontSize: 18,
+                          letterSpacing: 0.3,
                         ),
                       ),
                       SizedBox(height: 40),
@@ -102,19 +142,21 @@ class _NameScreenState extends State<NameScreen> {
       child: TextFormField(
         controller: _nameController,
         style: TextStyle(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.w500,
+          color: Color(0xFF4A4A4A),
+          fontSize: 26,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
         ),
         decoration: InputDecoration(
           hintText: "your name",
           hintStyle: TextStyle(
-            color: Colors.white54,
-            fontSize: 24,
+            color: Color(0xFF8B8B8B),
+            fontSize: 26,
+            letterSpacing: 0.3,
           ),
           border: InputBorder.none,
           enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: Colors.white24, width: 2),
+            borderSide: BorderSide(color: Color(0xFF8B8B8B).withOpacity(0.3), width: 2),
           ),
         ),
         validator: (value) {
@@ -134,27 +176,51 @@ class _NameScreenState extends State<NameScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(20),
-                child: ElevatedButton(
-                  onPressed: _isButtonEnabled ? _validateAndProceed : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple.shade900,
-                    minimumSize: Size(double.infinity, 55),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 8,
-                    shadowColor: Colors.purple.withOpacity(0.3),
-                  ),
-                  child: Text(
-                    'Continue',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                padding: const EdgeInsets.all(24),
+                child: AnimatedBuilder(
+                  animation: _buttonAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: NeoPopButton(
+                        color: Color(0xFFFF9800),
+                        bottomShadowColor: ColorUtils.getVerticalShadow(Color(0xFFFF9800)).toColor(),
+                        rightShadowColor: ColorUtils.getHorizontalShadow(Color(0xFFFF9800)).toColor(),
+                        animationDuration: Duration(milliseconds: 200),
+                        depth: 8,
+                        onTapUp: _isButtonEnabled ? () {
+                          _buttonController.forward().then((_) {
+                            _buttonController.reverse();
+                            _validateAndProceed();
+                          });
+                        } : null,
+                        onTapDown: () => _buttonController.forward(),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Continue',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],

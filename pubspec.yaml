@@ -41,12 +41,16 @@ dependencies:
   intl: ^0.20.2
   connectivity_plus: ^6.1.2 
   path_provider: ^2.1.5 
-  shimmer: ^3.0.0
-  mobile_scanner: ^6.0.6
+  shimmer: ^3.0.0 
   qr_flutter: ^4.1.0
   flutter_native_splash: ^2.4.4
   firebase_messaging: ^15.2.3
-  flutter_callkit_incoming: ^2.5.0
+  flutter_callkit_incoming: ^2.5.0 
+  mobile_scanner: ^6.0.6
+  flutter_spinkit: ^5.2.1
+  neopop: ^1.0.2
+  font_awesome_flutter: ^10.8.0
+  neural_effect: ^1.0.2
   
 
 dev_dependencies:
@@ -57,6 +61,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - lib/Authentication/data/privacy_policy.json
+    - lib/Authentication/data/terms_of_service.json
     - assets/apple.svg
     - assets/google.svg
     - assets/background.png

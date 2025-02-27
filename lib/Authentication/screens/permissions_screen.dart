@@ -1,6 +1,9 @@
 import 'package:duckbuck/Home/home.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PermissionsScreen extends StatefulWidget {
   @override
@@ -15,21 +18,28 @@ class _PermissionsScreenState extends State<PermissionsScreen>
       icon: Icons.camera_alt_rounded,
       title: 'Camera',
       description: 'Take photos and record videos for sharing with friends',
-      color: Color(0xFF9C27B0),
+      color: Color(0xFF8D6E63),
     ),
     PermissionItem(
       permission: Permission.microphone,
       icon: Icons.mic_rounded,
       title: 'Microphone',
       description: 'Send voice messages and make voice calls',
-      color: Color(0xFF2196F3),
+      color: Color(0xFFD2B48C),
     ),
     PermissionItem(
-      permission: Permission.storage,
+      permission: Permission.mediaLibrary,
       icon: Icons.photo_library_rounded,
       title: 'Gallery',
       description: 'Share photos and videos from your gallery',
-      color: Color(0xFF4CAF50),
+      color: Color(0xFFBCAAA4),
+    ),
+    PermissionItem(
+      permission: Permission.notification,
+      icon: Icons.notifications_rounded,
+      title: 'Notifications',
+      description: 'Stay updated with important messages and calls',
+      color: Color(0xFFA1887F),
     ),
   ];
 
@@ -103,8 +113,22 @@ class _PermissionsScreenState extends State<PermissionsScreen>
 
   void _continueToSignup(BuildContext context) {
     if (_allPermissionsGranted) {
+      HapticFeedback.heavyImpact();
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => HomeScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            var begin = Offset(1.0, 0.0);
+            var end = Offset.zero;
+            var curve = Curves.easeInOutCubic;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+          transitionDuration: Duration(milliseconds: 500),
+        ),
       );
     }
   }
@@ -118,9 +142,9 @@ class _PermissionsScreenState extends State<PermissionsScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.black,
-              Color(0xFF2A0845),
-              Color(0xFF6441A5),
+              Color(0xFFEEDCB5),
+              Color(0xFFD2B48C),
+              Color(0xFFBCAAA4),
             ],
           ),
         ),
@@ -179,17 +203,19 @@ class _PermissionsScreenState extends State<PermissionsScreen>
                 child: AnimatedOpacity(
                   duration: Duration(milliseconds: 300),
                   opacity: _allPermissionsGranted ? 1.0 : 0.5,
-                  child: GestureDetector(
-                    onTap: () => _continueToSignup(context),
+                  child: NeoPopButton(
+                    color: Color(0xFFD2B48C),
+                    onTapUp: () => _continueToSignup(context),
+                    enabled: _allPermissionsGranted,
                     child: Container(
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        color: Color(0xFF8D6E63),
+                        borderRadius: BorderRadius.zero,
                         boxShadow: _allPermissionsGranted
                             ? [
                                 BoxShadow(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.black.withOpacity(0.2),
                                   blurRadius: 15,
                                   offset: Offset(0, 8),
                                 ),
@@ -229,10 +255,17 @@ class _PermissionsScreenState extends State<PermissionsScreen>
     return Container(
       margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            item.color.withOpacity(0.15),
+            item.color.withOpacity(0.25),
+          ],
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+          color: item.color.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -249,38 +282,49 @@ class _PermissionsScreenState extends State<PermissionsScreen>
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: item.color.withOpacity(0.2),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        item.color.withOpacity(0.3),
+                        item.color.withOpacity(0.4),
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     item.icon,
-                    color: item.color,
+                    color: Colors.white,
                     size: 24,
                   ),
                 ),
                 SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.white.withOpacity(0.9),
+                    highlightColor: Colors.white,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        item.description,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 14,
-                          height: 1.4,
+                        SizedBox(height: 4),
+                        Text(
+                          item.description,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 14,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 SizedBox(width: 16),
@@ -290,9 +334,19 @@ class _PermissionsScreenState extends State<PermissionsScreen>
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: item.isGranted
-                        ? item.color
-                        : Colors.white.withOpacity(0.2),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: item.isGranted
+                          ? [
+                              item.color,
+                              item.color.withOpacity(0.8),
+                            ]
+                          : [
+                              Colors.white.withOpacity(0.2),
+                              Colors.white.withOpacity(0.1),
+                            ],
+                    ),
                     border: Border.all(
                       color: item.isGranted
                           ? item.color

@@ -1,0 +1,2 @@
+/Users/rudranarayanasahoo/Development/DuckBuck/android/app/.cxx/Debug/6t376r6d/x86/CMakeFiles/edit_cache.dir
+/Users/rudranarayanasahoo/Development/DuckBuck/android/app/.cxx/Debug/6t376r6d/x86/CMakeFiles/rebuild_cache.dir

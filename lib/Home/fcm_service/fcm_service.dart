@@ -38,7 +38,7 @@ class FCMService {
     try {
       debugPrint('Sending FCM notification to token: $token');
       final response = await http.post(
-        Uri.parse('$baseUrl/api/fcm/send'),
+        Uri.parse('$baseUrl/api/send/notification'),
         headers: {
           'Content-Type': 'application/json',
           // Add any auth headers if needed
