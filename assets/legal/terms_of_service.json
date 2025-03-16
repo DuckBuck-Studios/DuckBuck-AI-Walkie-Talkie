@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2023-07-01",
+  "title": "DuckBuck - Terms of Service",
+  "sections": [
+    {
+      "title": "1. Acceptance of Terms",
+      "content": "By downloading, installing, or using the DuckBuck application ('App'), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the App."
+    },
+    {
+      "title": "2. Description of Service",
+      "content": "DuckBuck is a walkie-talkie style communication app that operates over the internet. The App is designed to maintain connection to communication channels even when the application is not actively in use or has been terminated by the system."
+    },
+    {
+      "title": "3. Background Operation Consent",
+      "content": "You explicitly acknowledge and consent that DuckBuck will: (a) run in the background of your device; (b) automatically reconnect to channels when your device restarts or the app is terminated; (c) use system resources including battery, data, and processing power even when not actively in use; and (d) receive and transmit audio data when connected to a channel, even if the app is not in the foreground."
+    },
+    {
+      "title": "4. User Accounts",
+      "content": "To use certain features of the App, you may need to create a user account. You are responsible for maintaining the confidentiality of your account information and for all activities that occur under your account."
+    },
+    {
+      "title": "5. User Content",
+      "content": "You retain all rights to any content you submit, post or display on or through the App. By submitting content, you grant DuckBuck a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, adapt, publish, and distribute such content for the purpose of providing and improving the Service."
+    },
+    {
+      "title": "6. Prohibited Uses",
+      "content": "You agree not to use the App to: (a) violate any laws; (b) transmit any material that is abusive, harassing, tortious, defamatory, vulgar, pornographic, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable; (c) impersonate any person or entity; (d) interfere with or disrupt the App or servers or networks connected to the App; or (e) collect or store personal data about other users without their consent."
+    },
+    {
+      "title": "7. Termination",
+      "content": "DuckBuck reserves the right to terminate or suspend your access to the App at any time, without notice, for conduct that we believe violates these Terms of Service or is harmful to other users, us, or third parties, or for any other reason."
+    },
+    {
+      "title": "8. Disclaimer of Warranties",
+      "content": "The App is provided 'as is' and 'as available' without warranties of any kind, either express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, or non-infringement."
+    },
+    {
+      "title": "9. Limitation of Liability",
+      "content": "In no event shall DuckBuck be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the App."
+    },
+    {
+      "title": "10. Changes to Terms",
+      "content": "DuckBuck reserves the right to modify or replace these Terms of Service at any time. It is your responsibility to check the Terms periodically for changes."
+    },
+    {
+      "title": "11. Governing Law",
+      "content": "These Terms shall be governed by the laws of the jurisdiction in which the company operates, without regard to its conflict of law provisions."
+    },
+    {
+      "title": "12. Contact Information",
+      "content": "If you have any questions about these Terms, please contact us at support@duckbuck.com."
+    }
+  ]
+}

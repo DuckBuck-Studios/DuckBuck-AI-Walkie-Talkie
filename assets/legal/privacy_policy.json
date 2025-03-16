@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2023-07-01",
+  "title": "DuckBuck - Privacy Policy",
+  "sections": [
+    {
+      "title": "1. Introduction",
+      "content": "This Privacy Policy explains how DuckBuck ('we', 'our', or 'us') collects, uses, and shares your information when you use our mobile application ('App'). By using the App, you consent to the data practices described in this policy."
+    },
+    {
+      "title": "2. Information We Collect",
+      "content": "We collect the following types of information: (a) Account Information: When you create an account, we collect your email address, name, and authentication information; (b) User Content: Audio transmissions, messages, and other content you share through the App; (c) Device Information: Information about your device, including device model, operating system, unique device identifiers, IP address, and mobile network information; (d) Usage Information: How you use the App, including channels you join, time spent in channels, and interaction with features; (e) Location Information: Approximate location derived from IP address or precise location with your explicit consent."
+    },
+    {
+      "title": "3. Background Processing Consent",
+      "content": "You explicitly consent to DuckBuck collecting and processing data in the background, even when the app is not actively in use or has been terminated. This includes: (a) maintaining network connections; (b) processing and transmitting audio data when connected to a channel; (c) collecting usage metrics; and (d) sending notifications. This background processing is essential to the core functionality of the App as a walkie-talkie service that needs to maintain constant communication capabilities."
+    },
+    {
+      "title": "4. How We Use Your Information",
+      "content": "We use the information we collect to: (a) provide, maintain, and improve the App; (b) develop new products and services; (c) communicate with you about the App, updates, and promotions; (d) monitor and analyze trends and usage; (e) detect, investigate, and prevent fraudulent transactions and other illegal activities; and (f) protect the rights and property of DuckBuck and others."
+    },
+    {
+      "title": "5. How We Share Your Information",
+      "content": "We may share your information with: (a) other users of the App as part of the normal operation of the service; (b) service providers who perform services on our behalf; (c) in response to a legal request if we believe disclosure is required by law; (d) if we believe your actions are inconsistent with our user agreements or to protect the rights of DuckBuck or others; and (e) in connection with a sale, merger, or change of control."
+    },
+    {
+      "title": "6. Data Retention",
+      "content": "We store your information for as long as necessary to provide the App and fulfill the purposes described in this Privacy Policy. We may retain certain information for legitimate business purposes or as required by law."
+    },
+    {
+      "title": "7. Your Choices",
+      "content": "You can: (a) update your account information through the App settings; (b) opt-out of promotional communications; (c) disable background processing, though this will significantly impact the App's functionality; and (d) request deletion of your account, though some information may be retained as required by law."
+    },
+    {
+      "title": "8. Children's Privacy",
+      "content": "The App is not intended for children under 13, and we do not knowingly collect information from children under 13. If we learn we have collected information from a child under 13, we will delete that information."
+    },
+    {
+      "title": "9. International Data Transfers",
+      "content": "Your information may be transferred to, and processed in, countries other than the country in which you reside. These countries may have data protection laws that are different from the laws of your country."
+    },
+    {
+      "title": "10. Changes to This Privacy Policy",
+      "content": "We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the 'Last Updated' date."
+    },
+    {
+      "title": "11. Specific Platform Permissions",
+      "content": "DuckBuck requires and you hereby consent to the following permissions: (a) Microphone access to transmit audio; (b) Background processing to maintain channel connections; (c) Network access to transmit data; (d) Storage access to cache data; (e) Wake lock to prevent the device from sleeping during active communication; and (f) Start at boot to reconnect to channels after device restart."
+    },
+    {
+      "title": "12. California Privacy Rights",
+      "content": "If you are a California resident, you have specific rights regarding your personal information under the California Consumer Privacy Act (CCPA)."
+    },
+    {
+      "title": "13. Contact Us",
+      "content": "If you have any questions about this Privacy Policy, please contact us at privacy@duckbuck.com."
+    }
+  ]
+}

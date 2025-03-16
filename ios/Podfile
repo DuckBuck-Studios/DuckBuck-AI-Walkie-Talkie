@@ -29,7 +29,6 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
-  use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -40,17 +39,5 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-
-    # Enable required permissions for permission_handler
-    target.build_configurations.each do |config|
-      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
-        '$(inherited)',
-        'PERMISSION_CAMERA=1',      # Camera
-        'PERMISSION_MICROPHONE=1',  # Microphone
-        'PERMISSION_PHOTOS=1',      # Gallery
-        'PERMISSION_SPEECH_RECOGNIZER=1', # Speaker & Audio Processing
-      ]
-    end
   end
 end
- 
