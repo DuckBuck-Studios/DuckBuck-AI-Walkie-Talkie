@@ -33,11 +33,30 @@ class UserService {
     }
   }
   
+  // Stream user data by ID for real-time updates
+  Stream<UserModel?> getUserStreamById(String userId) {
+    return _firestore.collection('users').doc(userId)
+      .snapshots()
+      .map((doc) {
+        if (doc.exists && doc.data() != null) {
+          return UserModel.fromJson(doc.data()!);
+        }
+        return null;
+      });
+  }
+  
   // Get current user
   Future<UserModel?> getCurrentUser() async {
     final userId = currentUserId;
     if (userId == null) return null;
     return getUserById(userId);
+  }
+  
+  // Get current user as stream for real-time updates
+  Stream<UserModel?> getCurrentUserStream() {
+    final userId = currentUserId;
+    if (userId == null) return Stream.value(null);
+    return getUserStreamById(userId);
   }
   
   // Update user display name

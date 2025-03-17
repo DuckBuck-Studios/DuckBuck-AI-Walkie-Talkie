@@ -1,12 +1,99 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../providers/auth_provider.dart' as auth;
+import '../../providers/user_provider.dart';
 import '../../widgets/animated_background.dart';
 import '../../models/user_model.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
+
+  void _showQRCode(BuildContext context, UserModel userModel) {
+    final qrData = userModel.uid;
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF8B4513).withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Your Profile QR Code',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B4513),
+                ),
+              ).animate()
+                .fadeIn(duration: 600.ms)
+                .slideY(begin: -0.2, end: 0),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 15,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                child: QrImageView(
+                  data: qrData,
+                  version: QrVersions.auto,
+                  size: 200,
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF8B4513),
+                ),
+              ).animate()
+                .scale(
+                  begin: const Offset(0.5, 0.5),
+                  end: const Offset(1.0, 1.0),
+                  duration: 600.ms,
+                  curve: Curves.easeOutBack,
+                ),
+              const SizedBox(height: 24),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, color: Color(0xFF8B4513)),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B4513).withOpacity(0.1),
+                  padding: const EdgeInsets.all(12),
+                ),
+              ).animate()
+                .fadeIn(duration: 600.ms)
+                .scale(
+                  begin: const Offset(0.5, 0.5),
+                  end: const Offset(1.0, 1.0),
+                  duration: 600.ms,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,42 +101,56 @@ class ProfileScreen extends StatelessWidget {
     
     return Scaffold(
       body: DuckBuckAnimatedBackground(
-        opacity: 0.03, // Slightly more subtle background pattern
+        opacity: 0.03,
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                // Top Bar
+                // Top Bar with back button and title only
                 _buildTopBar(context)
                     .animate()
-                    .fadeIn(duration: 600.ms)
-                    .slideY(begin: -0.2, end: 0),
+                    .fadeIn(duration: 400.ms)
+                    .slideY(begin: -0.2, end: 0, curve: Curves.easeOutBack),
                 
                 const SizedBox(height: 30),
                 
                 // Profile Photo Section
                 _buildProfilePhoto(userModel)
                     .animate()
-                    .scale(delay: 200.ms, begin: const Offset(0.8, 0.8), end: const Offset(1.0, 1.0))
-                    .then()
-                    .shimmer(duration: 1.seconds),
+                    .scale(
+                      delay: 200.ms,
+                      duration: 600.ms,
+                      begin: const Offset(0.8, 0.8),
+                      end: const Offset(1.0, 1.0),
+                      curve: Curves.easeOutBack,
+                    ),
                 
                 const SizedBox(height: 24),
                 
-                // User Info Cards
-                _buildInfoSection(userModel)
+                // QR and Settings buttons
+                _buildActionButtons(context, userModel)
                     .animate()
-                    .fadeIn(delay: 400.ms, duration: 800.ms)
-                    .slideX(begin: 0.2, end: 0),
+                    .fadeIn(delay: 300.ms, duration: 400.ms)
+                    .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
+                
+                const SizedBox(height: 24),
+                
+                // User Info Cards with stacked animation
+                _buildInfoSection(userModel),
                 
                 const SizedBox(height: 30),
                 
-                // Logout Button
+                // Logout Button with bounce animation
                 _buildLogoutButton(context)
                     .animate()
                     .fadeIn(delay: 900.ms)
-                    .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.0, 1.0)),
+                    .scaleXY(
+                      begin: 0.5,
+                      end: 1.0,
+                      duration: 600.ms,
+                      curve: Curves.elasticOut,
+                    ),
                 
                 const SizedBox(height: 40),
               ],
@@ -57,7 +158,7 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 300.ms);
   }
 
   Widget _buildTopBar(BuildContext context) {
@@ -79,18 +180,53 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
-        IconButton(
-          icon: const Icon(Icons.edit),
-          onPressed: () {
-            // Show a snackbar for now as this is not implemented
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Edit profile coming soon!'),
-                backgroundColor: Color(0xFFD4A76A),
-              ),
-            );
-          },
-          color: const Color(0xFFD4A76A),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, UserModel? userModel) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // QR Code button
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFD4A76A).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            iconSize: 28,
+            icon: const Icon(Icons.qr_code),
+            onPressed: () {
+              if (userModel != null) {
+                _showQRCode(context, userModel);
+              }
+            },
+            color: const Color(0xFFD4A76A),
+          ),
+        ),
+        const SizedBox(width: 20),
+        // Settings button
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFD4A76A).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            iconSize: 28,
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              if (userModel != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
+              }
+            },
+            color: const Color(0xFFD4A76A),
+          ),
         ),
       ],
     );
@@ -157,6 +293,37 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildInfoSection(UserModel? userModel) {
+    // Create a list of info cards to animate
+    final infoCards = [
+      _buildInfoCard(
+        'Email',
+        userModel?.email ?? 'Not provided',
+        Icons.email,
+      ),
+      _buildInfoCard(
+        'Phone',
+        userModel?.phoneNumber ?? 'Not provided',
+        Icons.phone,
+      ),
+      if (userModel?.dateOfBirth != null)
+        _buildInfoCard(
+          'Age',
+          '${userModel!.age} years',
+          Icons.cake,
+        ),
+      if (userModel?.gender != null)
+        _buildInfoCard(
+          'Gender',
+          _formatGender(userModel!.gender.toString().split('.').last),
+          Icons.person_outline,
+        ),
+      _buildInfoCard(
+        'Member Since',
+        _formatDate(userModel?.createdAt.toDate()),
+        Icons.calendar_today,
+      ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -171,34 +338,20 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
-        _buildInfoCard(
-          'Email',
-          userModel?.email ?? 'Not provided',
-          Icons.email,
-        ),
-        _buildInfoCard(
-          'Phone',
-          userModel?.phoneNumber ?? 'Not provided',
-          Icons.phone,
-        ),
-        if (userModel?.dateOfBirth != null)
-          _buildInfoCard(
-            'Age',
-            '${userModel!.age} years',
-            Icons.cake,
-          ),
-        if (userModel?.gender != null)
-          _buildInfoCard(
-            'Gender',
-            _formatGender(userModel!.gender.toString().split('.').last),
-            Icons.person_outline,
-          ),
-        _buildInfoCard(
-          'Member Since',
-          _formatDate(userModel?.createdAt.toDate()),
-          Icons.calendar_today,
-        ),
-      ].animate(interval: 200.ms).fadeIn().slideX(),
+        ...infoCards.asMap().entries.map((entry) {
+          final index = entry.key;
+          final card = entry.value;
+          return card.animate()
+            .fadeIn(delay: Duration(milliseconds: 200 + (index * 100)))
+            .slideY(
+              begin: 0.5, 
+              end: 0,
+              duration: 600.ms,
+              curve: Curves.easeOutQuad,
+              delay: Duration(milliseconds: 200 + (index * 100)),
+            );
+        }).toList(),
+      ],
     );
   }
 

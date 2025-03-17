@@ -61,6 +61,8 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   firebase_database: ^11.3.4
   flutter_slidable: ^4.0.0 
+  qr_flutter: ^4.1.0
+  firebase_dynamic_links: ^6.1.4 
 
 
 dev_dependencies:

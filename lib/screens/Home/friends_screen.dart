@@ -33,6 +33,29 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+    
+    // Refresh friend lists when screen appears
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      
+      // Check if we have a user and initialize the friend provider
+      if (authProvider.userModel != null) {
+        print('FriendsScreen: Setting up with user ID: ${authProvider.userModel!.uid}');
+        
+        // Initialize the friend provider with the current user ID
+        friendProvider.initializeFriendStreams(authProvider.userModel!.uid);
+        
+        // Now refresh the lists
+        print('FriendsScreen: Refreshing lists on screen load');
+        friendProvider.refreshLists();
+        
+        // Explicitly check for pending requests
+        friendProvider.checkForPendingRequests();
+      } else {
+        print('FriendsScreen: No user logged in, cannot load friends');
+      }
+    });
   }
   
   @override
@@ -225,21 +248,52 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final friendProvider = Provider.of<FriendProvider>(context, listen: false);
       
       if (authProvider.userModel != null) {
+        final currentUserId = authProvider.userModel!.uid;
+        print('Sending friend request from $currentUserId to $friendId');
+        
+        // Make sure the friend provider is initialized
+        if (friendProvider.currentUserId == null) {
+          print('Initializing friend provider before sending request');
+          friendProvider.initializeFriendStreams(currentUserId);
+        }
+        
         final result = await friendProvider.sendFriendRequest(
-          authProvider.userModel!.uid, 
+          currentUserId, 
           friendId
         );
+        
+        print('Friend request send result: $result');
+        
+        // Explicitly refresh the lists to ensure the UI shows the new request
+        await friendProvider.refreshLists();
+        
+        // Also explicitly check for pending requests
+        await friendProvider.checkForPendingRequests();
         
         setState(() {
           if (result.contains('successfully')) {
             _successMessage = result;
             _friendIdController.clear();
+            
+            // Show a snackbar for better user feedback
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Friend request sent successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
           } else {
             _errorMessage = result;
           }
         });
+      } else {
+        setState(() {
+          _errorMessage = 'You need to be logged in to send friend requests';
+        });
       }
     } catch (e) {
+      print('Error in _sendFriendRequest: $e');
       setState(() {
         _errorMessage = 'Failed to send friend request: $e';
       });
@@ -256,6 +310,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final friendProvider = Provider.of<FriendProvider>(context);
     final bool hasFriends = friendProvider.friends.isNotEmpty;
     final bool hasPendingRequests = friendProvider.pendingRequests.isNotEmpty;
+    
+    // Debug prints to understand what's in the lists
+    print('FRIENDS SCREEN - FRIENDS LIST: ${friendProvider.friends.length} items');
+    print('FRIENDS SCREEN - PENDING REQUESTS: ${friendProvider.pendingRequests.length} items');
+    print('FRIENDS SCREEN - PENDING REQUESTS DATA: ${friendProvider.pendingRequests}');
     
     return Scaffold(
       body: DuckBuckAnimatedBackground(
@@ -314,73 +373,103 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 )
               else
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (hasPendingRequests) ...[
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.pending_actions,
-                              color: Colors.brown.shade800,
-                            ).animate(
-                              onPlay: (controller) => controller.repeat(reverse: true),
-                            ).scale(
-                              begin: const Offset(1, 1),
-                              end: const Offset(1.1, 1.1),
-                              duration: 1.seconds,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Pending Requests',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.brown.shade800,
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      // Allow user to pull to refresh
+                      await friendProvider.refreshLists();
+                    },
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        // Always show pending requests section header if there are pending requests
+                        if (hasPendingRequests) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.brown.shade100, Colors.brown.shade50],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                          ],
-                        ).animate().fadeIn().slideX(begin: -0.2),
-                        const SizedBox(height: 12),
-                        ..._buildPendingRequests(friendProvider, authProvider),
-                        const SizedBox(height: 24),
-                      ],
-                      
-                      if (hasFriends) ...[
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.people,
-                              color: Colors.brown.shade800,
-                            ).animate(
-                              onPlay: (controller) => controller.repeat(reverse: true),
-                            ).scale(
-                              begin: const Offset(1, 1),
-                              end: const Offset(1.1, 1.1),
-                              duration: 1.seconds,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.pending_actions,
+                                  color: Colors.brown.shade800,
+                                ).animate(
+                                  onPlay: (controller) => controller.repeat(reverse: true),
+                                ).scale(
+                                  begin: const Offset(1, 1),
+                                  end: const Offset(1.1, 1.1),
+                                  duration: 1.seconds,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Pending Requests (${friendProvider.pendingRequests.length})',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.brown.shade800,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Friends',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.brown.shade800,
+                          ).animate().fadeIn().slideX(begin: -0.2, end: 0),
+                          ..._buildPendingRequests(friendProvider, authProvider),
+                          const SizedBox(height: 24),
+                        ],
+                        
+                        // Always show friends section header if there are friends
+                        if (hasFriends) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.brown.shade100, Colors.brown.shade50],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                          ],
-                        ).animate().fadeIn().slideX(begin: -0.2),
-                        const SizedBox(height: 12),
-                        ..._buildFriendsList(friendProvider, authProvider),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.people,
+                                  color: Colors.brown.shade800,
+                                ).animate(
+                                  onPlay: (controller) => controller.repeat(reverse: true),
+                                ).scale(
+                                  begin: const Offset(1, 1),
+                                  end: const Offset(1.1, 1.1),
+                                  duration: 1.seconds,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Friends (${friendProvider.friends.length})',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.brown.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ).animate().fadeIn().slideX(begin: -0.2, end: 0),
+                          ..._buildFriendsList(friendProvider, authProvider),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
             ],
           ),
         ),
       ),
-      floatingActionButton: hasFriends || hasPendingRequests ? FloatingActionButton(
+      floatingActionButton: FloatingActionButton(
         onPressed: _showAddFriendDialog,
         backgroundColor: Colors.brown.shade800,
         child: const Icon(Icons.person_add, color: Colors.white),
@@ -388,7 +477,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         .fadeIn(delay: 500.ms)
         .scale(begin: const Offset(0.5, 0.5))
         .then()
-        .shimmer(duration: 1.seconds, color: Colors.white24) : null,
+        .shimmer(duration: 1.seconds, color: Colors.white24),
     );
   }
 
@@ -423,7 +512,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const SizedBox(width: 40),
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
               Text(
                 'My Friends',
                 style: const TextStyle(
@@ -481,90 +573,266 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   List<Widget> _buildPendingRequests(FriendProvider friendProvider, AuthProvider authProvider) {
-    final requests = friendProvider.pendingRequests.where((request) {
-      final name = (request['name'] ?? '').toString().toLowerCase();
-      return _searchQuery.isEmpty || name.contains(_searchQuery);
-    }).toList();
-
-    if (requests.isEmpty) return [];
-
-    return requests.map((request) {
-      final bool isReceived = request['type'] == 'received';
+    try {
+      final requests = friendProvider.pendingRequests;
       
-      return Slidable(
-        key: ValueKey(request['uid']),
-        endActionPane: isReceived ? ActionPane(
-          motion: const ScrollMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (_) {
-                if (authProvider.userModel != null) {
-                  friendProvider.acceptFriendRequest(
-                    authProvider.userModel!.uid,
-                    request['uid'],
-                  );
-                }
-              },
-              backgroundColor: Colors.brown.shade600,
-              foregroundColor: Colors.white,
-              icon: Icons.check,
-              label: 'Accept',
+      print('Building pending requests UI - count: ${requests.length}');
+      print('All pending requests: $requests');
+      
+      // Apply search filter if needed
+      final filteredRequests = requests.where((request) {
+        // Debug print for each request
+        print('Filtering pending request: $request');
+        
+        // Skip invalid requests
+        if (request == null || !request.containsKey('uid')) {
+          print('Skipping invalid request: $request');
+          return false;
+        }
+        
+        // Get the display name using multiple fallbacks
+        final name = (request['displayName'] ?? (request['name'] ?? '')).toString().toLowerCase();
+        return _searchQuery.isEmpty || name.contains(_searchQuery);
+      }).toList();
+
+      if (filteredRequests.isEmpty) {
+        print('NO MATCHING PENDING REQUESTS AFTER FILTERING');
+        return [];
+      }
+
+      print('Building UI for ${filteredRequests.length} pending requests');
+      return filteredRequests.map((request) {
+        final bool isReceived = request['type'] == 'received';
+        final bool isSent = request['type'] == 'sent';
+        print('Request type: ${request['type']}, isReceived: $isReceived, isSent: $isSent');
+        
+        // Get the name with fallbacks
+        final String name = request['displayName'] ?? request['name'] ?? 'Unknown User';
+        print('Pending request name: $name');
+        
+        return Slidable(
+          key: ValueKey(request['uid']),
+          // For received requests - show accept/reject options
+          endActionPane: isReceived ? ActionPane(
+            motion: const ScrollMotion(),
+            children: [
+              SlidableAction(
+                onPressed: (_) async {
+                  if (authProvider.userModel != null) {
+                    try {
+                      await friendProvider.acceptFriendRequest(
+                        authProvider.userModel!.uid,
+                        request['uid'],
+                      );
+                      // Force refresh after accepting
+                      await friendProvider.refreshLists();
+                      // Show success message
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Friend request from $name accepted!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      print('Error accepting friend request: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error accepting friend request: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                backgroundColor: Colors.brown.shade600,
+                foregroundColor: Colors.white,
+                icon: Icons.check,
+                label: 'Accept',
+              ),
+              SlidableAction(
+                onPressed: (_) async {
+                  if (authProvider.userModel != null) {
+                    try {
+                      await friendProvider.removeFriend(
+                        authProvider.userModel!.uid,
+                        request['uid'],
+                      );
+                      // Force refresh after rejecting
+                      await friendProvider.refreshLists();
+                      // Show success message
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Friend request from $name rejected'),
+                            backgroundColor: Colors.grey,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      print('Error rejecting friend request: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error rejecting friend request: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                backgroundColor: Colors.brown.shade800,
+                foregroundColor: Colors.white,
+                icon: Icons.close,
+                label: 'Reject',
+              ),
+            ],
+          ) : isSent ? ActionPane(
+            // For sent requests - show cancel option
+            motion: const ScrollMotion(),
+            children: [
+              SlidableAction(
+                onPressed: (_) async {
+                  if (authProvider.userModel != null) {
+                    try {
+                      // Use the same removeFriend method to cancel the request
+                      await friendProvider.removeFriend(
+                        authProvider.userModel!.uid,
+                        request['uid'],
+                      );
+                      // Force refresh after cancelling
+                      await friendProvider.refreshLists();
+                      // Show success message
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Friend request to $name cancelled'),
+                            backgroundColor: Colors.grey,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      print('Error cancelling friend request: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error cancelling friend request: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                backgroundColor: Colors.brown.shade700,
+                foregroundColor: Colors.white,
+                icon: Icons.cancel,
+                label: 'Cancel',
+              ),
+            ],
+          ) : null,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isReceived ? Colors.brown.shade200 : 
+                      isSent ? Colors.brown.shade100 : Colors.brown.shade50,
+                width: isReceived ? 2 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.brown.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            SlidableAction(
-              onPressed: (_) {
-                if (authProvider.userModel != null) {
-                  friendProvider.removeFriend(
-                    authProvider.userModel!.uid,
-                    request['uid'],
-                  );
-                }
-              },
-              backgroundColor: Colors.brown.shade800,
-              foregroundColor: Colors.white,
-              icon: Icons.close,
-              label: 'Reject',
-            ),
-          ],
-        ) : null,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isReceived ? Colors.brown.shade200 : Colors.brown.shade100,
-              width: 1,
-            ),
-          ),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.brown.shade50,
-              child: Text(
-                request['name']?.toString().substring(0, 1).toUpperCase() ?? '?',
-                style: TextStyle(
-                  color: Colors.brown.shade800,
-                  fontWeight: FontWeight.bold,
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: Hero(
+                tag: 'friend-avatar-${request['uid']}',
+                child: CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Colors.brown.shade50,
+                  backgroundImage: request['photoURL'] != null && request['photoURL'].toString().isNotEmpty
+                      ? NetworkImage(request['photoURL'])
+                      : null,
+                  child: request['photoURL'] == null || request['photoURL'].toString().isEmpty
+                      ? Text(
+                          name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                          style: TextStyle(
+                            color: Colors.brown.shade800,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        )
+                      : null,
                 ),
               ),
-            ),
-            title: Text(
-              request['name'] ?? 'Unknown User',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              isReceived ? 'Wants to be your friend' : 'Request sent',
-              style: TextStyle(
-                color: Colors.brown.shade600,
+              title: Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        isReceived ? Icons.call_received : Icons.call_made,
+                        size: 14,
+                        color: Colors.brown.shade400,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isReceived ? 'Wants to be your friend' : 'Request sent',
+                        style: TextStyle(
+                          color: Colors.brown.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isReceived ? 'Swipe left to accept/reject' : 'Swipe left to cancel',
+                    style: TextStyle(
+                      color: Colors.brown.shade400,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+              trailing: Icon(
+                isReceived ? Icons.swipe_left : Icons.pending_outlined,
+                color: Colors.brown.shade400,
               ),
             ),
-            trailing: Icon(
-              isReceived ? Icons.swipe_left : Icons.pending_outlined,
-              color: Colors.brown.shade400,
-            ),
+          ),
+        ).animate()
+          .fadeIn(duration: 400.ms, curve: Curves.easeOut)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOut)
+          .then()
+          .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1), duration: 200.ms);
+      }).toList();
+    } catch (e) {
+      print('ERROR BUILDING PENDING REQUESTS: $e');
+      return [
+        Center(
+          child: Text(
+            'Error loading pending requests',
+            style: TextStyle(color: Colors.red),
           ),
         ),
-      ).animate().fadeIn().slideX(begin: 0.2, end: 0);
-    }).toList();
+      ];
+    }
   }
 
   List<Widget> _buildFriendsList(FriendProvider friendProvider, AuthProvider authProvider) {
@@ -607,19 +875,43 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ];
     }
 
-    return friends.map((friend) {
+    return friends.asMap().entries.map((entry) {
+      final index = entry.key;
+      final friend = entry.value;
+      
       return Slidable(
         key: ValueKey(friend['uid']),
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
           children: [
             SlidableAction(
-              onPressed: (_) {
+              onPressed: (_) async {
                 if (authProvider.userModel != null) {
-                  friendProvider.removeFriend(
-                    authProvider.userModel!.uid,
-                    friend['uid'],
-                  );
+                  try {
+                    await friendProvider.removeFriend(
+                      authProvider.userModel!.uid,
+                      friend['uid'],
+                    );
+                    // Show success message
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Removed ${friend['name'] ?? 'Unknown'} from friends'),
+                          backgroundColor: Colors.grey,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    print('Error removing friend: $e');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error removing friend: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 }
               },
               backgroundColor: Colors.brown.shade800,
@@ -638,37 +930,70 @@ class _FriendsScreenState extends State<FriendsScreen> {
               color: Colors.brown.shade100,
               width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.brown.withOpacity(0.05),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.brown.shade50,
-              child: Text(
-                friend['name']?.toString().substring(0, 1).toUpperCase() ?? '?',
-                style: TextStyle(
-                  color: Colors.brown.shade800,
-                  fontWeight: FontWeight.bold,
-                ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: Hero(
+              tag: 'friend-avatar-${friend['uid']}',
+              child: CircleAvatar(
+                radius: 25,
+                backgroundColor: Colors.brown.shade50,
+                backgroundImage: friend['photoURL'] != null && friend['photoURL'].toString().isNotEmpty
+                    ? NetworkImage(friend['photoURL'])
+                    : null,
+                child: friend['photoURL'] == null || friend['photoURL'].toString().isEmpty
+                    ? Text(
+                        friend['name']?.toString().substring(0, 1).toUpperCase() ?? '?',
+                        style: TextStyle(
+                          color: Colors.brown.shade800,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      )
+                    : null,
               ),
             ),
             title: Text(
               friend['name'] ?? 'Unknown Friend',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            subtitle: Row(
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(right: 5),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: friend['isOnline'] == true ? Colors.green : Colors.grey,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(right: 5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: friend['isOnline'] == true ? Colors.green : Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      friend['isOnline'] == true ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        color: friend['isOnline'] == true ? Colors.green.shade700 : Colors.grey,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  friend['isOnline'] == true ? 'Online' : 'Offline',
+                  'Swipe left to remove',
                   style: TextStyle(
-                    color: friend['isOnline'] == true ? Colors.green.shade700 : Colors.grey,
+                    color: Colors.brown.shade400,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
               ],
@@ -679,7 +1004,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
           ),
         ),
-      ).animate().fadeIn().slideX(begin: 0.2, end: 0);
+      ).animate(delay: (50 * index).ms)
+        .fadeIn(duration: 400.ms, curve: Curves.easeOut)
+        .slideY(begin: 0.3, end: 0, duration: 400.ms, curve: Curves.easeOut)
+        .then()
+        .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1), duration: 200.ms);
     }).toList();
   }
 } 

@@ -32,56 +32,98 @@ class FriendService {
   /// Sends a friend request if the receiver UID exists
   Future<String> sendFriendRequest(String senderUid, String receiverUid) async {
   try {
+    print('FRIEND SERVICE: Sending friend request from $senderUid to $receiverUid');
+    
     // Check if the sender is trying to send a request to themselves
     if (senderUid == receiverUid) {
+      print('FRIEND SERVICE: Cannot send friend request to self');
       return 'You cannot send a friend request to yourself.';
     }
 
     final receiverExists = await userExists(receiverUid);
 
     if (!receiverExists) {
+      print('FRIEND SERVICE: Receiver user does not exist: $receiverUid');
       return 'User does not exist.';
     }
 
     final senderRef = _firestore.collection('users').doc(senderUid);
     final receiverRef = _firestore.collection('users').doc(receiverUid);
 
-    await _firestore.runTransaction((transaction) async {
+    // First check if request already exists to avoid transaction if unnecessary
+    final senderDoc = await senderRef.get();
+    if (senderDoc.exists) {
+      final List<dynamic> senderFriends = senderDoc.data()?['friends'] ?? [];
+      
+      // Print all sender's friends for debugging
+      print('FRIEND SERVICE: Current sender friends: $senderFriends');
+      
+      if (senderFriends.any((friend) => 
+          friend is Map && 
+          friend['uid'] == receiverUid)) {
+        print('FRIEND SERVICE: Friend request already exists');
+        return 'Friend request already sent or you are already friends.';
+      }
+    }
+
+    String result = await _firestore.runTransaction<String>((transaction) async {
+      print('FRIEND SERVICE: Starting transaction for friend request');
       final senderSnapshot = await transaction.get(senderRef);
       final receiverSnapshot = await transaction.get(receiverRef);
 
-      if (!senderSnapshot.exists || !receiverSnapshot.exists) {
-        throw Exception('User document not found.');
+      if (!senderSnapshot.exists) {
+        print('FRIEND SERVICE: Sender document not found');
+        throw Exception('Your user profile was not found.');
+      }
+      
+      if (!receiverSnapshot.exists) {
+        print('FRIEND SERVICE: Receiver document not found');
+        throw Exception('Recipient user profile was not found.');
       }
 
       List<dynamic> senderFriends = senderSnapshot.data()?['friends'] ?? [];
       List<dynamic> receiverFriends = receiverSnapshot.data()?['friends'] ?? [];
 
-      // Check if a request already exists
-      if (senderFriends.any((friend) => friend['uid'] == receiverUid)) {
-        throw Exception('Friend request already sent.');
+      // Check if a request already exists (double check in transaction)
+      if (senderFriends.any((friend) => 
+          friend is Map && 
+          friend['uid'] == receiverUid)) {
+        print('FRIEND SERVICE: Friend request already exists (inside transaction)');
+        return 'Friend request already sent.';
       }
 
-      senderFriends.add({
+      // Add to sender's friends list with status 'pending' and type 'sent'
+      final senderEntry = {
         'uid': receiverUid,
         'status': 'pending',
         'type': 'sent',
-      });
-
-      receiverFriends.add({
+      };
+      
+      // Add to receiver's friends list with status 'pending' and type 'received'
+      final receiverEntry = {
         'uid': senderUid,
         'status': 'pending',
         'type': 'received',
-      });
+      };
+      
+      senderFriends.add(senderEntry);
+      receiverFriends.add(receiverEntry);
 
+      print('FRIEND SERVICE: Updating sender document with new friends list: $senderFriends');
+      print('FRIEND SERVICE: Updating receiver document with new friends list: $receiverFriends');
+      
       transaction.update(senderRef, {'friends': senderFriends});
       transaction.update(receiverRef, {'friends': receiverFriends});
+      
+      print('FRIEND SERVICE: Transaction completed successfully');
+      return 'Friend request sent successfully.';
     });
 
-    return 'Friend request sent successfully.';
+    print('FRIEND SERVICE: Friend request result: $result');
+    return result;
   } catch (e) {
-    print('Error sending friend request: $e');
-    return 'Failed to send friend request.';
+    print('FRIEND SERVICE: Error sending friend request: $e');
+    return 'Failed to send friend request: ${e.toString()}';
   }
 }
 

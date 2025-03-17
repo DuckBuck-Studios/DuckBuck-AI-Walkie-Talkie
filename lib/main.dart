@@ -9,6 +9,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart'; 
 import 'providers/friend_provider.dart';
+import 'providers/user_provider.dart';
 import 'screens/Home/home_screen.dart';   
 import 'screens/onboarding/name_screen.dart';
 import 'screens/onboarding/dob_screen.dart';
@@ -60,6 +61,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => FriendProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: MaterialApp(
         title: 'DuckBuck',
