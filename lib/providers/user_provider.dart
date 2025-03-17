@@ -21,25 +21,60 @@ class UserProvider with ChangeNotifier {
   
   // Get user status
   bool _isOnline = false;
-  String _statusAnimation = 'default';
+  String? _statusAnimation;
   int _lastStatusTimestamp = 0;
   
   bool get isOnline => _isOnline;
-  String get statusAnimation => _statusAnimation;
+  String? get statusAnimation => _statusAnimation;
   int get lastStatusTimestamp => _lastStatusTimestamp;
   
   // Initialize provider
   Future<void> initialize() async {
+    print("UserProvider: Initializing");
     final currentUid = _userService.currentUserId;
     if (currentUid != null) {
+      print("UserProvider: Current user ID found: $currentUid");
       await _setupUserListeners(currentUid);
+      
+      // Wait for initial user data to be fetched
+      if (_currentUser == null) {
+        print("UserProvider: Waiting for initial user data");
+        // Create a completer to wait for the first user data
+        final completer = Completer<void>();
+        late StreamSubscription subscription;
+        
+        subscription = _userService.getUserStreamById(currentUid).listen((userData) {
+          if (userData != null && !completer.isCompleted) {
+            print("UserProvider: Initial user data received");
+            _currentUser = userData;
+            completer.complete();
+            subscription.cancel();
+          }
+        });
+        
+        // Set a timeout just in case
+        Future.delayed(const Duration(seconds: 5), () {
+          if (!completer.isCompleted) {
+            print("UserProvider: Timeout waiting for user data");
+            completer.complete();
+          }
+        });
+        
+        await completer.future;
+      }
+      
+      print("UserProvider: Initialization completed with user: ${_currentUser?.displayName ?? 'Unknown'}");
+    } else {
+      print("UserProvider: No current user ID found");
     }
     
     // Listen for auth state changes
     auth.FirebaseAuth.instance.authStateChanges().listen((auth.User? user) {
       if (user != null && (currentUid == null || currentUid != user.uid)) {
+        print("UserProvider: Auth state changed, user logged in: ${user.uid}");
         _setupUserListeners(user.uid);
       } else if (user == null) {
+        print("UserProvider: Auth state changed, user logged out");
         _clearUser();
       }
     });
@@ -59,16 +94,20 @@ class UserProvider with ChangeNotifier {
     // Setup user status listener
     _userStatusSubscription = _userService.getUserStatusStream(uid).listen((statusData) {
       _isOnline = statusData['isOnline'] ?? false;
-      _statusAnimation = statusData['animation'] ?? 'default';
+      _statusAnimation = statusData['animation'];
       _lastStatusTimestamp = statusData['timestamp'] ?? 0;
       notifyListeners();
     });
   }
   
   // Set user status animation
-  Future<void> setStatusAnimation(String animation) async {
+  Future<void> setStatusAnimation(String? animation) async {
+    print("UserProvider: Setting status animation to: ${animation ?? 'null'}");
     if (_currentUser != null) {
+      print("UserProvider: User exists, calling UserService.setUserStatusAnimation");
       await _userService.setUserStatusAnimation(_currentUser!.uid, animation);
+    } else {
+      print("UserProvider: Cannot set status animation, user is null");
     }
   }
   
@@ -96,7 +135,7 @@ class UserProvider with ChangeNotifier {
     await _clearSubscriptions();
     _currentUser = null;
     _isOnline = false;
-    _statusAnimation = 'default';
+    _statusAnimation = null;
     _lastStatusTimestamp = 0;
     notifyListeners();
   }

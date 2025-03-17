@@ -1,14 +1,14 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as path;
 import '../models/user_model.dart'; 
-import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_database/firebase_database.dart' as database;
 
 class UserService {
-  final _realtimeDb = FirebaseDatabase.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final _realtimeDb = database.FirebaseDatabase.instance;
+  final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final Dio _dio = Dio();
   
@@ -87,7 +87,7 @@ class UserService {
       
       // Create updated metadata with the new dateOfBirth
       final updatedMetadata = Map<String, dynamic>.from(user.metadata ?? {});
-      updatedMetadata['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
+      updatedMetadata['dateOfBirth'] = firestore.Timestamp.fromDate(dateOfBirth);
       
       // Update the user document with the new metadata
       await _firestore.collection('users').doc(userId).update({
@@ -161,7 +161,7 @@ class UserService {
         final email = userData['email'];
         if (email is String) {
           metadataUpdates['email'] = email;
-          updates['email'] = FieldValue.delete();
+          updates['email'] = firestore.FieldValue.delete();
           needsUpdate = true;
         }
       }
@@ -172,7 +172,7 @@ class UserService {
         
         final phoneNumber = userData['phoneNumber'];
         metadataUpdates['phoneNumber'] = phoneNumber;
-        updates['phoneNumber'] = FieldValue.delete();
+        updates['phoneNumber'] = firestore.FieldValue.delete();
         needsUpdate = true;
       }
       
@@ -181,9 +181,9 @@ class UserService {
         print('Moving top-level dateOfBirth to metadata for user $userId');
         
         final dob = userData['dateOfBirth'];
-        if (dob is Timestamp) {
+        if (dob is firestore.Timestamp) {
           metadataUpdates['dateOfBirth'] = dob;
-          updates['dateOfBirth'] = FieldValue.delete();
+          updates['dateOfBirth'] = firestore.FieldValue.delete();
           needsUpdate = true;
         }
       }
@@ -195,7 +195,7 @@ class UserService {
         final gender = userData['gender'];
         if (gender is String) {
           metadataUpdates['gender'] = gender;
-          updates['gender'] = FieldValue.delete();
+          updates['gender'] = firestore.FieldValue.delete();
           needsUpdate = true;
         }
       }
@@ -222,7 +222,7 @@ class UserService {
           if (photoURL == null || (photoURL is String && photoURL.isEmpty)) {
             updates['photoURL'] = profileUrl;
           }
-          updates['profileUrl'] = FieldValue.delete();
+          updates['profileUrl'] = firestore.FieldValue.delete();
           needsUpdate = true;
         }
       }
@@ -371,24 +371,53 @@ class UserService {
     }
   }
 
+  // Method to set predefined status animations
+  Future<void> setUserStatusAnimation(String userId, String? animation) async {
+    print("UserService: Setting status animation for user: $userId");
+    // animation parameter can be null or any valid animation name from popup
+    if (animation == null) {
+      print("UserService: Setting null animation (no animation)");
+    } else {
+      print("UserService: Setting animation: $animation");
+    }
+
+    await updateUserStatus(userId, animation);
+  }
+
   // Add these new methods for status management
-  Future<void> updateUserStatus(String userId, String statusAnimation) async {
+  Future<void> updateUserStatus(String userId, String? statusAnimation) async {
     try {
+      print("UserService: Updating user status in Realtime DB for user: $userId");
+      print("UserService: Setting animation: ${statusAnimation ?? 'null'}, isOnline: true");
+      
       final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
+      
+      // Update the status directly without checking connection
+      // This avoids potential path issues with .info/connected
       await statusRef.set({
         'animation': statusAnimation,
-        'timestamp': ServerValue.timestamp,
+        'timestamp': database.ServerValue.timestamp,
         'isOnline': true,
+        'lastSeen': database.ServerValue.timestamp,
       });
+      
+      print("UserService: Status updated successfully in Realtime DB");
 
-      // Remove the status when user goes offline
-      statusRef.onDisconnect().remove();
+      // Set user as offline on disconnect instead of removing
+      statusRef.onDisconnect().update({
+        'isOnline': false,
+        'timestamp': database.ServerValue.timestamp,
+        'lastSeen': database.ServerValue.timestamp,
+        // Keep the animation as is
+      });
+      print("UserService: Set onDisconnect handler to mark user as offline");
     } catch (e) {
       print('Error updating user status: $e');
     }
   }
 
   Stream<Map<String, dynamic>> getUserStatusStream(String userId) {
+    print("UserService: Setting up status stream for user: $userId");
     return _realtimeDb
         .ref()
         .child('userStatus')
@@ -397,16 +426,20 @@ class UserService {
         .map((event) {
       if (event.snapshot.value != null) {
         final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        print("UserService: Status update received: animation=${data['animation']}, isOnline=${data['isOnline']}");
         return {
-          'animation': data['animation'] ?? 'default',
+          'animation': data['animation'],
           'timestamp': data['timestamp'] ?? 0,
           'isOnline': data['isOnline'] ?? false,
+          'lastSeen': data['lastSeen'] ?? 0,
         };
       }
+      print("UserService: Status update received: null (user offline)");
       return {
-        'animation': 'default',
+        'animation': null,
         'timestamp': 0,
         'isOnline': false,
+        'lastSeen': 0,
       };
     });
   }
@@ -414,38 +447,11 @@ class UserService {
   // Method to clear user status when logging out
   Future<void> clearUserStatus(String userId) async {
     try {
+      print("UserService: Clearing user status for user: $userId");
       await _realtimeDb.ref().child('userStatus').child(userId).remove();
+      print("UserService: User status cleared successfully");
     } catch (e) {
       print('Error clearing user status: $e');
     }
-  }
-
-  // Method to set predefined status animations
-  Future<void> setUserStatusAnimation(String userId, String animation) async {
-    // animation parameter should be the name of the JSON file without extension
-    // Example: 'happy', 'busy', 'away', 'gaming', etc.
-    if (!_isValidStatusAnimation(animation)) {
-      print('Invalid status animation: $animation');
-      return;
-    }
-
-    await updateUserStatus(userId, animation);
-  }
-
-  // Validate status animation names
-  bool _isValidStatusAnimation(String animation) {
-    // Add all valid status animation names here
-    final validAnimations = [
-      'default',
-      'happy',
-      'busy',
-      'away',
-      'gaming',
-      'working',
-      'sleeping',
-      'eating',
-      // Add more status animations as needed
-    ];
-    return validAnimations.contains(animation);
   }
 }

@@ -103,6 +103,7 @@ class DuckBuckButton extends StatelessWidget {
                 )
               : Row(
                   mainAxisAlignment: alignment,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (lottieAsset != null) ...[
                       SizedBox(
@@ -112,9 +113,12 @@ class DuckBuckButton extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    Text(
-                      text,
-                      style: effectiveTextStyle,
+                    Flexible(
+                      child: Text(
+                        text,
+                        style: effectiveTextStyle,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     if (icon != null) ...[
                       const SizedBox(width: 8),

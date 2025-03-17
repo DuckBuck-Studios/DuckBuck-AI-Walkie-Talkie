@@ -377,9 +377,19 @@ class AuthProvider with ChangeNotifier {
       _status = AuthStatus.loading;
       notifyListeners();
 
+      // Clear any cached data
+      _userModel = null;
+      _cachedOnboardingStage = null;
+      _errorMessage = null;
+
+      // Sign out from Firebase Auth
       await _authService.signOut();
       
-      // Auth state listener will update the status
+      // Explicitly set status to unauthenticated
+      _status = AuthStatus.unauthenticated;
+      _user = null;
+      notifyListeners();
+      
     } catch (e) {
       _status = AuthStatus.error;
       _errorMessage = e.toString();

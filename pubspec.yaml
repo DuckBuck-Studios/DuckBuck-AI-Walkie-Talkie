@@ -61,8 +61,7 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   firebase_database: ^11.3.4
   flutter_slidable: ^4.0.0 
-  qr_flutter: ^4.1.0
-  firebase_dynamic_links: ^6.1.4 
+  qr_flutter: ^4.1.0 
 
 
 dev_dependencies:
@@ -91,7 +90,7 @@ flutter:
     - assets/animations/
     - assets/legal/
     - assets/status/usr-emoji/
-    - assets/status/blue-demon/
+    - assets/status/blue-demon/ 
 
   # To add assets to your application, add an assets section, like this:
   # assets:

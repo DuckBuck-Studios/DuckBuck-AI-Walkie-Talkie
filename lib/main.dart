@@ -59,9 +59,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FriendProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()), 
         ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => FriendProvider()),
       ],
       child: MaterialApp(
         title: 'DuckBuck',
@@ -74,70 +74,8 @@ class MyApp extends StatelessWidget {
             brightness: Brightness.light,
           ),
         ),
-        home: const SplashScreen(),
+        home: const AuthenticationWrapper(),
         debugShowCheckedModeBanner: false,
-      ),
-    );
-  }
-}
-
-/// A splash screen to prevent flash of content
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
-
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    
-    // Quickly initialize and move to the main app
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const AuthenticationWrapper(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
-      }
-    });
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: DuckBuckAnimatedBackground(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // App logo or name
-              Text(
-                "DuckBuck",
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ).animate().fadeIn(duration: const Duration(milliseconds: 300)).scale(
-                begin: const Offset(0.8, 0.8),
-                end: const Offset(1.0, 1.0),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutBack,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -153,35 +91,53 @@ class AuthenticationWrapper extends StatefulWidget {
 }
 
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
-  bool _isNavigating = false;
-
   @override
   Widget build(BuildContext context) {
-    // Use a Consumer to listen to auth state changes
     return Consumer<AuthProvider>(
-      builder: (_, authProvider, __) {
-        // If not authenticated, show welcome screen with animation
-        if (!authProvider.isAuthenticated) {
-          return const WelcomeScreen().animate().fadeIn(duration: const Duration(milliseconds: 300));
+      builder: (context, authProvider, child) {
+        // Show loading screen while checking auth state
+        if (authProvider.status == AuthStatus.loading) {
+          return Scaffold(
+            body: DuckBuckAnimatedBackground(
+              opacity: 0.03,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
+                ),
+              ),
+            ),
+          );
         }
-        
-        // For authenticated users, check onboarding status and direct to proper screen
+
+        // If not authenticated, show welcome screen
+        if (!authProvider.isAuthenticated) {
+          return const WelcomeScreen().animate().fadeIn(
+            duration: const Duration(milliseconds: 300),
+          );
+        }
+
+        // For authenticated users, check onboarding status
         return FutureBuilder<OnboardingStage>(
           future: authProvider.getOnboardingStage(),
           builder: (context, snapshot) {
-            // While loading onboarding stage, show a placeholder that matches the app theme
-            // rather than a loading indicator
+            // Show loading screen while checking onboarding stage
             if (!snapshot.hasData) {
               return Scaffold(
                 body: DuckBuckAnimatedBackground(
-                  child: const SizedBox.expand(),
+                  opacity: 0.03,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
+                    ),
+                  ),
                 ),
               );
             }
-             
+
+            // Determine which screen to show based on onboarding stage
             Widget screenToShow;
             final onboardingStage = snapshot.data!;
-            
+
             if (onboardingStage == OnboardingStage.completed) {
               screenToShow = const HomeScreen();
             } else {
@@ -202,8 +158,8 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
                   break;
               }
             }
-            
-            // Return the appropriate screen with a fade-in animation
+
+            // Show the appropriate screen with animation
             return screenToShow.animate().fadeIn(
               duration: const Duration(milliseconds: 300),
             );

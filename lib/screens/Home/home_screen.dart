@@ -4,9 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../widgets/animated_background.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/friend_provider.dart';
-import '../../widgets/cool_button.dart';
+import '../../widgets/friend_card.dart';
+import '../../widgets/status_animation_popup.dart';
 import 'profile_screen.dart';
-import 'friends_screen.dart';
+import 'friend_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,49 +18,78 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PageController _friendsPageController = PageController();
-  int _currentFriendIndex = 0;
-
+  
   @override
   void initState() {
     super.initState();
     // Initialize the user provider
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<UserProvider>(context, listen: false).initialize();
-      
-      // Initialize friend streams
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      print("HomeScreen: Starting initialization sequence");
       final userProvider = Provider.of<UserProvider>(context, listen: false);
-      if (userProvider.uid != null) {
-        Provider.of<FriendProvider>(context, listen: false).initializeFriendStreams(userProvider.uid!);
-      }
+      // Wait for user provider to initialize
+      await userProvider.initialize();
+      print("HomeScreen: UserProvider initialization completed");
+      
+      // Set user status as online - only after initialization is complete
+      _setUserOnline();
+      
+      // Initialize friend provider
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      print("HomeScreen: Initializing FriendProvider");
+      await friendProvider.initialize();
+      print("HomeScreen: FriendProvider initialization completed");
+      
+      // Start monitoring friend statuses
+      _startFriendStatusMonitoring(friendProvider);
     });
   }
-
+  
   @override
   void dispose() {
     _friendsPageController.dispose();
     super.dispose();
   }
 
-  void _navigateToProfile() {
-    print("Navigating to profile");
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const ProfileScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
+  // Set user status as online
+  void _setUserOnline() {
+    print("HomeScreen: Setting user online status");
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    // Set user as online - the initialize method already handles this
+    // We can use setStatusAnimation to ensure the status is active
+    if (userProvider.uid != null) {
+      print("HomeScreen: User ID found: ${userProvider.uid}, updating status animation");
+      // Pass the current animation (which might be null)
+      userProvider.setStatusAnimation(userProvider.statusAnimation);
+    } else {
+      print("HomeScreen: User ID is null, cannot set online status");
+    }
+  }
+
+  // Show status animation popup
+  void _showStatusAnimationPopup() {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (context) => StatusAnimationPopup(
+        onAnimationSelected: (animation) {
+          userProvider.setStatusAnimation(animation);
         },
-        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }
-  
-  void _navigateToFriends() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const FriendsScreen()),
-    );
+
+  // Monitor friend statuses
+  void _startFriendStatusMonitoring(FriendProvider friendProvider) {
+    print("HomeScreen: Starting friend status monitoring");
+    // This ensures the friend provider starts monitoring status updates
+    friendProvider.startStatusMonitoring();
+    
+    // Add debugging for friend statuses
+    final friends = friendProvider.friends;
+    print("HomeScreen: Monitoring ${friends.length} friends for status updates");
+    for (var friend in friends) {
+      print("HomeScreen: Friend ${friend['displayName']} (${friend['id']}) status: ${friend['isOnline'] == true ? 'Online' : 'Offline'}");
+    }
   }
 
   @override
@@ -67,25 +97,21 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: DuckBuckAnimatedBackground(
         child: SafeArea(
-          child: Consumer2<UserProvider, FriendProvider>(
-            builder: (context, userProvider, friendProvider, child) {
-              final user = userProvider.currentUser;
-              final friends = friendProvider.friends;
-              
-              // Debug print
-              print('HomeScreen build: Found ${friends.length} friends');
-              
-              return Column(
-                children: [
-                  // Top Bar with Profile Icon
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Profile Photo Button
-                        GestureDetector(
+          child: Column(
+            children: [
+              // Top Bar with Profile Icon
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Profile Photo Button
+                    Consumer<UserProvider>(
+                      builder: (context, userProvider, child) {
+                        final user = userProvider.currentUser;
+                        return GestureDetector(
                           onTap: _navigateToProfile,
+                          onLongPress: _showStatusAnimationPopup,
                           child: Hero(
                             tag: 'profile-photo',
                             child: Container(
@@ -105,9 +131,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(25),
-                                child: user?.photoURL != null
+                                child: user?.photoURL != null && user!.photoURL!.isNotEmpty
                                     ? Image.network(
-                                        user!.photoURL!,
+                                        user.photoURL!,
                                         fit: BoxFit.cover,
                                         errorBuilder: (context, error, stackTrace) {
                                           return const Icon(Icons.person, size: 30, color: Color(0xFFD4A76A));
@@ -124,283 +150,238 @@ class _HomeScreenState extends State<HomeScreen> {
                             end: const Offset(1.0, 1.0),
                             duration: 500.ms,
                             curve: Curves.elasticOut,
-                          ),
-                        
-                        // App Name or Title
-                        Text(
-                          "DuckBuck",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.brown.shade800,
-                          ),
-                        ),
-                        
-                        // Empty Container for balance
-                        SizedBox(width: 50),
-                      ],
+                          );
+                      }
                     ),
-                  ),
-                  
-                  // Main Content
-                  Expanded(
-                    child: friends.isEmpty
-                        ? _buildEmptyState()
-                        : _buildFriendsView(friends),
-                  ),
-                  
-                  // Bottom Button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                    child: DuckBuckButton(
-                      text: friends.isEmpty ? 'Add Friends' : 'Friends',
-                      onTap: _navigateToFriends,
-                      icon: const Icon(Icons.people, color: Colors.white),
-                      color: const Color(0xFF4A1C03),
-                      borderColor: const Color(0xFF2D1102),
-                      textColor: Colors.white,
-                    ),
-                  ).animate()
-                    .fadeIn(duration: 600.ms, delay: 600.ms)
-                    .slideY(begin: 0.3, end: 0, duration: 500.ms, curve: Curves.easeOutQuad),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildEmptyState() {
-    return Center(
-      child: Text(
-        'Add friends to start talking',
-        style: TextStyle(
-          fontSize: 18,
-          color: Colors.brown.shade800,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    ).animate()
-      .fadeIn(duration: 600.ms, delay: 200.ms)
-      .moveY(begin: 20, end: 0, duration: 500.ms, curve: Curves.easeOutQuad);
-  }
-  
-  Widget _buildFriendsView(List<Map<String, dynamic>> friends) {
-    return Column(
-      children: [
-        // Friends Carousel
-        Expanded(
-          child: PageView.builder(
-            controller: _friendsPageController,
-            itemCount: friends.length,
-            onPageChanged: (index) {
-              setState(() {
-                _currentFriendIndex = index;
-              });
-            },
-            itemBuilder: (context, index) {
-              final friend = friends[index];
-              print('Building card for friend: ${friend['displayName'] ?? 'Unknown'}');
-              return Center(
-                child: _buildFriendCard(friend),
-              );
-            },
-          ),
-        ),
-        
-        // Page Indicator Dots
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              friends.length,
-              (index) => Container(
-                width: 10,
-                height: 10,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _currentFriendIndex == index
-                      ? const Color(0xFF4A1C03)
-                      : const Color(0xFF4A1C03).withOpacity(0.3),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildFriendCard(Map<String, dynamic> friend) {
-    final String name = friend['displayName'] ?? friend['name'] ?? 'Friend';
-    
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.8,
-      height: MediaQuery.of(context).size.height * 0.5,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.brown.shade800.withOpacity(0.2),
-            blurRadius: 20,
-            spreadRadius: 5,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Friend Photo as Background
-            ShaderMask(
-              shaderCallback: (rect) {
-                return LinearGradient(
-                  begin: Alignment.center,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                ).createShader(rect);
-              },
-              blendMode: BlendMode.srcOver,
-              child: friend['photoURL'] != null && friend['photoURL'].toString().isNotEmpty
-                ? Image.network(
-                    friend['photoURL'],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.brown.shade100,
-                        child: Center(
-                          child: Icon(
-                            Icons.person,
-                            size: 80,
-                            color: Colors.brown.shade800,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : Container(
-                    color: Colors.brown.shade100,
-                    child: Center(
-                      child: Icon(
-                        Icons.person,
-                        size: 80,
+                    
+                    // App Name or Title
+                    Text(
+                      "DuckBuck",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                         color: Colors.brown.shade800,
                       ),
-                    ),
-                  ),
-            ),
-            
-            // Gradient overlay for better text visibility
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 150,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.6),
-                    ],
-                  ),
+                    ).animate()
+                      .fadeIn(duration: 600.ms)
+                      .slideY(begin: -0.2, end: 0, duration: 600.ms, curve: Curves.easeOutCubic),
+                    
+                    // Empty Container for balance
+                    const SizedBox(width: 50),
+                  ],
                 ),
               ),
-            ),
-            
-            // Friend name and info
-            Positioned(
-              bottom: 20,
-              left: 20,
-              right: 20,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Friend name
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(1, 1),
-                          blurRadius: 3,
-                          color: Colors.black54,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  
-                  // Online status indicator
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: friend['isOnline'] == true ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        friend['isOnline'] == true ? 'Online' : 'Offline',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white.withOpacity(0.9),
-                          shadows: [
-                            Shadow(
-                              offset: Offset(1, 1),
-                              blurRadius: 3,
-                              color: Colors.black54,
-                            ),
+              
+              // Friends section with PageView
+              Expanded(
+                child: Consumer<FriendProvider>(
+                  builder: (context, friendProvider, child) {
+                    final friends = friendProvider.friends;
+                    
+                    if (friends.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 80,
+                              color: Color(0xFF3C1F1F),
+                            ).animate()
+                              .fadeIn(duration: 800.ms)
+                              .scale(
+                                begin: const Offset(0.5, 0.5),
+                                duration: 800.ms,
+                                curve: Curves.elasticOut,
+                              ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No friends yet',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.brown.shade800,
+                              ),
+                            ).animate()
+                              .fadeIn(delay: 200.ms, duration: 600.ms),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add friends to see them here',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.brown.shade600,
+                              ),
+                            ).animate()
+                              .fadeIn(delay: 400.ms, duration: 600.ms),
                           ],
                         ),
+                      );
+                    }
+                    
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: PageView.builder(
+                            controller: _friendsPageController,
+                            itemCount: friends.length,
+                            itemBuilder: (context, index) {
+                              // Staggered animation based on index
+                              return Padding(
+                                // Add padding to reduce the effective card size
+                                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 20.0),
+                                child: FriendCard(
+                                  friend: friends[index],
+                                  showStatus: true, // Enable status display
+                                ).animate()
+                                  .fadeIn(
+                                    delay: Duration(milliseconds: 100 * index), 
+                                    duration: 800.ms
+                                  )
+                                  .scale(
+                                    begin: const Offset(0.9, 0.9),
+                                    end: const Offset(1.0, 1.0),
+                                    delay: Duration(milliseconds: 100 * index),
+                                    duration: 800.ms,
+                                    curve: Curves.easeOutBack,
+                                  ),
+                              );
+                            },
+                          ),
+                        ),
+                        if (friends.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                friends.length,
+                                (index) => AnimatedBuilder(
+                                  animation: _friendsPageController,
+                                  builder: (context, child) {
+                                    // Calculate current page for indicator
+                                    double page = _friendsPageController.hasClients
+                                        ? _friendsPageController.page ?? 0
+                                        : 0;
+                                    bool isActive = (index == page.round());
+                                    
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                                      width: isActive ? 12 : 8,
+                                      height: isActive ? 12 : 8,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isActive
+                                            ? const Color(0xFF3C1F1F)
+                                            : const Color(0xFF3C1F1F).withOpacity(0.3),
+                                      ),
+                                    ).animate(
+                                      target: isActive ? 1.0 : 0.0,
+                                    ).scaleXY(
+                                      begin: 1.0,
+                                      end: 1.2,
+                                      duration: 300.ms,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ).animate()
+                            .fadeIn(delay: 600.ms, duration: 400.ms),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              
+              // Friends button at bottom
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24.0),
+                child: GestureDetector(
+                  onTap: _navigateToFriendScreen,
+                  child: Container(
+                    width: 200,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF3C1F1F), // Dark chocolate
+                          const Color(0xFF5C2F2F), // Lighter chocolate
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  Text(
-                    'Swipe to see more friends',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.7),
-                      fontStyle: FontStyle.italic,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(1, 1),
-                          blurRadius: 2,
-                          color: Colors.black54,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.people,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Manage Friends',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ).animate()
+                  .fadeIn(duration: 600.ms, delay: 400.ms)
+                  .scale(
+                    begin: const Offset(0.8, 0.8),
+                    end: const Offset(1.0, 1.0),
+                    duration: 500.ms,
+                    curve: Curves.easeOutBack,
+                  ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ).animate()
-      .fadeIn()
-      .scale(
-        begin: const Offset(0.9, 0.9),
-        duration: 500.ms,
-        curve: Curves.easeOutBack,
-      );
+    );
+  }
+
+  void _navigateToProfile() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const ProfileScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
+  }
+
+  void _navigateToFriendScreen() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const FriendScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
   }
 }

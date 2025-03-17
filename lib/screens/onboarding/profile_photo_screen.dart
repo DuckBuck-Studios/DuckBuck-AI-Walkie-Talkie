@@ -3,11 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:duckbuck/widgets/cool_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart'; 
 import '../../providers/auth_provider.dart' as auth;
 import '../../widgets/animated_background.dart';
-import 'profile_photo_preview_screen.dart';
-import '../Home/home_screen.dart';
+import 'profile_photo_preview_screen.dart'; 
 
 class ProfilePhotoScreen extends StatefulWidget {
   const ProfilePhotoScreen({super.key});
@@ -50,40 +48,12 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
         return;
       }
       
-      // Crop the image
-      final CroppedFile? croppedFile = await ImageCropper().cropImage(
-        sourcePath: pickedImage.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        compressQuality: 80,
-        compressFormat: ImageCompressFormat.jpg,
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop your profile photo',
-            toolbarColor: const Color(0xFFD4A76A),
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-            activeControlsWidgetColor: const Color(0xFFD4A76A),
-          ),
-          IOSUiSettings(
-            title: 'Crop your profile photo',
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
-            aspectRatioPickerButtonHidden: true,
-          ),
-        ],
-      );
-      
-      if (croppedFile == null) {
-        return;
-      }
-      
-      // Navigate to preview screen
+      // Navigate directly to preview screen
       if (mounted) {
         Navigator.of(context).push(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => ProfilePhotoPreviewScreen(
-              imagePath: croppedFile.path,
+              imagePath: pickedImage.path,
             ),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
@@ -182,38 +152,6 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-  }
-
-  Future<void> _skipProfilePhoto() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Mark onboarding as completed without a profile photo
-      await Provider.of<auth.AuthProvider>(context, listen: false).updateOnboardingStage(auth.OnboardingStage.completed);
-      
-      // Navigate to home screen
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        );
-      }
-    } catch (e) {
-      _showErrorSnackBar('Failed to complete profile: ${e.toString()}');
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   @override

@@ -7,6 +7,7 @@ import '../../providers/user_provider.dart';
 import '../../widgets/animated_background.dart';
 import '../../models/user_model.dart';
 import 'settings_screen.dart';
+import '../Authentication/welcome_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -97,68 +98,72 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userModel = Provider.of<auth.AuthProvider>(context).userModel;
-    
-    return Scaffold(
-      body: DuckBuckAnimatedBackground(
-        opacity: 0.03,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                // Top Bar with back button and title only
-                _buildTopBar(context)
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: -0.2, end: 0, curve: Curves.easeOutBack),
-                
-                const SizedBox(height: 30),
-                
-                // Profile Photo Section
-                _buildProfilePhoto(userModel)
-                    .animate()
-                    .scale(
-                      delay: 200.ms,
-                      duration: 600.ms,
-                      begin: const Offset(0.8, 0.8),
-                      end: const Offset(1.0, 1.0),
-                      curve: Curves.easeOutBack,
-                    ),
-                
-                const SizedBox(height: 24),
-                
-                // QR and Settings buttons
-                _buildActionButtons(context, userModel)
-                    .animate()
-                    .fadeIn(delay: 300.ms, duration: 400.ms)
-                    .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
-                
-                const SizedBox(height: 24),
-                
-                // User Info Cards with stacked animation
-                _buildInfoSection(userModel),
-                
-                const SizedBox(height: 30),
-                
-                // Logout Button with bounce animation
-                _buildLogoutButton(context)
-                    .animate()
-                    .fadeIn(delay: 900.ms)
-                    .scaleXY(
-                      begin: 0.5,
-                      end: 1.0,
-                      duration: 600.ms,
-                      curve: Curves.elasticOut,
-                    ),
-                
-                const SizedBox(height: 40),
-              ],
+    return Consumer<UserProvider>(
+      builder: (context, userProvider, child) {
+        final userModel = userProvider.currentUser;
+        
+        return Scaffold(
+          body: DuckBuckAnimatedBackground(
+            opacity: 0.03,
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    // Top Bar with back button and title only
+                    _buildTopBar(context)
+                        .animate()
+                        .fadeIn(duration: 400.ms)
+                        .slideY(begin: -0.2, end: 0, curve: Curves.easeOutBack),
+                    
+                    const SizedBox(height: 30),
+                    
+                    // Profile Photo Section
+                    _buildProfilePhoto(userModel)
+                        .animate()
+                        .scale(
+                          delay: 200.ms,
+                          duration: 600.ms,
+                          begin: const Offset(0.8, 0.8),
+                          end: const Offset(1.0, 1.0),
+                          curve: Curves.easeOutBack,
+                        ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // QR and Settings buttons
+                    _buildActionButtons(context, userModel)
+                        .animate()
+                        .fadeIn(delay: 300.ms, duration: 400.ms)
+                        .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // User Info Cards with stacked animation
+                    _buildInfoSection(userModel),
+                    
+                    const SizedBox(height: 30),
+                    
+                    // Logout Button with bounce animation
+                    _buildLogoutButton(context)
+                        .animate()
+                        .fadeIn(delay: 900.ms)
+                        .scaleXY(
+                          begin: 0.5,
+                          end: 1.0,
+                          duration: 600.ms,
+                          curve: Curves.elasticOut,
+                        ),
+                    
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    ).animate().fadeIn(duration: 300.ms);
+        ).animate().fadeIn(duration: 300.ms);
+      },
+    );
   }
 
   Widget _buildTopBar(BuildContext context) {
@@ -418,8 +423,54 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _buildLogoutButton(BuildContext context) {
     return ElevatedButton.icon(
-      onPressed: () {
-        Provider.of<auth.AuthProvider>(context, listen: false).signOut();
+      onPressed: () async {
+        try {
+          // Show loading indicator
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
+              ),
+            ),
+          );
+
+          // Get the auth provider
+          final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
+          
+          // Sign out
+          await authProvider.signOut();
+
+          // Close loading dialog
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
+
+          // Force navigation to welcome screen
+          if (context.mounted) {
+            // Clear the entire navigation stack and push welcome screen
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+              (route) => false,
+            );
+          }
+        } catch (e) {
+          // Close loading dialog if it's still showing
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
+
+          // Show error message
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error signing out: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
       },
       icon: const Icon(Icons.logout),
       label: const Text('Sign Out'),
@@ -451,3 +502,4 @@ class ProfileScreen extends StatelessWidget {
     return gender[0].toUpperCase() + gender.substring(1).toLowerCase();
   }
 }
+
