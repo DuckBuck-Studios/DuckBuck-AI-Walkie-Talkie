@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DuckBuck</string>
+    <!-- Replace with your actual Agora App ID -->
+    <string name="agora_app_id">3983e52a08424b7da5e79be4c9dfae0f</string>
+</resources> 

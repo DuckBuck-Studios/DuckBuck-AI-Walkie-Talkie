@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../widgets/animated_background.dart';
 import '../../widgets/phone_auth_popup.dart';
 import '../onboarding/profile_photo_preview_screen.dart';
+import '../debug/log_viewer_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -166,6 +167,28 @@ class SettingsScreen extends StatelessWidget {
                           _buildSubscriptionStatus(context, userModel),
                         ],
                         delay: 500,
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Debug Section
+                      _buildSettingSection(
+                        title: 'Debug',
+                        icon: Icons.bug_report,
+                        children: [
+                          _buildSettingOption(
+                            context: context,
+                            title: 'Debug Logs',
+                            subtitle: 'View application logs for troubleshooting',
+                            icon: Icons.analytics,
+                            onTap: () => Navigator.push(
+                              context, 
+                              MaterialPageRoute(builder: (_) => const LogViewerScreen())
+                            ),
+                            delay: 900,
+                          ),
+                        ],
+                        delay: 600,
                       ),
                       
                       const SizedBox(height: 32),

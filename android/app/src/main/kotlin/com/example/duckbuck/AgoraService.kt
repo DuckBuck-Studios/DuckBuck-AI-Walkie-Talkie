@@ -13,12 +13,19 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import android.os.PowerManager
+import java.util.Timer
+import java.util.TimerTask
 
 class AgoraService(private val context: Context, messenger: BinaryMessenger) : MethodChannel.MethodCallHandler {
     private val TAG = "AgoraService"
     private var rtcEngine: RtcEngine? = null
     private var localUid: Int = 0
     private val channel = MethodChannel(messenger, "com.example.duckbuck/agora")
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var keepAliveTimer: Timer? = null
+    private var lastChannelName: String? = null
+    private var lastToken: String? = null
     
     init {
         channel.setMethodCallHandler(this)
@@ -29,6 +36,10 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
             Log.d(TAG, "onJoinChannelSuccess: $channel, uid: $uid")
             localUid = uid
+            lastChannelName = channel
+            
+            // Start more aggressive keep-alive mechanism
+            startKeepAliveTimer()
         }
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
@@ -41,6 +52,49 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         
         override fun onError(err: Int) {
             Log.e(TAG, "onError: $err")
+            
+            // Try to recover from common errors by rejoining
+            if ((err == 101 || err == 109 || err == 110 || err == 8 || err == 1 || err == 2) 
+                && lastChannelName != null && lastToken != null) {
+                
+                Log.d(TAG, "Attempting to recover from error $err by rejoining channel")
+                Timer().schedule(object : TimerTask() {
+                    override fun run() {
+                        // Rejoin the channel
+                        try {
+                            rtcEngine?.leaveChannel()
+                            Thread.sleep(300)
+                            rtcEngine?.joinChannel(lastToken, lastChannelName, null, localUid)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to rejoin after error: ${e.message}")
+                        }
+                    }
+                }, 2000)
+            }
+        }
+        
+        override fun onConnectionStateChanged(state: Int, reason: Int) {
+            Log.d(TAG, "onConnectionStateChanged: state=$state, reason=$reason")
+            
+            // Handle disconnection automatically
+            if (state == Constants.CONNECTION_STATE_DISCONNECTED || 
+                state == Constants.CONNECTION_STATE_FAILED) {
+                
+                if (lastChannelName != null && lastToken != null) {
+                    Log.d(TAG, "Reconnecting due to connection state change")
+                    Timer().schedule(object : TimerTask() {
+                        override fun run() {
+                            try {
+                                rtcEngine?.leaveChannel()
+                                Thread.sleep(200)
+                                rtcEngine?.joinChannel(lastToken, lastChannelName, null, localUid)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to reconnect: ${e.message}")
+                            }
+                        }
+                    }, 1000)
+                }
+            }
         }
     }
     
@@ -63,10 +117,17 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
                 val userId = call.argument<Int>("userId") ?: 0
                 val muteOnJoin = call.argument<Boolean>("muteOnJoin") ?: false
                 
+                // Save token for reconnection purposes
+                lastToken = token
+                lastChannelName = channelName
+                
+                // Acquire wake lock to keep CPU running
+                acquireWakeLock()
+                
                 if (channelName != null) {
                     joinChannel(token, channelName, userId, muteOnJoin, result)
-                    // Start foreground service when joining channel
-                    startForegroundService(channelName)
+                    // Start foreground service when joining channel with enhanced parameters
+                    startEnhancedForegroundService(channelName, token, userId)
                 } else {
                     result.error("INVALID_ARGUMENT", "Channel name is required", null)
                 }
@@ -76,12 +137,14 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
                 leaveChannel(result)
                 // Stop foreground service when leaving channel
                 stopForegroundService()
+                releaseWakeLock()
             }
             
             "cleanup" -> {
                 cleanup(result)
                 // Stop foreground service during cleanup
                 stopForegroundService()
+                releaseWakeLock()
             }
             "muteLocalAudio" -> {
                 val mute = call.argument<Boolean>("mute") ?: false
@@ -97,6 +160,40 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         }
     }
     
+    // Acquire wakelock to keep CPU active
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+            
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "DuckBuck:AgoraServiceWakeLock"
+            )
+            
+            // Acquire indefinitely
+            wakeLock?.setReferenceCounted(false)
+            wakeLock?.acquire()
+            
+            Log.d(TAG, "Acquired wake lock for Agora service")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock: ${e.message}", e)
+        }
+    }
+    
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            try {
+                wakeLock?.release()
+                Log.d(TAG, "Released wake lock")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing wake lock: ${e.message}", e)
+            }
+        }
+    }
+    
     // Initialize Agora Engine
     private fun initializeEngine(appId: String, result: Result) {
         try {
@@ -105,6 +202,20 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
             // Enable audio mode to continue in background
             rtcEngine?.setEnableSpeakerphone(true)
             rtcEngine?.setDefaultAudioRoutetoSpeakerphone(true)
+            
+            // Enhanced parameters for better background operation
+            rtcEngine?.setParameters("{\"rtc.room_leave.when_queue_empty\": false}")
+            rtcEngine?.setParameters("{\"rtc.queue_blocked_mode\": 0}")
+            rtcEngine?.setParameters("{\"rtc.enable_accelerate_connection\": true}")
+            rtcEngine?.setParameters("{\"rtc.no_disconnect_when_network_broken\": true}")
+            rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
+            rtcEngine?.setParameters("{\"rtc.forced_connection\": true}")
+            rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
+            rtcEngine?.setParameters("{\"rtc.audio.keep_send_audioframe_when_silence\": true}")
+            rtcEngine?.setParameters("{\"rtc.enable_connect_always\": true}")
+            rtcEngine?.setParameters("{\"rtc.enable_session_resume\": true}")
+            rtcEngine?.setParameters("{\"rtc.retry_connection_limit\": 30}")
+            rtcEngine?.setParameters("{\"rtc.engine.force_high_perf\": true}")
             
             // This is critical for background operation
             rtcEngine?.enableAudioVolumeIndication(200, 3, false)
@@ -141,13 +252,66 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
                 rtcEngine?.muteLocalAudioStream(true)
             }
             
+            // Set optimized audio parameters
+            rtcEngine?.setAudioProfile(
+                Constants.AUDIO_PROFILE_SPEECH_STANDARD,
+                Constants.AUDIO_SCENARIO_CHATROOM
+            )
+            
             // Join the channel with the specified userId
-            rtcEngine?.joinChannel(token, channelName, userId, options)
+            rtcEngine?.setParameters("{\"rtc.connection.backup_server_enable\": true}")
+            rtcEngine?.joinChannel(token, channelName, null, userId)
+            
+            // Save token and channel for reconnection
+            lastToken = token
+            lastChannelName = channelName
+            
             result.success(true)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to join channel", e)
             result.error("JOIN_ERROR", "Failed to join channel", e.message)
         }
+    }
+    
+    // Keep-alive timer to prevent connection from dropping
+    private fun startKeepAliveTimer() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = Timer()
+        keepAliveTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                try {
+                    if (rtcEngine != null) {
+                        // Send regular operations to keep connection active
+                        rtcEngine?.enableAudioVolumeIndication(500, 3, false)
+                        rtcEngine?.muteLocalAudioStream(false)
+                        
+                        // Vary signal volume slightly to ensure real traffic
+                        val randomVolume = 95 + (Math.random() * 10).toInt()
+                        rtcEngine?.adjustRecordingSignalVolume(randomVolume)
+                        
+                        // Refresh connection parameters
+                        rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
+                        rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
+                        
+                        Log.d(TAG, "Keep-alive pulse sent")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in keep-alive timer: ${e.message}")
+                    
+                    // If connection fails, try to reconnect
+                    if (lastToken != null && lastChannelName != null) {
+                        try {
+                            Log.d(TAG, "Attempting to rejoin from keep-alive failure")
+                            rtcEngine?.leaveChannel()
+                            Thread.sleep(200)
+                            rtcEngine?.joinChannel(lastToken, lastChannelName, null, localUid)
+                        } catch (e2: Exception) {
+                            Log.e(TAG, "Failed to reconnect from keep-alive: ${e2.message}")
+                        }
+                    }
+                }
+            }
+        }, 2000, 2000) // Every 2 seconds
     }
     
     // Leave the channel
@@ -158,6 +322,7 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         }
         
         try {
+            keepAliveTimer?.cancel()
             rtcEngine?.leaveChannel()
             result.success(true)
         } catch (e: Exception) {
@@ -169,6 +334,7 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
     // Cleanup before joining another channel or destroying
     private fun cleanup(result: Result) {
         try {
+            keepAliveTimer?.cancel()
             rtcEngine?.leaveChannel()
             RtcEngine.destroy()
             rtcEngine = null
@@ -233,39 +399,92 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         }
     }
     
-    // Start foreground service
-    private fun startForegroundService(channelName: String) {
+    // Enhanced foreground service with robust parameters
+    private fun startEnhancedForegroundService(channelName: String, token: String, uid: Int) {
         if (!isInForegroundMode) {
             val serviceIntent = Intent(context, AgoraForegroundService::class.java).apply {
                 putExtra("channelName", channelName)
+                putExtra("token", token)
+                putExtra("uid", uid)
+                putExtra("isConnected", true)
+                
+                // Add flags to ensure intent is delivered
+                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             }
             
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+                
+                isInForegroundMode = true
+                Log.d(TAG, "Started enhanced foreground service")
+                
+                // Schedule periodic checks to make sure service stays running
+                Timer().scheduleAtFixedRate(object : TimerTask() {
+                    override fun run() {
+                        if (isInForegroundMode && !isServiceRunning(AgoraForegroundService::class.java)) {
+                            Log.d(TAG, "Foreground service not running, restarting")
+                            
+                            // Service isn't running, restart it
+                            val restartIntent = Intent(context, AgoraForegroundService::class.java).apply {
+                                putExtra("channelName", channelName)
+                                putExtra("token", token)
+                                putExtra("uid", uid)
+                                putExtra("isConnected", true)
+                                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                            }
+                            
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                context.startForegroundService(restartIntent)
+                            } else {
+                                context.startService(restartIntent)
+                            }
+                        }
+                    }
+                }, 5000, 10000) // Check every 10 seconds
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting foreground service: ${e.message}", e)
             }
-            
-            isInForegroundMode = true
-            Log.d(TAG, "Started foreground service")
         }
+    }
+    
+    // Check if a service is running
+    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        
+        @Suppress("DEPRECATION") // This remains the most reliable way to check
+        for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.name == service.service.className) {
+                return true
+            }
+        }
+        return false
     }
     
     // Stop foreground service
     private fun stopForegroundService() {
         if (isInForegroundMode) {
-            context.stopService(Intent(context, AgoraForegroundService::class.java))
-            isInForegroundMode = false
-            Log.d(TAG, "Stopped foreground service")
+            try {
+                context.stopService(Intent(context, AgoraForegroundService::class.java))
+                isInForegroundMode = false
+                Log.d(TAG, "Stopped foreground service")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping foreground service: ${e.message}", e)
+            }
         }
     }
     
     // Clean up resources when plugin is detached
     fun dispose() {
+        keepAliveTimer?.cancel()
         channel.setMethodCallHandler(null)
         rtcEngine?.leaveChannel()
         RtcEngine.destroy()
         rtcEngine = null
         stopForegroundService()
+        releaseWakeLock()
     }
 }

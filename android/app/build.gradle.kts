@@ -15,12 +15,12 @@ android {
     ndkVersion = "28.0.13004108"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -46,6 +46,8 @@ android {
 dependencies {
     // Add Agora RTC SDK
     implementation("io.agora.rtc:full-sdk:4.2.2")
+    // Add Firebase Cloud Messaging dependency
+    implementation("com.google.firebase:firebase-messaging:23.1.2")
 }
 
 flutter {

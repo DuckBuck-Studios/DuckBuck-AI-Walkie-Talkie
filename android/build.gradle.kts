@@ -5,6 +5,17 @@ allprojects {
     }
 }
 
+// Set Java compatibility for all projects
+allprojects {
+    plugins.withType<JavaBasePlugin> {
+        extensions.configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(17))
+            }
+        }
+    }
+}
+
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
