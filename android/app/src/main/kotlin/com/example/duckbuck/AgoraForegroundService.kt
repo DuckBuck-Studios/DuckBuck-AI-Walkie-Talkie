@@ -29,7 +29,6 @@ class AgoraForegroundService : Service() {
         private var isConnected = false
     }
     
-    private lateinit var logger: AppLogger
     private var wakeLock: PowerManager.WakeLock? = null
     private var cpuWakeLock: PowerManager.WakeLock? = null
     private var channelName: String? = null
@@ -45,8 +44,7 @@ class AgoraForegroundService : Service() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
             Log.d(TAG, "Service: onJoinChannelSuccess - $channel, uid: $uid")
             isConnected = true
-            logger.logEvent("ServiceAgoraEvent", "Join channel success", 
-                mapOf("channel" to (channel ?: ""), "uid" to uid, "elapsed" to elapsed))
+            Log.d(TAG, "Join channel success: channel=$channel, uid=$uid, elapsed=$elapsed")
             updateNotification()
             
             // Start keep-alive mechanism
@@ -55,19 +53,17 @@ class AgoraForegroundService : Service() {
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
             Log.d(TAG, "Service: onUserJoined - $uid")
-            logger.logEvent("ServiceAgoraEvent", "User joined", 
-                mapOf("uid" to uid, "elapsed" to elapsed))
+            Log.d(TAG, "User joined: uid=$uid, elapsed=$elapsed")
             updateNotification()
         }
         
         override fun onConnectionStateChanged(state: Int, reason: Int) {
             Log.d(TAG, "Service: onConnectionStateChanged - state: $state, reason: $reason")
-            logger.logEvent("ServiceAgoraEvent", "Connection state changed", 
-                mapOf("state" to state, "reason" to reason))
+            Log.d(TAG, "Connection state changed: state=$state, reason=$reason")
             
             // Handle specific case: disconnect with reason "changed by client" (15)
             if (state == Constants.CONNECTION_STATE_DISCONNECTED && reason == 15) {
-                logger.logEvent("ServiceAgoraEvent", "Detected Android system disconnecting client, preventing...")
+                Log.d(TAG, "Detected Android system disconnecting client, preventing...")
                 
                 // Re-acquire wake lock immediately
                 if (wakeLock?.isHeld != true) {
@@ -85,7 +81,7 @@ class AgoraForegroundService : Service() {
                     Timer().schedule(object : TimerTask() {
                         override fun run() {
                             rtcEngine?.joinChannel(token, channelName, null, uid)
-                            logger.logEvent("ServiceAgoraEvent", "Force rejoined after system disconnect")
+                            Log.d(TAG, "Force rejoined after system disconnect")
                         }
                     }, 500) // Faster reconnect (500ms vs 2000ms)
                 }
@@ -95,7 +91,7 @@ class AgoraForegroundService : Service() {
             // Handle other disconnection cases
             if (state == Constants.CONNECTION_STATE_DISCONNECTED || 
                 state == Constants.CONNECTION_STATE_FAILED) {
-                logger.logEvent("ServiceAgoraEvent", "Connection lost, attempting to reconnect")
+                Log.d(TAG, "Connection lost, attempting to reconnect")
                 
                 // Check if we should try to rejoin
                 if (token != null && channelName != null && uid > 0) {
@@ -104,7 +100,7 @@ class AgoraForegroundService : Service() {
                     Timer().schedule(object : TimerTask() {
                         override fun run() {
                             rtcEngine?.joinChannel(token, channelName, null, uid)
-                            logger.logEvent("ServiceAgoraEvent", "Attempted to rejoin channel")
+                            Log.d(TAG, "Attempted to rejoin channel")
                         }
                     }, 2000)
                 }
@@ -112,7 +108,7 @@ class AgoraForegroundService : Service() {
         }
         
         override fun onError(err: Int) {
-            logger.logEvent("ServiceAgoraEvent", "Error occurred", mapOf("errorCode" to err))
+            Log.e(TAG, "Error occurred: errorCode=$err")
             
             // Try to recover from certain errors
             if (err == 101 || // Channel join failed
@@ -121,7 +117,7 @@ class AgoraForegroundService : Service() {
                 err == 8 || // General timeout
                 err == 1 || // General error
                 err == 2) { // Invalid argument
-                logger.logEvent("ServiceAgoraEvent", "Recoverable error, attempting to rejoin")
+                Log.d(TAG, "Recoverable error, attempting to rejoin")
                 
                 if (token != null && channelName != null && uid > 0) {
                     rtcEngine?.leaveChannel()
@@ -130,7 +126,7 @@ class AgoraForegroundService : Service() {
                     Timer().schedule(object : TimerTask() {
                         override fun run() {
                             rtcEngine?.joinChannel(token, channelName, null, uid)
-                            logger.logEvent("ServiceAgoraEvent", "Attempted to rejoin after error")
+                            Log.d(TAG, "Attempted to rejoin after error")
                         }
                     }, 2000)
                 }
@@ -140,9 +136,6 @@ class AgoraForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        logger = AppLogger.getInstance(applicationContext)
-        logger.startNewSession("ForegroundService_Created")
-        logger.logEvent("Service", "Agora Foreground Service created")
         Log.d(TAG, "Agora Foreground Service created")
         createNotificationChannel()
         acquireWakeLock()
@@ -150,8 +143,7 @@ class AgoraForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Agora Foreground Service started")
-        logger.logEvent("Service", "Foreground service started with intent", 
-            mapOf("intent" to (intent?.extras.toString() ?: "null")))
+        Log.d(TAG, "Intent: ${intent?.extras.toString() ?: "null"}")
         
         // Get parameters from intent
         channelName = intent?.getStringExtra("channelName") ?: "Voice Call"
@@ -160,17 +152,11 @@ class AgoraForegroundService : Service() {
         uid = intent?.getIntExtra("uid", 0) ?: 0
         val isAlreadyConnected = intent?.getBooleanExtra("isConnected", false) ?: false
         
-        logger.logEvent("Service", "Parameters extracted from intent", mapOf(
-            "channelName" to channelName.toString(),
-            "senderUid" to senderUid,
-            "tokenLength" to (token?.length ?: 0),
-            "uid" to uid,
-            "isAlreadyConnected" to isAlreadyConnected
-        ))
+        Log.d(TAG, "Parameters from intent: channelName=$channelName, senderUid=$senderUid, tokenLength=${token?.length ?: 0}, uid=$uid, isAlreadyConnected=$isAlreadyConnected")
         
         if (isAlreadyConnected) {
             isConnected = true
-            logger.logEvent("Service", "Service marked as connected based on intent")
+            Log.d(TAG, "Service marked as connected based on intent")
         }
         
         // Create notification and start foreground service
@@ -179,28 +165,23 @@ class AgoraForegroundService : Service() {
         // Use the appropriate foreground service type for Android 12+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                logger.logEvent("Service", "Starting foreground service with media playback type")
+                Log.d(TAG, "Starting foreground service with media playback type")
                 startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             } else {
-                logger.logEvent("Service", "Starting regular foreground service")
+                Log.d(TAG, "Starting regular foreground service")
                 startForeground(NOTIFICATION_ID, notification)
             }
-            logger.logEvent("Service", "Successfully started as foreground service")
+            Log.d(TAG, "Successfully started as foreground service")
         } catch (e: Exception) {
-            logger.logEvent("Service", "Error starting foreground service", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Error starting foreground service: ${e.message}")
         }
         
         // Initialize Agora if needed and token is provided
         if (!isConnected && token != null && uid > 0) {
-            logger.logEvent("Service", "Initializing Agora connection from service")
+            Log.d(TAG, "Initializing Agora connection from service")
             initializeAndConnectAgora()
         } else {
-            logger.logEvent("Service", "Not initializing Agora connection", mapOf(
-                "isConnected" to isConnected,
-                "hasToken" to (token != null),
-                "uid" to uid
-            ))
+            Log.d(TAG, "Not initializing Agora connection: isConnected=$isConnected, hasToken=${token != null}, uid=$uid")
         }
         
         // Set up heartbeat to keep the service alive
@@ -215,7 +196,7 @@ class AgoraForegroundService : Service() {
         heartbeatTimer = Timer()
         heartbeatTimer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
-                logger.logEvent("Service", "Heartbeat pulse", mapOf("isConnected" to isConnected))
+                Log.d(TAG, "Heartbeat pulse: isConnected=$isConnected")
                 
                 // Re-acquire wake lock if it was released
                 if (wakeLock?.isHeld != true) {
@@ -231,8 +212,7 @@ class AgoraForegroundService : Service() {
                             engine.adjustRecordingSignalVolume(100)
                             engine.enableAudioVolumeIndication(1000, 3, false)
                         } catch (e: Exception) {
-                            logger.logEvent("Service", "Error during heartbeat ping", 
-                                mapOf("error" to e.message.toString()))
+                            Log.e(TAG, "Error during heartbeat ping: ${e.message}")
                         }
                     }
                 }
@@ -248,107 +228,42 @@ class AgoraForegroundService : Service() {
         keepAliveTimer = Timer()
         keepAliveTimer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
-                // Keep Agora connection active by sending operations in sequence
-                rtcEngine?.let {
+                // Logic to keep the Agora connection alive
+                Log.d(TAG, "Keep-alive: isConnected=$isConnected")
+                lastKeepAliveTime = System.currentTimeMillis()
+                
+                if (isConnected && rtcEngine != null) {
                     try {
-                        // More aggressive keep-alive with multiple operations
-                        it.enableAudioVolumeIndication(1000, 3, false)
-                        it.muteLocalAudioStream(false)
-                        it.adjustRecordingSignalVolume(100)
+                        // Minimal operations to keep the connection active
+                        rtcEngine?.adjustRecordingSignalVolume(100)
+                        rtcEngine?.enableAudioVolumeIndication(500, 3, false)
                         
-                        // Vary signal volume slightly to ensure real traffic
-                        val randomVolume = 95 + (Math.random() * 10).toInt()
-                        it.adjustRecordingSignalVolume(randomVolume)
+                        // Additional parameters to enhance connection stability
+                        rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
+                        rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
                         
-                        // Additional operations to create network activity
-                        it.setAudioProfile(Constants.AUDIO_PROFILE_DEFAULT, Constants.AUDIO_SCENARIO_GAME_STREAMING)
-                        
-                        // Reset connection parameters periodically to prevent timeout
-                        it.setParameters("{\"rtc.no_disconnect_when_network_broken\": true}")
-                        it.setParameters("{\"rtc.use_persistent_connection\": true}")
-                        it.setParameters("{\"rtc.forced_connection\": true}")
-                        it.setParameters("{\"rtc.keep_alive_interval\": 1000}")
-                        it.setParameters("{\"rtc.audio.keep_send_audioframe_when_silence\": true}")
-                        it.setParameters("{\"rtc.enable_connect_always\": true}")
-                        
-                        // Record last successful keep-alive time
-                        lastKeepAliveTime = System.currentTimeMillis()
-                        reconnectAttempts = 0 // Reset reconnect attempts counter on success
-                        
-                        logger.logEvent("KeepAlive", "Sent keep-alive pulse to Agora", 
-                            mapOf("volume" to randomVolume))
+                        Log.d(TAG, "Keep-alive signal sent")
                     } catch (e: Exception) {
-                        logger.logEvent("KeepAlive", "Error in keep-alive", 
-                            mapOf("error" to e.message.toString()))
-                        
-                        // If keep-alive fails, try to re-establish connection with backoff
-                        if (isConnected && token != null && channelName != null && uid > 0) {
-                            reconnectAttempts++
-                            
-                            if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
-                                try {
-                                    // Allow increasing backoff for repeated attempts
-                                    val backoffTime = Math.min(reconnectAttempts * 500, 5000).toLong()
-                                    
-                                    Timer().schedule(object : TimerTask() {
-                                        override fun run() {
-                                            try {
-                                                // First, attempt to refresh the engine state
-                                                it.muteLocalAudioStream(false)
-                                                it.adjustRecordingSignalVolume(100)
-                                                Thread.sleep(100)
-                                                
-                                                // Then rejoin the channel
-                                                it.leaveChannel()
-                                                Thread.sleep(200)
-                                                it.joinChannel(token, channelName, null, uid)
-                                                logger.logEvent("KeepAlive", "Re-joined channel after keep-alive failure",
-                                                    mapOf("attempt" to reconnectAttempts, "backoff" to backoffTime))
-                                            } catch (e2: Exception) {
-                                                logger.logEvent("KeepAlive", "Failed to rejoin on attempt $reconnectAttempts", 
-                                                    mapOf("error" to e2.message.toString()))
-                                                
-                                                // If multiple rejoin attempts fail, try to reinitialize Agora
-                                                if (reconnectAttempts >= 5 && reconnectAttempts % 5 == 0) {
-                                                    logger.logEvent("KeepAlive", "Multiple rejoin failures, reinitializing Agora")
-                                                    initializeAndConnectAgora()
-                                                }
-                                            }
-                                        }
-                                    }, backoffTime)
-                                } catch (e2: Exception) {
-                                    logger.logEvent("KeepAlive", "Critical error scheduling rejoin", 
-                                        mapOf("error" to e2.message.toString()))
-                                }
-                            } else {
-                                // After max attempts, try more drastic measures
-                                logger.logEvent("KeepAlive", "Reached max reconnect attempts, forcing service restart")
-                                restartService()
-                                reconnectAttempts = 0 // Reset counter
-                            }
-                        }
+                        Log.e(TAG, "Error during keep-alive: ${e.message}")
                     }
                 }
             }
-        }, 2000, 2000) // Every 2 seconds (increased from 3)
+        }, 0, 1000) // Every 1 second
     }
     
     private fun initializeAndConnectAgora() {
         try {
-            logger.logEvent("ServiceAgora", "Beginning Agora initialization")
+            Log.d(TAG, "Beginning Agora initialization")
             
             // Use existing engine if available, or create a new one
             if (rtcEngine == null) {
-                logger.logEvent("ServiceAgora", "Creating new RTC engine")
+                Log.d(TAG, "Creating new RTC engine")
                 
                 val appId = applicationContext.resources.getString(R.string.agora_app_id)
-                logger.logEvent("ServiceAgora", "Got app ID", mapOf(
-                    "appIdLength" to appId.length,
-                    "appIdStartsWith" to (if (appId.length > 4) appId.substring(0, 4) else appId)
-                ))
+                Log.d(TAG, "Got app ID: appIdLength=${appId.length}, appIdStartsWith=${if (appId.length > 4) appId.substring(0, 4) else appId}")
                 
                 rtcEngine = RtcEngine.create(applicationContext, appId, rtcEventHandler)
-                logger.logEvent("ServiceAgora", "RTC engine created successfully")
+                Log.d(TAG, "RTC engine created successfully")
                 
                 // Configure as audio call
                 rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
@@ -390,9 +305,9 @@ class AgoraForegroundService : Service() {
                 // Set a higher priority for Agora
                 rtcEngine?.setParameters("{\"rtc.use_high_priority_task\": true}")
                 
-                logger.logEvent("ServiceAgora", "RTC engine configured with enhanced parameters")
+                Log.d(TAG, "RTC engine configured with enhanced parameters")
             } else {
-                logger.logEvent("ServiceAgora", "Using existing RTC engine")
+                Log.d(TAG, "Using existing RTC engine")
                 
                 // Refresh parameters even for existing engine
                 rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
@@ -402,11 +317,7 @@ class AgoraForegroundService : Service() {
             }
             
             // Join channel with optimized options
-            logger.logEvent("ServiceAgora", "Joining channel", mapOf(
-                "channelName" to (channelName ?: ""),
-                "uid" to uid,
-                "tokenLength" to (token?.length ?: 0)
-            ))
+            Log.d(TAG, "Joining channel: channelName=$channelName, uid=$uid, tokenLength=${token?.length ?: 0}")
             
             // Set audio parameters for low bandwidth usage
             rtcEngine?.setAudioProfile(
@@ -417,14 +328,12 @@ class AgoraForegroundService : Service() {
             // Join channel with specific connection optimization
             rtcEngine?.setParameters("{\"rtc.connection.backup_server_enable\": true}")
             val result = rtcEngine?.joinChannel(token, channelName, null, uid)
-            logger.logEvent("ServiceAgora", "Join channel result", mapOf("result" to (result ?: -999)))
+            Log.d(TAG, "Join channel result: result=$result")
             
             // Reset reconnect attempts counter
             reconnectAttempts = 0
             
         } catch (e: Exception) {
-            logger.logEvent("ServiceAgora", "Error initializing Agora", 
-                mapOf("error" to e.message.toString(), "stackTrace" to e.stackTraceToString()))
             Log.e(TAG, "Error initializing Agora: ${e.message}", e)
         }
     }
@@ -451,7 +360,7 @@ class AgoraForegroundService : Service() {
                 "DuckBuck:AgoraCpuWakeLock"
             )
             
-            logger.logEvent("Service", "Acquiring multiple enhanced wake locks")
+            Log.d(TAG, "Acquiring multiple enhanced wake locks")
             
             // Acquire indefinitely to prevent Android from releasing
             wakeLock?.setReferenceCounted(false)
@@ -460,7 +369,7 @@ class AgoraForegroundService : Service() {
             cpuWakeLock?.setReferenceCounted(false)
             cpuWakeLock?.acquire(10*60*1000L) // 10 minutes, will be refreshed
             
-            logger.logEvent("Service", "Enhanced wake locks acquired")
+            Log.d(TAG, "Enhanced wake locks acquired")
             
             // Schedule periodic wake lock refreshes at a higher frequency
             Timer().scheduleAtFixedRate(object : TimerTask() {
@@ -490,12 +399,12 @@ class AgoraForegroundService : Service() {
                                 wakeLock?.acquire()
                             }
                             
-                            logger.logEvent("Service", "All wake locks refreshed")
+                            Log.d(TAG, "All wake locks refreshed")
                             
                             // Also check if we need to restart the service - this helps with Android's service lifetime limits
                             val timeSinceLastKeepAlive = System.currentTimeMillis() - lastKeepAliveTime
                             if (timeSinceLastKeepAlive > 60000) { // 1 minute
-                                logger.logEvent("Service", "Service may be stalling, forcing activity")
+                                Log.d(TAG, "Service may be stalling, forcing activity")
                                 updateNotification() // Refresh notification
                                 
                                 // Force Agora activity
@@ -504,28 +413,24 @@ class AgoraForegroundService : Service() {
                                         it.adjustRecordingSignalVolume(95 + (Math.random() * 10).toInt())
                                         it.enableAudioVolumeIndication(500, 3, false)
                                     } catch (e: Exception) {
-                                        logger.logEvent("Service", "Error forcing activity", 
-                                            mapOf("error" to e.message.toString()))
+                                        Log.e(TAG, "Error forcing activity: ${e.message}")
                                     }
                                 }
                                 
                                 // If no keepAlive for too long, consider restarting service
                                 if (timeSinceLastKeepAlive > 180000) { // 3 minutes
-                                    logger.logEvent("Service", "Long time without activity, forcing service restart")
+                                    Log.d(TAG, "Long time without activity, forcing service restart")
                                     restartService()
                                 }
                             }
                         }
                     } catch (e: Exception) {
-                        logger.logEvent("Service", "Error refreshing wake locks", 
-                            mapOf("error" to e.message.toString()))
+                        Log.e(TAG, "Error refreshing wake locks: ${e.message}")
                     }
                 }
             }, 15 * 1000, 15 * 1000) // Every 15 seconds (was 30 minutes)
             
         } catch (e: Exception) {
-            logger.logEvent("Service", "Error acquiring wake locks", 
-                mapOf("error" to e.message.toString()))
             Log.e(TAG, "Error acquiring wake locks: ${e.message}", e)
         }
     }
@@ -555,10 +460,9 @@ class AgoraForegroundService : Service() {
                 startService(restartIntent)
             }
             
-            logger.logEvent("Service", "Service manually restarted for persistence")
+            Log.d(TAG, "Service manually restarted for persistence")
         } catch (e: Exception) {
-            logger.logEvent("Service", "Failed to restart service", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Failed to restart service: ${e.message}", e)
         }
     }
 
@@ -567,10 +471,9 @@ class AgoraForegroundService : Service() {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val notification = createNotification(channelName ?: "", "")
             notificationManager.notify(NOTIFICATION_ID, notification)
-            logger.logEvent("Service", "Notification updated with connected status")
+            Log.d(TAG, "Notification updated with connected status")
         } catch (e: Exception) {
-            logger.logEvent("Service", "Error updating notification", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Error updating notification: ${e.message}", e)
         }
     }
 
@@ -580,7 +483,7 @@ class AgoraForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        logger.logEvent("Service", "Foreground service being destroyed")
+        Log.d(TAG, "Foreground service being destroyed")
         
         // Stop the timers
         keepAliveTimer?.cancel()
@@ -588,21 +491,20 @@ class AgoraForegroundService : Service() {
         
         // Release wake lock
         if (wakeLock?.isHeld == true) {
-            logger.logEvent("Service", "Releasing wake lock")
+            Log.d(TAG, "Releasing wake lock")
             try {
                 wakeLock?.release()
             } catch (e: Exception) {
-                logger.logEvent("Service", "Error releasing wake lock", 
-                    mapOf("error" to e.message.toString()))
+                Log.e(TAG, "Error releasing wake lock: ${e.message}", e)
             }
         }
         
-        logger.logEvent("Service", "Service destroyed")
+        Log.d(TAG, "Service destroyed")
         Log.d(TAG, "Agora Foreground Service destroyed")
         
         // Restart the service if we were connected
         if (isConnected && token != null && channelName != null) {
-            logger.logEvent("Service", "Service was connected, attempting restart")
+            Log.d(TAG, "Service was connected, attempting restart")
             try {
                 val restartIntent = Intent(applicationContext, AgoraForegroundService::class.java).apply {
                     putExtra("channelName", channelName)
@@ -616,17 +518,16 @@ class AgoraForegroundService : Service() {
                 } else {
                     startService(restartIntent)
                 }
-                logger.logEvent("Service", "Service restart requested")
+                Log.d(TAG, "Service restart requested")
             } catch (e: Exception) {
-                logger.logEvent("Service", "Failed to restart service", 
-                    mapOf("error" to e.message.toString()))
+                Log.e(TAG, "Failed to restart service: ${e.message}", e)
             }
         }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            logger.logEvent("Service", "Creating notification channel")
+            Log.d(TAG, "Creating notification channel")
             
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -642,17 +543,13 @@ class AgoraForegroundService : Service() {
             
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
-            logger.logEvent("Service", "Notification channel created")
+            Log.d(TAG, "Notification channel created")
         }
     }
 
     private fun createNotification(channelName: String, senderUid: String): Notification {
         try {
-            logger.logEvent("Service", "Creating notification", mapOf(
-                "channelName" to channelName,
-                "senderUid" to senderUid,
-                "isConnected" to isConnected
-            ))
+            Log.d(TAG, "Creating notification: channelName=$channelName, senderUid=$senderUid, isConnected=$isConnected")
             
             // Create an intent to open the app when notification is tapped
             val pendingIntent = PendingIntent.getActivity(
@@ -683,15 +580,11 @@ class AgoraForegroundService : Service() {
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .build()
                 
-            logger.logEvent("Service", "Notification created", mapOf(
-                "title" to title,
-                "content" to content
-            ))
+            Log.d(TAG, "Notification created: title=$title, content=$content")
             
             return notification
         } catch (e: Exception) {
-            logger.logEvent("Service", "Error creating notification", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Error creating notification: ${e.message}", e)
             
             // Fallback notification in case of error
             return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -708,7 +601,7 @@ class AgoraForegroundService : Service() {
     // This ensures the service restarts if it's killed
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        logger.logEvent("Service", "onTaskRemoved called, scheduling aggressive restart")
+        Log.d(TAG, "onTaskRemoved called, scheduling aggressive restart")
         
         // Request restart if service is killed
         if (isConnected) {
@@ -783,8 +676,7 @@ class AgoraForegroundService : Service() {
                         startService(restartServiceIntent)
                     }
                 } catch (e: Exception) {
-                    logger.logEvent("Service", "Direct restart attempt failed, relying on AlarmManager", 
-                        mapOf("error" to e.message.toString()))
+                    Log.e(TAG, "Direct restart attempt failed, relying on AlarmManager: ${e.message}", e)
                 }
                 
                 // 3. Try to keep the process alive a bit longer
@@ -807,10 +699,9 @@ class AgoraForegroundService : Service() {
                     }
                 }.start()
                 
-                logger.logEvent("Service", "Scheduled triple redundant service restart mechanisms")
+                Log.d(TAG, "Scheduled triple redundant service restart mechanisms")
             } catch (e: Exception) {
-                logger.logEvent("Service", "Failed to schedule restart", 
-                    mapOf("error" to e.message.toString()))
+                Log.e(TAG, "Failed to schedule restart: ${e.message}", e)
             }
         }
     }

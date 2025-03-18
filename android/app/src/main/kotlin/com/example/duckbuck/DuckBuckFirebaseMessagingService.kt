@@ -37,13 +37,12 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
         private var isForegroundServiceRunning = false
     }
 
-    private lateinit var logger: AppLogger
     private var wakeLock: PowerManager.WakeLock? = null
     
     private val rtcEventHandler = object : IRtcEngineEventHandler() {
         override fun onError(err: Int) {
             Log.e(TAG, "Agora onError: $err")
-            logger.logEvent("AgoraEvent", "Agora error", mapOf("error" to err))
+            Log.e(TAG, "Agora error: $err")
             
             // Try to recover from certain errors
             if (err == 101 || // Channel join failed
@@ -53,7 +52,7 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                 err == 1 || // General error
                 err == 2) { // Invalid argument
                 
-                logger.logEvent("AgoraEvent", "Recoverable error, attempting to rejoin")
+                Log.d(TAG, "Recoverable error, attempting to rejoin")
                 
                 if (lastToken != null && lastChannelName != null && lastUid > 0) {
                     // Wait a moment before rejoining
@@ -70,8 +69,7 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
             Log.d(TAG, "Agora onJoinChannelSuccess: $channel, uid: $uid")
             isConnectedToChannel = true
             
-            logger.logEvent("AgoraEvent", "Joined channel successfully", 
-                mapOf("channel" to (channel ?: "Unknown"), "uid" to uid, "elapsed" to elapsed))
+            Log.d(TAG, "Joined channel successfully: channel=${channel ?: "Unknown"}, uid=$uid, elapsed=$elapsed")
             
             // Save connection details for potential reconnection
             lastChannelName = channel
@@ -97,14 +95,13 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                 startService(serviceIntent)
                 }
                 isForegroundServiceRunning = true
-                logger.logEvent("AgoraEvent", "Started foreground service after join success")
+                Log.d(TAG, "Started foreground service after join success")
             } catch (e: Exception) {
-                logger.logEvent("AgoraEvent", "Error starting foreground service", 
-                    mapOf("error" to e.message.toString()))
+                Log.e(TAG, "Error starting foreground service: ${e.message}", e)
                 
                 // As a backup, schedule the service to start via AlarmManager
                 try {
-                    logger.logEvent("AgoraEvent", "Scheduling service start via AlarmManager")
+                    Log.d(TAG, "Scheduling service start via AlarmManager")
                     val pendingIntent = PendingIntent.getService(
                         applicationContext,
                         100,
@@ -129,8 +126,7 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                         )
                     }
                 } catch (e2: Exception) {
-                    logger.logEvent("AgoraEvent", "Error scheduling service via AlarmManager", 
-                        mapOf("error" to e2.message.toString()))
+                    Log.e(TAG, "Error scheduling service via AlarmManager: ${e2.message}", e2)
                 }
             }
             
@@ -141,7 +137,7 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                 override fun run() {
                     // Check if service is running, and restart if needed
                     if (!isServiceRunning(AgoraForegroundService::class.java) && isConnectedToChannel) {
-                        logger.logEvent("AgoraEvent", "Foreground service not running, restarting")
+                        Log.d(TAG, "Foreground service not running, restarting")
                         
                         val restartIntent = Intent(applicationContext, AgoraForegroundService::class.java).apply {
                             putExtra("channelName", lastChannelName)
@@ -158,10 +154,9 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                                 startService(restartIntent)
                             }
                             isForegroundServiceRunning = true
-                            logger.logEvent("AgoraEvent", "Restarted foreground service")
+                            Log.d(TAG, "Restarted foreground service")
                         } catch (e: Exception) {
-                            logger.logEvent("AgoraEvent", "Failed to restart service", 
-                                mapOf("error" to e.message.toString()))
+                            Log.e(TAG, "Failed to restart service: ${e.message}", e)
                         }
                     }
                     
@@ -172,10 +167,9 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                             rtcEngine?.enableAudioVolumeIndication(500, 3, false)
                             rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
                             rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
-                            logger.logEvent("AgoraEvent", "Sent keepalive from FCM service")
+                            Log.d(TAG, "Sent keepalive from FCM service")
                         } catch (e: Exception) {
-                            logger.logEvent("AgoraEvent", "Error sending keepalive", 
-                                mapOf("error" to e.message.toString()))
+                            Log.e(TAG, "Error sending keepalive: ${e.message}", e)
                         }
                     }
                 }
@@ -184,20 +178,19 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
 
         override fun onUserOffline(uid: Int, reason: Int) {
             Log.d(TAG, "Agora onUserOffline: $uid, reason: $reason")
-            logger.logEvent("AgoraEvent", "User offline", mapOf("uid" to uid, "reason" to reason))
+            Log.d(TAG, "User offline: uid=$uid, reason=$reason")
         }
 
         override fun onConnectionStateChanged(state: Int, reason: Int) {
             Log.d(TAG, "Agora onConnectionStateChanged: state=$state, reason=$reason")
-            logger.logEvent("AgoraEvent", "Connection state changed", 
-                mapOf("state" to state, "reason" to reason))
+            Log.d(TAG, "Connection state changed: state=$state, reason=$reason")
             
             // Handle specific reconnection cases
             if (state == Constants.CONNECTION_STATE_DISCONNECTED || 
                 state == Constants.CONNECTION_STATE_FAILED) {
                 
                 isConnectedToChannel = false
-                logger.logEvent("AgoraEvent", "Disconnected, will attempt to reconnect")
+                Log.d(TAG, "Disconnected, will attempt to reconnect")
                 
                 // Schedule reconnection
                 if (lastToken != null && lastChannelName != null && lastUid > 0) {
@@ -205,11 +198,11 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                         override fun run() {
                             // Try to reconnect
                             connectToAgoraChannel(lastChannelName!!, lastToken!!, lastUid)
-                            logger.logEvent("AgoraEvent", "Scheduled reconnection attempt")
+                            Log.d(TAG, "Scheduled reconnection attempt")
                             
                             // Also make sure service is running
                             if (!isForegroundServiceRunning) {
-                                logger.logEvent("AgoraEvent", "Restarting foreground service during reconnection")
+                                Log.d(TAG, "Restarting foreground service during reconnection")
                                 startForegroundServiceWithRetry()
                             }
                         }
@@ -223,14 +216,11 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onCreate() {
         super.onCreate()
-        logger = AppLogger.getInstance(applicationContext)
-        logger.startNewSession("FCMService_Created")
-        logger.logEvent("LifeCycle", "Firebase Messaging Service created")
         Log.d(TAG, "DuckBuckFirebaseMessagingService created")
         
         // If we have saved connection params, ensure connection is maintained
         if (lastToken != null && lastChannelName != null && lastUid > 0 && !isConnectedToChannel) {
-            logger.logEvent("LifeCycle", "Restoring previous connection on service create")
+            Log.d(TAG, "Restoring previous connection on service create")
             thread {
                 connectToAgoraChannel(lastChannelName!!, lastToken!!, lastUid)
             }
@@ -239,7 +229,7 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        logger.logEvent("TokenUpdate", "New FCM token received", mapOf("token_length" to token.length))
+        Log.d(TAG, "New FCM token received: ${token.length} chars")
         Log.d(TAG, "New FCM token: $token")
     }
 
@@ -247,250 +237,256 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "Received message: ${remoteMessage.data}")
         
-        logger.logEvent("FCM", "Received message", mapOf(
-            "data" to remoteMessage.data.toString(),
-            "notification" to (remoteMessage.notification?.title ?: "null"),
-            "from" to (remoteMessage.from ?: "unknown"),
-            "messageId" to (remoteMessage.messageId ?: "unknown")
-        ))
-
-        // Only handle messages when the app is killed (not in foreground or background)
-        val isKilled = isAppKilled()
-        val isRoomInvitation = isRoomInvitationNotification(remoteMessage)
+        Log.d(TAG, "Received FCM message: ${remoteMessage.messageId}, data: ${remoteMessage.data}")
         
-        logger.logEvent("FCM", "Message evaluation", mapOf(
-            "isAppKilled" to isKilled,
-            "isRoomInvitation" to isRoomInvitation
-        ))
+        // Wake up the device to handle this notification
+        acquireWakeLock()
         
-        if (isKilled && isRoomInvitation) {
-            logger.logEvent("FCM", "App is in killed state, handling notification natively")
+        try {
+            val messageData = remoteMessage.data
+            val messageType = messageData["type"]
             
-            // Wake lock device - acquire early and hold
-            logger.logEvent("FCM", "Acquiring wake lock")
-            acquireWakeLock()
+            Log.d(TAG, "Processing message of type: $messageType")
             
-            // Handle the invitation
-            logger.logEvent("FCM", "Handling room invitation")
-            handleRoomInvitationNotification(remoteMessage)
-        } else {
-            logger.logEvent("FCM", "App is in foreground/background, letting Flutter handle notification")
-            // Let the Flutter implementation handle it
+            when (messageType) {
+                TYPE_ROOM_INVITATION -> {
+                    handleRoomInvitation(messageData)
+                }
+                "directMessage" -> {
+                    // Handle direct messages
+                    Log.d(TAG, "Direct message received: ${messageData["messageContent"]}")
+                }
+                "systemNotification" -> {
+                    // Handle system notifications
+                    Log.d(TAG, "System notification: ${messageData["message"]}")
+                }
+                else -> {
+                    // Handle other message types
+                    Log.d(TAG, "Unknown message type: $messageType")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing FCM message: ${e.message}", e)
+        } finally {
+            releaseWakeLock()
         }
     }
     
     private fun acquireWakeLock() {
         try {
-            if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
+            if (wakeLock == null) {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "DuckBuck:FCMWakeLock"
+                )
+                wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes max
+                Log.d(TAG, "Wake lock acquired")
             }
-            
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            
-            // Create wake lock that will keep the CPU running
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK or 
-                PowerManager.ACQUIRE_CAUSES_WAKEUP or 
-                PowerManager.ON_AFTER_RELEASE,
-                "DuckBuck:FCMWakeLock"
-            )
-            
-            // Don't let the wake lock count down with references
-            wakeLock?.setReferenceCounted(false)
-            
-            // Acquire for 5 minutes - service should take over before this expires
-            wakeLock?.acquire(5 * 60 * 1000L)
-            
-            logger.logEvent("WakeDevice", "Acquired enhanced FCM wake lock for 5 minutes")
-            
-            // Also wake the screen for visibility
-            wakeScreen(powerManager)
-            
         } catch (e: Exception) {
-            logger.logEvent("WakeDevice", "Error acquiring wake lock", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Error acquiring wake lock: ${e.message}", e)
         }
     }
     
-    private fun wakeScreen(powerManager: PowerManager) {
+    private fun releaseWakeLock() {
         try {
-            // Try to wake the screen if it's off
-            if (!powerManager.isInteractive) {
-                val screenWakeLock = powerManager.newWakeLock(
-                    PowerManager.FULL_WAKE_LOCK or 
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or 
-                    PowerManager.ON_AFTER_RELEASE,
-                    "DuckBuck:ScreenWakeLock"
-                )
-                
-                screenWakeLock.acquire(10000L) // 10 seconds
-                
-                // If the keyguard is on, try to disable it 
-                val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                val isLocked = keyguardManager.isKeyguardLocked
-                logger.logEvent("WakeDevice", "Keyguard status", mapOf("isLocked" to isLocked))
-                
-                if (isLocked) {
-                    // Start the main activity to bring it to the foreground
-                    logger.logEvent("WakeDevice", "Device is locked, attempting to start main activity")
-                    val intent = packageManager.getLaunchIntentForPackage(packageName)
-                    intent?.apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                        }
-                        startActivity(this)
-                        logger.logEvent("WakeDevice", "Started main activity with special flags")
-                    }
-                }
-                
-                // Release the screen wake lock
-                if (screenWakeLock.isHeld) {
-                    screenWakeLock.release()
-                }
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "Wake lock released")
             }
         } catch (e: Exception) {
-            logger.logEvent("WakeDevice", "Error waking screen", 
-                mapOf("error" to e.message.toString()))
+            Log.e(TAG, "Error releasing wake lock: ${e.message}", e)
         }
     }
-
-    private fun isAppKilled(): Boolean {
-        // This is a heuristic based on whether the main activity is running
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        val packageName = packageName
+    
+    private fun handleRoomInvitation(data: Map<String, String>) {
+        Log.d(TAG, "Processing room invitation")
         
-        val runningProcesses = activityManager.runningAppProcesses
-        logger.logEvent("AppState", "Checking if app is killed", mapOf(
-            "runningProcessCount" to (runningProcesses?.size ?: 0),
-            "packageName" to packageName
-        ))
+        // Get invitation details
+        val roomId = data["roomId"] ?: ""
+        val channelName = data["channelName"] ?: ""
+        val agoraToken = data["agoraToken"] ?: ""
+        val uid = data["uid"]?.toIntOrNull() ?: 0
+        val senderUid = data["senderUid"] ?: ""
+        val senderName = data["senderName"] ?: "Unknown"
         
-        // Get list of running processes
-        if (runningProcesses == null) {
-            logger.logEvent("AppState", "No running processes found, considering app killed")
-            return true
-        }
+        Log.d(TAG, "Room invitation details: roomId=$roomId, channelName=$channelName, tokenLength=${agoraToken.length}, uid=$uid, sender=$senderName")
         
-        // Check if our process is in foreground or background
-        for (processInfo in runningProcesses) {
-            if (processInfo.processName == packageName) {
-                val importance = processInfo.importance
-                logger.logEvent("AppState", "Found process", mapOf(
-                    "processName" to processInfo.processName,
-                    "importance" to importance
-                ))
-                
-                // IMPORTANCE_FOREGROUND = 100, IMPORTANCE_BACKGROUND = 400
-                // If not in foreground or visible background, consider it "killed"
-                val isKilled = importance > 200 // Greater than IMPORTANCE_VISIBLE (200)
-                logger.logEvent("AppState", "App state evaluation", mapOf("isKilled" to isKilled))
-                return isKilled
-            }
-        }
-        
-        // If our process is not found, it's likely killed
-        logger.logEvent("AppState", "Process not found, considering app killed")
-        return true
-    }
-
-    private fun isRoomInvitationNotification(remoteMessage: RemoteMessage): Boolean {
-        val type = remoteMessage.data["type"]
-        val isInvitation = type == TYPE_ROOM_INVITATION
-        logger.logEvent("FCMType", "Checking notification type", 
-            mapOf("type" to (type ?: "null"), "isRoomInvitation" to isInvitation))
-        return isInvitation
-    }
-
-    private fun handleRoomInvitationNotification(remoteMessage: RemoteMessage) {
-        val data = remoteMessage.data
-        val channelName = data["agora_channel"]
-        val token = data["agora_token"] ?: ""
-        val uidString = data["agora_uid"]
-        val uid = uidString?.toIntOrNull() ?: 0
-        val channelId = data["channel_id"] ?: ""
-        val senderUid = data["sender_uid"] ?: ""
-        val timestamp = data["timestamp"] ?: ""
-
-        logger.logEvent("RoomInvitation", "Handling room invitation", mapOf(
-            "channelName" to (channelName ?: "null"),
-            "tokenLength" to token.length,
-            "uid" to uid,
-            "channelId" to channelId,
-            "senderUid" to senderUid,
-            "timestamp" to timestamp
-        ))
-
-        // Validate required data
-        if (channelName == null) {
-            logger.logEvent("RoomInvitation", "Missing channel name, cannot proceed")
+        // Validate essential data
+        if (channelName.isEmpty() || agoraToken.isEmpty() || uid <= 0) {
+            Log.e(TAG, "Invalid room invitation data")
             return
         }
         
-        // Save values for potential reconnection
-        lastChannelName = channelName
-        lastToken = token
-        lastUid = uid
-
-        logger.logEvent("RoomInvitation", "Starting foreground service")
+        // Store token for potential reconnection
+        lastToken = agoraToken
         
-        // Start foreground service first to ensure visibility to user
-        val serviceIntent = Intent(this, AgoraForegroundService::class.java).apply {
-            putExtra("channelName", channelName)
-            putExtra("senderUid", senderUid)
-            putExtra("uid", uid)
-            putExtra("token", token)
-            
-            // Add flags to make sure intent is delivered
-            addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-        }
-
-        // Start service with retry mechanism
-        startForegroundServiceWithRetry(serviceIntent)
-
-        // Initialize and connect to Agora in a background thread
-        logger.logEvent("RoomInvitation", "Initiating Agora channel connection in thread")
+        // Connect to the Agora channel
         thread {
-            connectToAgoraChannel(channelName, token, uid)
-            
-            // Schedule periodic checks to make sure service stays running
-            scheduleServiceChecks(channelName, token, uid)
-        }
-    }
-    
-    private fun startForegroundServiceWithRetry(intent: Intent? = null) {
-        val serviceIntent = intent ?: Intent(this, AgoraForegroundService::class.java).apply {
-            putExtra("channelName", lastChannelName)
-            putExtra("token", lastToken)
-            putExtra("uid", lastUid)
-            putExtra("isConnected", isConnectedToChannel)
-            addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+            connectToAgoraChannel(channelName, agoraToken, uid)
         }
         
-        // Try to start service
+        // Start the foreground service to keep the connection alive
         try {
-            logger.logEvent("Service", "Attempting to start foreground service")
+            val serviceIntent = Intent(applicationContext, AgoraForegroundService::class.java).apply {
+                putExtra("channelName", channelName)
+                putExtra("senderUid", senderUid)
+                putExtra("token", agoraToken)
+                putExtra("uid", uid)
+                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+            }
+            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(this, serviceIntent)
+                startForegroundService(serviceIntent)
             } else {
                 startService(serviceIntent)
             }
-            logger.logEvent("Service", "Service started successfully")
-            isForegroundServiceRunning = true
-        } catch (e: Exception) {
-            logger.logEvent("Service", "Failed to start service directly, trying AlarmManager", 
-                mapOf("error" to e.message.toString()))
             
-            // As a backup, use AlarmManager to start the service shortly
-            try {
-                logger.logEvent("Service", "Scheduling service start via AlarmManager")
+            isForegroundServiceRunning = true
+            Log.d(TAG, "Started foreground service for room invitation")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting foreground service: ${e.message}", e)
+            startForegroundServiceWithRetry()
+        }
+        
+        // Also try to wake up the app UI
+        wakeUpApp(roomId, channelName, senderName)
+    }
+    
+    private fun connectToAgoraChannel(channelName: String, token: String, uid: Int) {
+        try {
+            // Don't reconnect if already connected to this channel
+            if (isConnectedToChannel && lastChannelName == channelName) {
+                Log.d(TAG, "Already connected to channel: $channelName")
+                return
+            }
+            
+            Log.d(TAG, "Initializing Agora connection")
+            
+            // Initialize Agora SDK if not already initialized
+            if (rtcEngine == null) {
+                Log.d(TAG, "Creating RTC engine")
+                
+                // Get app ID from resources
+                val appId = applicationContext.resources.getString(R.string.agora_app_id)
+                Log.d(TAG, "Agora app ID length: ${appId.length}")
+                
+                rtcEngine = RtcEngine.create(applicationContext, appId, rtcEventHandler)
+                
+                // Configure audio settings for call
+                rtcEngine?.apply {
+                    enableAudio()
+                    disableVideo()
+                    setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
+                    setAudioProfile(Constants.AUDIO_PROFILE_DEFAULT, Constants.AUDIO_SCENARIO_CHATROOM)
+                    
+                    // Optimize for reliability
+                    setParameters("{\"rtc.enable_keep_alive_webrtc\": true}")
+                    setParameters("{\"rtc.use_high_priority_task\": true}")
+                    setParameters("{\"che.audio.keep_audiosession\": true}")
+                    setParameters("{\"rtc.audio.force_bluetooth_a2dp\": true}")
+                    setParameters("{\"rtc.audio.keep_send_audioframe_when_silence\": true}")
+                    setParameters("{\"rtc.low_audio_delay_latency\": true}")
+                    setParameters("{\"rtc.enable_connect_always\": true}")
+                    
+                    // Recommended for VoIP calls
+                    adjustPlaybackSignalVolume(150) // Boost volume slightly
+                }
+                
+                Log.d(TAG, "RTC engine created successfully")
+            }
+            
+            // Store this channel info for potential reconnection
+            lastChannelName = channelName
+            lastToken = token
+            lastUid = uid
+            
+            // Join the channel
+            Log.d(TAG, "Joining Agora channel: $channelName with uid $uid")
+            val result = rtcEngine?.joinChannel(token, channelName, null, uid)
+            Log.d(TAG, "Join channel result: $result")
+            
+            // Schedule regular keep-alive
+            startKeepAliveTimer()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error connecting to Agora channel: ${e.message}", e)
+        }
+    }
+    
+    private fun startKeepAliveTimer() {
+        try {
+            // Cancel any existing timer
+            connectionTimer?.cancel()
+            
+            // Create new timer for keepalive
+            connectionTimer = Timer()
+            connectionTimer?.scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    if (isConnectedToChannel && rtcEngine != null) {
+                        try {
+                            // Simple operations to maintain the connection
+                            rtcEngine?.adjustRecordingSignalVolume(100)
+                            Log.d(TAG, "Keeping connection alive")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error in keep-alive: ${e.message}", e)
+                        }
+                    }
+                }
+            }, 5000, 5000) // Every 5 seconds
+            
+            Log.d(TAG, "Keep-alive timer started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting keep-alive timer: ${e.message}", e)
+        }
+    }
+    
+    private fun wakeUpApp(roomId: String, channelName: String, senderName: String) {
+        try {
+            Log.d(TAG, "Attempting to wake up app UI")
+            
+            // Check if device is locked
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            val isDeviceLocked = keyguardManager.isKeyguardLocked
+            
+            // Create intent to launch main activity
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("roomId", roomId)
+                putExtra("channelName", channelName)
+                putExtra("senderName", senderName)
+                putExtra("fromNotification", true)
+            }
+            
+            // Only try to directly start activity if device is not locked
+            if (!isDeviceLocked && launchIntent != null) {
+                startActivity(launchIntent)
+                Log.d(TAG, "Started main activity")
+            } else {
+                Log.d(TAG, "Device locked or no launch intent, can't directly start activity")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error waking up app: ${e.message}", e)
+        }
+    }
+    
+    private fun startForegroundServiceWithRetry() {
+        try {
+            Log.d(TAG, "Trying backup method to start foreground service")
+            
+            if (lastToken != null && lastChannelName != null && lastUid > 0) {
+                val serviceIntent = Intent(applicationContext, AgoraForegroundService::class.java).apply {
+                    putExtra("channelName", lastChannelName)
+                    putExtra("token", lastToken)
+                    putExtra("uid", lastUid)
+                    putExtra("isConnected", isConnectedToChannel)
+                    addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                }
+                
+                // Try using AlarmManager as fallback
                 val pendingIntent = PendingIntent.getService(
-                    this,
-                    100,
+                    applicationContext,
+                    101,
                     serviceIntent,
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) 
                         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -512,265 +508,40 @@ class DuckBuckFirebaseMessagingService : FirebaseMessagingService() {
                     )
                 }
                 
-                // Also try with a delay as a second backup
-                val backupPendingIntent = PendingIntent.getService(
-                    this,
-                    101,
-                    serviceIntent,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) 
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                    else PendingIntent.FLAG_UPDATE_CURRENT
-                )
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        System.currentTimeMillis() + 2000,
-                        backupPendingIntent
-                    )
-                }
-                
-                logger.logEvent("Service", "Service start scheduled via AlarmManager")
-            } catch (e2: Exception) {
-                logger.logEvent("Service", "Failed even with AlarmManager", 
-                    mapOf("error" to e2.message.toString()))
+                Log.d(TAG, "Service start scheduled via AlarmManager")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule service start: ${e.message}", e)
         }
-    }
-    
-    private fun scheduleServiceChecks(channelName: String, token: String, uid: Int) {
-        Timer().scheduleAtFixedRate(object : TimerTask() {
-            override fun run() {
-                // Check if the service is running
-                val isRunning = isServiceRunning(AgoraForegroundService::class.java)
-                logger.logEvent("ServiceCheck", "Checking if service is running", 
-                    mapOf("isRunning" to isRunning))
-                
-                if (!isRunning && isConnectedToChannel) {
-                    logger.logEvent("ServiceCheck", "Service not running, restarting")
-                    
-                    // Service isn't running, restart it
-                    val restartIntent = Intent(applicationContext, AgoraForegroundService::class.java).apply {
-                        putExtra("channelName", channelName)
-                        putExtra("token", token)
-                        putExtra("uid", uid)
-                        putExtra("isConnected", isConnectedToChannel)
-                        addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-                    }
-                    
-                    startForegroundServiceWithRetry(restartIntent)
-                }
-                
-                // Ensure Agora is still active
-                if (isConnectedToChannel && rtcEngine != null) {
-                    try {
-                        // Keep the engine active
-                        rtcEngine?.muteLocalAudioStream(false)
-                        rtcEngine?.adjustRecordingSignalVolume(100)
-                        rtcEngine?.enableAudioVolumeIndication(500, 3, false)
-                        logger.logEvent("ServiceCheck", "Sent activity to RTC engine")
-                    } catch (e: Exception) {
-                        logger.logEvent("ServiceCheck", "Error keeping RTC engine active", 
-                            mapOf("error" to e.message.toString()))
-                        
-                        // If we can't communicate with the engine, try to reconnect
-                        if (channelName == lastChannelName && token == lastToken && uid == lastUid) {
-                            logger.logEvent("ServiceCheck", "Attempting to reconnect to channel")
-                            connectToAgoraChannel(channelName, token, uid)
-                        }
-                    }
-                }
-            }
-        }, 5000, 10000) // Check every 10 seconds, starting 5 seconds after initial connection
     }
     
     private fun isServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        
-        @Suppress("DEPRECATION") // This remains the most reliable way to check
-        for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun connectToAgoraChannel(channelName: String, token: String, uid: Int) {
         try {
-            logger.logEvent("AgoraConnect", "Beginning connection process", mapOf(
-                "channelName" to channelName,
-                "tokenLength" to token.length,
-                "uid" to uid
-            ))
-            
-            // Save connection params for potential reconnection
-            lastChannelName = channelName
-            lastToken = token
-            lastUid = uid
-            
-            // If already connected to the correct channel, don't reconnect
-            if (isConnectedToChannel && rtcEngine != null && lastChannelName == channelName) {
-                logger.logEvent("AgoraConnect", "Already connected to this channel, refreshing connection")
-                try {
-                    // Still refresh the connection parameters
-                    rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
-                    rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
-                    rtcEngine?.setParameters("{\"rtc.enable_connect_always\": true}")
-                    rtcEngine?.setParameters("{\"rtc.enable_session_resume\": true}")
-                    
-                    // Ensure audio is enabled
-                    rtcEngine?.enableAudio()
-                    rtcEngine?.muteLocalAudioStream(false)
-                    
-                    // Make sure the foreground service is running with current parameters
-                    startForegroundServiceWithRetry()
-                    
-                return
-                } catch (e: Exception) {
-                    logger.logEvent("AgoraConnect", "Error refreshing connection, will reconnect", 
-                        mapOf("error" to e.message.toString()))
-                    // Continue to full reconnection
-                }
-            }
-            
-            // Initialize Agora engine if not already initialized
-            if (rtcEngine == null) {
-                logger.logEvent("AgoraConnect", "Initializing Agora RTC Engine")
-                try {
-                    val appId = applicationContext.resources.getString(R.string.agora_app_id)
-                    logger.logEvent("AgoraConnect", "Got appId", mapOf(
-                        "appIdLength" to appId.length,
-                        "appIdStartsWith" to (if (appId.length > 4) appId.substring(0, 4) else appId)
-                    ))
-                    
-                    rtcEngine = RtcEngine.create(applicationContext, appId, rtcEventHandler)
-                    logger.logEvent("AgoraConnect", "RTC Engine created successfully")
-                    
-                    // Configure as audio call
-                    rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
-                    rtcEngine?.enableAudio()
-                    rtcEngine?.setEnableSpeakerphone(false)
-                    logger.logEvent("AgoraConnect", "RTC Engine configured for audio call")
-                    
-                    // Set parameters for robust background operation
-                    rtcEngine?.setParameters("{\"rtc.room_leave.when_queue_empty\": false}")
-                    rtcEngine?.setParameters("{\"rtc.queue_blocked_mode\": 0}")
-                    rtcEngine?.setParameters("{\"rtc.enable_accelerate_connection\": true}")
-                    rtcEngine?.setParameters("{\"rtc.no_disconnect_when_network_broken\": true}")
-                    rtcEngine?.setParameters("{\"rtc.use_persistent_connection\": true}")
-                    rtcEngine?.setParameters("{\"rtc.forced_connection\": true}")
-                    rtcEngine?.setParameters("{\"rtc.keep_alive_interval\": 1000}")
-                    rtcEngine?.setParameters("{\"rtc.audio.keep_send_audioframe_when_silence\": true}")
-                    rtcEngine?.setParameters("{\"rtc.enable_connect_always\": true}")
-                    rtcEngine?.setParameters("{\"rtc.enable_session_resume\": true}")
-                    rtcEngine?.setParameters("{\"rtc.retry_connection_limit\": 30}")
-                    rtcEngine?.setParameters("{\"rtc.drop_timeout\": 30000}")
-                    rtcEngine?.setParameters("{\"rtc.connection.recovery_timeout\": 30000}")
-                    rtcEngine?.setParameters("{\"rtc.engine.force_high_perf\": true}")
-                    rtcEngine?.setParameters("{\"che.audio.prevent_bluetooth_off\": true}")
-                    
-                    // Optimize audio for call quality while minimizing bandwidth
-                    rtcEngine?.setParameters("{\"che.audio.enable.aec\": false}")
-                    rtcEngine?.setParameters("{\"che.audio.enable.agc\": true}")
-                    rtcEngine?.setParameters("{\"che.audio.enable.ns\": false}")
-                    rtcEngine?.setParameters("{\"che.audio.enable.hq_apm_mode\": 0}")
-                    rtcEngine?.setParameters("{\"che.audio.frame_duration\": 20}")
-                    rtcEngine?.setParameters("{\"che.audio.lowlatency\": 1}")
-                    
-                    // Set a higher priority for Agora
-                    rtcEngine?.setParameters("{\"rtc.use_high_priority_task\": true}")
-                    
-                    logger.logEvent("AgoraConnect", "RTC Engine configured with enhanced parameters")
-                } catch (e: Exception) {
-                    logger.logEvent("AgoraConnect", "Error initializing Agora engine", 
-                        mapOf("error" to e.message.toString(), "stackTrace" to e.stackTraceToString()))
-                    throw e
-                }
-            }
-
-            logger.logEvent("AgoraConnect", "Joining Agora channel", mapOf(
-                "channelName" to channelName,
-                "uid" to uid,
-                "tokenLength" to token.length
-            ))
-            
-            // Set audio parameters for good audio quality with low bandwidth
-            rtcEngine?.setAudioProfile(
-                Constants.AUDIO_PROFILE_SPEECH_STANDARD,
-                Constants.AUDIO_SCENARIO_CHATROOM
+            val intent = Intent(applicationContext, serviceClass)
+            val pendingIntent = PendingIntent.getService(
+                applicationContext,
+                0,
+                intent,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) 
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
+                else PendingIntent.FLAG_NO_CREATE
             )
             
-            // Join the channel with backup server enabled
-            rtcEngine?.setParameters("{\"rtc.connection.backup_server_enable\": true}")
-            val result = rtcEngine?.joinChannel(token, channelName, null, uid)
-            logger.logEvent("AgoraConnect", "Join channel result", mapOf("result" to (result ?: -999)))
-            
+            // If the pending intent is null, the service is not running
+            return pendingIntent != null
         } catch (e: Exception) {
-            logger.logEvent("AgoraConnect", "Error connecting to Agora channel", 
-                mapOf("error" to e.message.toString(), "stackTrace" to e.stackTraceToString()))
-            Log.e(TAG, "Error connecting to Agora channel: ${e.message}", e)
-            
-            // Schedule a retry after a delay
-            Timer().schedule(object : TimerTask() {
-                override fun run() {
-                    logger.logEvent("AgoraConnect", "Retrying connection after failure")
-                    try {
-                        // Try to clean up rtcEngine first
-                        rtcEngine?.leaveChannel()
-                        RtcEngine.destroy()
-                        rtcEngine = null
-                        
-                        // Then reconnect from scratch
-                        connectToAgoraChannel(channelName, token, uid)
-                    } catch (e2: Exception) {
-                        logger.logEvent("AgoraConnect", "Retry also failed", 
-                            mapOf("error" to e2.message.toString()))
-                    }
-                }
-            }, 3000) // Wait 3 seconds before retry
+            Log.e(TAG, "Error checking if service is running: ${e.message}", e)
+            return false
         }
-    }
-
-    override fun onDestroy() {
-        logger.logEvent("LifeCycle", "Firebase Messaging Service being destroyed, trying to persist connection")
-        
-        // Release wake lock if held
-        if (wakeLock?.isHeld == true) {
-            wakeLock?.release()
-        }
-        
-        // Try to keep the connection alive
-        if (isConnectedToChannel && lastToken != null && lastChannelName != null && lastUid > 0) {
-            logger.logEvent("LifeCycle", "Trying to ensure connection persists through service destroy")
-            
-            // Start the foreground service with our connection details
-            val serviceIntent = Intent(this, AgoraForegroundService::class.java).apply {
-                putExtra("channelName", lastChannelName)
-                putExtra("token", lastToken)
-                putExtra("uid", lastUid)
-                putExtra("isConnected", true)
-                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-            }
-            
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
-                } else {
-                    startService(serviceIntent)
-                }
-            } catch (e: Exception) {
-                logger.logEvent("LifeCycle", "Error starting service on destroy", 
-                    mapOf("error" to e.message.toString()))
-            }
-        }
-        
-        Log.d(TAG, "DuckBuckFirebaseMessagingService onDestroy called")
-        super.onDestroy()
     }
     
-    // Helper to get log file path for Flutter access
-    fun getLogFilePath(): String {
-        return AppLogger.getInstance(applicationContext).getLogFilePath()
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "FCM service being destroyed")
+        
+        releaseWakeLock()
+        connectionTimer?.cancel()
+        
+        Log.d(TAG, "FCM service destroyed")
     }
 } 
