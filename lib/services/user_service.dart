@@ -372,28 +372,42 @@ class UserService {
   }
 
   // Method to set predefined status animations
-  Future<void> setUserStatusAnimation(String userId, String? animation) async {
+  Future<void> setUserStatusAnimation(String userId, String? animation, {bool explicitAnimationChange = true}) async {
     print("UserService: Setting status animation for user: $userId");
-    // animation parameter can be null or any valid animation name from popup
+    
     if (animation == null) {
-      print("UserService: Setting null animation (no animation)");
+      if (explicitAnimationChange) {
+        print("UserService: Explicitly setting null animation (no animation)");
+      } else {
+        print("UserService: Null animation passed during initialization, will preserve existing");
+      }
     } else {
       print("UserService: Setting animation: $animation");
     }
 
-    await updateUserStatus(userId, animation);
+    await updateUserStatus(userId, animation, explicitAnimationChange: explicitAnimationChange);
   }
 
   // Add these new methods for status management
-  Future<void> updateUserStatus(String userId, String? statusAnimation) async {
+  Future<void> updateUserStatus(String userId, String? statusAnimation, {bool explicitAnimationChange = false}) async {
     try {
       print("UserService: Updating user status in Realtime DB for user: $userId");
       print("UserService: Setting animation: ${statusAnimation ?? 'null'}, isOnline: true");
       
       final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
       
-      // Update the status directly without checking connection
-      // This avoids potential path issues with .info/connected
+      // Only preserve animation if this is not an explicit animation change (like during initialization)
+      // and the incoming statusAnimation is null
+      if (statusAnimation == null && !explicitAnimationChange) {
+        final snapshot = await statusRef.get();
+        if (snapshot.exists) {
+          final data = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
+          statusAnimation = data['animation'] as String?;
+          print("UserService: Retrieved existing animation: ${statusAnimation ?? 'null'}");
+        }
+      }
+      
+      // Update the status with preserved or new animation
       await statusRef.set({
         'animation': statusAnimation,
         'timestamp': database.ServerValue.timestamp,

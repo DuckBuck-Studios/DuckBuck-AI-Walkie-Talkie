@@ -15,7 +15,8 @@ import 'screens/onboarding/name_screen.dart';
 import 'screens/onboarding/dob_screen.dart';
 import 'screens/onboarding/gender_screen.dart';
 import 'screens/onboarding/profile_photo_screen.dart';
-import 'widgets/animated_background.dart';
+import 'widgets/animated_background.dart'; 
+import 'services/fcm_receiver_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,9 @@ void main() async {
   
   // Initialize App Check
   await _initializeAppCheck();
+  
+  // Initialize FCM
+  await FCMReceiverService().initialize();
   
   runApp(const MyApp());
 }

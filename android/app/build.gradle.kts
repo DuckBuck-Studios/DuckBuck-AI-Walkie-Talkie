@@ -43,6 +43,11 @@ android {
     }
 }
 
+dependencies {
+    // Add Agora RTC SDK
+    implementation("io.agora.rtc:full-sdk:4.2.2")
+}
+
 flutter {
     source = "../.."
 }

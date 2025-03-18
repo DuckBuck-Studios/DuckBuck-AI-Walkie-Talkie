@@ -101,13 +101,15 @@ class UserProvider with ChangeNotifier {
   }
   
   // Set user status animation
-  Future<void> setStatusAnimation(String? animation) async {
-    print("UserProvider: Setting status animation to: ${animation ?? 'null'}");
-    if (_currentUser != null) {
-      print("UserProvider: User exists, calling UserService.setUserStatusAnimation");
-      await _userService.setUserStatusAnimation(_currentUser!.uid, animation);
-    } else {
-      print("UserProvider: Cannot set status animation, user is null");
+  void setStatusAnimation(String? animation, {bool explicitChange = true}) {
+    if (_currentUser == null) return;
+    
+    // For explicit changes (from popup), directly use the animation value
+    // For non-explicit changes (initialization), only update if animation is not null
+    if (explicitChange || animation != null) {
+      _userService.setUserStatusAnimation(_currentUser!.uid, animation, explicitAnimationChange: explicitChange);
+      _statusAnimation = animation;
+      notifyListeners();
     }
   }
   

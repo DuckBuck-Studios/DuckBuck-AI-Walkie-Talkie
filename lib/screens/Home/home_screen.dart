@@ -54,15 +54,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _setUserOnline() {
     print("HomeScreen: Setting user online status");
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    // Set user as online - the initialize method already handles this
-    // We can use setStatusAnimation to ensure the status is active
-    if (userProvider.uid != null) {
-      print("HomeScreen: User ID found: ${userProvider.uid}, updating status animation");
-      // Pass the current animation (which might be null)
-      userProvider.setStatusAnimation(userProvider.statusAnimation);
-    } else {
-      print("HomeScreen: User ID is null, cannot set online status");
-    }
+    
+    // Pass the current animation, but don't treat as explicit animation change
+    // This ensures we don't clear existing animation on initialization
+    userProvider.setStatusAnimation(userProvider.statusAnimation, explicitChange: false);
   }
 
   // Show status animation popup
