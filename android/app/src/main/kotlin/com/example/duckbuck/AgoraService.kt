@@ -1,5 +1,6 @@
 package com.example.duckbuck
-
+import android.content.Intent
+import android.os.Build
 import android.content.Context
 import android.util.Log
 import io.agora.rtc2.Constants
@@ -43,6 +44,8 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         }
     }
     
+    private var isInForegroundMode = false
+    
     // Handle method calls from Flutter
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
@@ -62,15 +65,23 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
                 
                 if (channelName != null) {
                     joinChannel(token, channelName, userId, muteOnJoin, result)
+                    // Start foreground service when joining channel
+                    startForegroundService(channelName)
                 } else {
                     result.error("INVALID_ARGUMENT", "Channel name is required", null)
                 }
             }
+            
             "leaveChannel" -> {
                 leaveChannel(result)
+                // Stop foreground service when leaving channel
+                stopForegroundService()
             }
+            
             "cleanup" -> {
                 cleanup(result)
+                // Stop foreground service during cleanup
+                stopForegroundService()
             }
             "muteLocalAudio" -> {
                 val mute = call.argument<Boolean>("mute") ?: false
@@ -90,6 +101,14 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
     private fun initializeEngine(appId: String, result: Result) {
         try {
             rtcEngine = RtcEngine.create(context, appId, rtcEventHandler)
+            
+            // Enable audio mode to continue in background
+            rtcEngine?.setEnableSpeakerphone(true)
+            rtcEngine?.setDefaultAudioRoutetoSpeakerphone(true)
+            
+            // This is critical for background operation
+            rtcEngine?.enableAudioVolumeIndication(200, 3, false)
+            
             result.success(true)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Agora engine", e)
@@ -111,6 +130,10 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
                 clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
                 publishCameraTrack = false
                 publishMicrophoneTrack = !muteOnJoin
+                
+                // These options help maintain connection in background
+                autoSubscribeAudio = true
+                publishMediaPlayerAudioTrack = true
             }
             
             // Mute audio if required
@@ -119,7 +142,7 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
             }
             
             // Join the channel with the specified userId
-            rtcEngine?.joinChannel(token, channelName, userId, options)  // Changed: removed null parameter
+            rtcEngine?.joinChannel(token, channelName, userId, options)
             result.success(true)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to join channel", e)
@@ -188,11 +211,61 @@ class AgoraService(private val context: Context, messenger: BinaryMessenger) : M
         }
     }
     
+    // New method to enable/disable background mode
+    private fun enableBackgroundMode(enable: Boolean, result: Result) {
+        if (rtcEngine == null) {
+            result.error("ENGINE_NOT_INITIALIZED", "Agora engine not initialized", null)
+            return
+        }
+        
+        try {
+            if (enable) {
+                rtcEngine?.setParameters("{\"rtc.running_background\": true}")
+                rtcEngine?.setEnableSpeakerphone(false)
+            } else {
+                rtcEngine?.setParameters("{\"rtc.running_background\": false}")
+                rtcEngine?.setEnableSpeakerphone(true)
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set background mode", e)
+            result.error("BACKGROUND_MODE_ERROR", "Failed to set background mode", e.message)
+        }
+    }
+    
+    // Start foreground service
+    private fun startForegroundService(channelName: String) {
+        if (!isInForegroundMode) {
+            val serviceIntent = Intent(context, AgoraForegroundService::class.java).apply {
+                putExtra("channelName", channelName)
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+            
+            isInForegroundMode = true
+            Log.d(TAG, "Started foreground service")
+        }
+    }
+    
+    // Stop foreground service
+    private fun stopForegroundService() {
+        if (isInForegroundMode) {
+            context.stopService(Intent(context, AgoraForegroundService::class.java))
+            isInForegroundMode = false
+            Log.d(TAG, "Stopped foreground service")
+        }
+    }
+    
     // Clean up resources when plugin is detached
     fun dispose() {
         channel.setMethodCallHandler(null)
         rtcEngine?.leaveChannel()
         RtcEngine.destroy()
         rtcEngine = null
+        stopForegroundService()
     }
 }
