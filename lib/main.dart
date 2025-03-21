@@ -1,35 +1,35 @@
-import 'package:duckbuck/screens/Authentication/welcome_screen.dart';
+import 'package:duckbuck/providers/user_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart'; 
 import 'providers/friend_provider.dart';
-import 'providers/user_provider.dart';
-import 'screens/Home/home_screen.dart';   
+import 'screens/Authentication/welcome_screen.dart';
 import 'screens/onboarding/name_screen.dart';
 import 'screens/onboarding/dob_screen.dart';
 import 'screens/onboarding/gender_screen.dart';
 import 'screens/onboarding/profile_photo_screen.dart';
-import 'widgets/animated_background.dart'; 
+import 'screens/Home/home_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/fcm_receiver_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase with options
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // Initialize App Check
+  // Initialize Firebase App Check
   await _initializeAppCheck();
   
-  // Initialize FCM
+  // Initialize FCM Receiver Service
   await FCMReceiverService().initialize();
   
   runApp(const MyApp());
@@ -37,15 +37,11 @@ void main() async {
 
 // Platform-specific App Check initialization
 Future<void> _initializeAppCheck() async {
-  if (kIsWeb) {
-    await FirebaseAppCheck.instance.activate(
-      webProvider: ReCaptchaV3Provider('YOUR-RECAPTCHA-V3-SITE-KEY'),
-    );
-  } else if (Platform.isAndroid) {
+  if (Platform.isAndroid) {
     await FirebaseAppCheck.instance.activate(
       androidProvider: AndroidProvider.debug,
     );
-  } else if (Platform.isIOS || Platform.isMacOS) {
+  } else if (Platform.isIOS) {
     await FirebaseAppCheck.instance.activate(
       appleProvider: AppleProvider.debug,
     );
@@ -56,6 +52,7 @@ Future<void> _initializeAppCheck() async {
   }
 }
 
+/// Main app widget
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -63,9 +60,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()), 
-        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => FriendProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: MaterialApp(
         title: 'DuckBuck',
@@ -95,76 +92,106 @@ class AuthenticationWrapper extends StatefulWidget {
 }
 
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
+  // Add a flag to track if we're still initializing
+  bool _isInitializing = true;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Check auth state asynchronously
+    _checkAuthState();
+  }
+  
+  // Check auth state asynchronously
+  Future<void> _checkAuthState() async {
+    // Add a minimum delay to show splash screen
+    await Future.delayed(const Duration(milliseconds: 2500));
+    
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+      });
+    }
+  }
+
+  Widget _buildSplashScreen() {
+    return const SplashScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Always show splash screen during initialization
+    if (_isInitializing) {
+      return _buildSplashScreen();
+    }
+    
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        // Show loading screen while checking auth state
+        // If still loading auth state, show splash screen
         if (authProvider.status == AuthStatus.loading) {
-          return Scaffold(
-            body: DuckBuckAnimatedBackground(
-              opacity: 0.03,
-              child: const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
-                ),
-              ),
-            ),
-          );
+          return _buildSplashScreen();
         }
+        
+        print('AuthWrapper: Current auth status: ${authProvider.status}');
+        print('AuthWrapper: Is authenticated: ${authProvider.isAuthenticated}');
+        print('AuthWrapper: Current user: ${authProvider.currentUser?.uid}');
 
         // If not authenticated, show welcome screen
         if (!authProvider.isAuthenticated) {
+          print('AuthWrapper: Not authenticated, showing welcome screen');
           return const WelcomeScreen().animate().fadeIn(
             duration: const Duration(milliseconds: 300),
           );
         }
 
-        // For authenticated users, check onboarding status
+        // For authenticated users, check onboarding stage directly
         return FutureBuilder<OnboardingStage>(
           future: authProvider.getOnboardingStage(),
-          builder: (context, snapshot) {
-            // Show loading screen while checking onboarding stage
-            if (!snapshot.hasData) {
-              return Scaffold(
-                body: DuckBuckAnimatedBackground(
-                  opacity: 0.03,
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
-                    ),
-                  ),
-                ),
+          builder: (context, stageSnapshot) {
+            // If we're still loading the stage, show the splash screen
+            if (stageSnapshot.connectionState == ConnectionState.waiting) {
+              return _buildSplashScreen();
+            }
+            
+            // Get the current stage
+            final currentStage = stageSnapshot.data ?? OnboardingStage.name;
+            print('AuthWrapper: Current onboarding stage: $currentStage');
+            
+            // If the user doesn't exist in the database (notStarted), show welcome screen
+            if (currentStage == OnboardingStage.notStarted) {
+              print('AuthWrapper: User not in database, showing welcome screen');
+              // Sign out the user first
+              authProvider.signOut();
+              return const WelcomeScreen().animate().fadeIn(
+                duration: const Duration(milliseconds: 300),
               );
             }
-
-            // Determine which screen to show based on onboarding stage
-            Widget screenToShow;
-            final onboardingStage = snapshot.data!;
-
-            if (onboardingStage == OnboardingStage.completed) {
-              screenToShow = const HomeScreen();
-            } else {
-              switch (onboardingStage) {
-                case OnboardingStage.dateOfBirth:
-                  screenToShow = const DOBScreen();
-                  break;
-                case OnboardingStage.gender:
-                  screenToShow = const GenderScreen();
-                  break;
-                case OnboardingStage.profilePhoto:
-                  screenToShow = const ProfilePhotoScreen();
-                  break;
-                case OnboardingStage.name:
-                case OnboardingStage.notStarted:
-                default:
-                  screenToShow = const NameScreen();
-                  break;
-              }
+            
+            // Route to the appropriate screen based on onboarding stage
+            Widget targetScreen;
+            
+            switch (currentStage) {
+              case OnboardingStage.completed:
+                targetScreen = const HomeScreen();
+                break;
+              case OnboardingStage.name:
+                targetScreen = const NameScreen();
+                break;
+              case OnboardingStage.dateOfBirth:
+                targetScreen = const DOBScreen();
+                break;
+              case OnboardingStage.gender:
+                targetScreen = const GenderScreen();
+                break;
+              case OnboardingStage.profilePhoto:
+                targetScreen = const ProfilePhotoScreen();
+                break;
+              default:
+                targetScreen = const NameScreen();
             }
-
-            // Show the appropriate screen with animation
-            return screenToShow.animate().fadeIn(
+            
+            // Animate the transition to the target screen
+            return targetScreen.animate().fadeIn(
               duration: const Duration(milliseconds: 300),
             );
           },

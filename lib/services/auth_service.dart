@@ -8,8 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:retry/retry.dart';
 import '../models/user_model.dart' as models;
 import 'dart:math';
-import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async'; 
 
 /// A service class that handles all authentication operations including:
 /// - Sign in with various providers (Google, Apple, Phone)
@@ -87,31 +86,31 @@ class AuthService {
 
   /// Get a user model by UID
   Future<models.UserModel?> getUserModel(String uid) async {
+    print('AuthService: Getting user model for UID: $uid');
     try {
-      return await _retryOptions.retry(
-        () async {
-          final docSnapshot = await _firestore.collection('users').doc(uid).get();
-          
-          if (!docSnapshot.exists) {
-            return null;
-          }
-          
-          final userData = docSnapshot.data() as Map<String, dynamic>;
-          final userModel = models.UserModel.fromJson(userData);
-          
-          // Cache the user model if it's the current user
-          if (_auth.currentUser != null && uid == _auth.currentUser!.uid) {
-            _cachedUserModel = userModel;
-            _setupCacheRefresh();
-          }
-          
-          return userModel;
-        },
-        retryIf: (e) => e is FirebaseException && _shouldRetryFirestore(e),
-        onRetry: (e) => debugPrint('Retrying fetch user model due to error: $e'),
-      );
+      print('AuthService: Fetching user document from Firestore');
+      final docSnapshot = await _firestore.collection('users').doc(uid).get();
+      
+      print('AuthService: Document exists: ${docSnapshot.exists}');
+      if (!docSnapshot.exists) {
+        print('AuthService: No user document found');
+        return null;
+      }
+      
+      final userData = docSnapshot.data() as Map<String, dynamic>;
+      print('AuthService: User data found: ${userData['displayName']}');
+      final userModel = models.UserModel.fromJson(userData);
+      
+      // Cache the user model if it's the current user
+      if (_auth.currentUser != null && uid == _auth.currentUser!.uid) {
+        print('AuthService: Caching user model for current user');
+        _cachedUserModel = userModel;
+        _setupCacheRefresh();
+      }
+      
+      return userModel;
     } catch (e) {
-      debugPrint('Error getting user model for $uid: $e');
+      print('AuthService: Error getting user model for $uid: $e');
       return null;
     }
   }
@@ -408,7 +407,6 @@ class AuthService {
             final metadata = <String, dynamic>{
               'email': user.email ?? '',
               'phoneNumber': user.phoneNumber,
-              // You can add default dateOfBirth and gender here if needed
             };
             
             // Create a new user document with consistent field placement
@@ -492,7 +490,6 @@ class AuthService {
             final metadata = <String, dynamic>{
               'email': user.email ?? '',
               'phoneNumber': user.phoneNumber,
-              // You can add default dateOfBirth and gender here if needed
             };
             
             final newUser = models.UserModel(

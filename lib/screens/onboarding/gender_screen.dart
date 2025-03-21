@@ -17,8 +17,8 @@ class _GenderScreenState extends State<GenderScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   String? _selectedGender;
   final TextEditingController _customGenderController = TextEditingController();
-  bool _isLoading = false;
   bool _isCustomGender = false;
+  bool _isLoading = false;
 
   final List<String> _genderOptions = [
     'Male',
@@ -29,29 +29,14 @@ class _GenderScreenState extends State<GenderScreen> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    
-    // Set the onboarding stage to 'gender' when this screen loads,
-    // but only if it's not already set to avoid unnecessary updates
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      final currentStage = await authProvider.getOnboardingStage();
-      
-      // Only update if needed
-      if (currentStage != auth.OnboardingStage.gender) {
-        await authProvider.updateOnboardingStage(auth.OnboardingStage.gender);
-      }
-    });
-  }
-
-  @override
   void dispose() {
     _customGenderController.dispose();
     super.dispose();
   }
 
   Future<void> _saveGender() async {
+    if (_isLoading) return;
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -61,18 +46,22 @@ class _GenderScreenState extends State<GenderScreen> {
       return;
     }
 
+    // Set loading state
+    setState(() {
+      _isLoading = true;
+    });
+
     String gender = _selectedGender!;
     if (_isCustomGender) {
       gender = _customGenderController.text.trim();
       if (gender.isEmpty) {
         _showErrorSnackBar('Please enter your gender');
+        setState(() {
+          _isLoading = false;
+        });
         return;
       }
     }
-
-    setState(() {
-      _isLoading = true;
-    });
 
     try {
       // Get the auth provider
@@ -82,13 +71,17 @@ class _GenderScreenState extends State<GenderScreen> {
       await authProvider.updateUserProfile(
         metadata: {
           'gender': gender,
+          'current_onboarding_stage': 'profilePhoto', // Explicitly set the stage
         },
       );
       
-      // Update onboarding stage to profile photo
+      // Update onboarding stage to profilePhoto
       await authProvider.updateOnboardingStage(auth.OnboardingStage.profilePhoto);
       
-      // Navigate to home screen if mounted
+      // Log for debugging
+      print('GenderScreen: Saved gender: $gender');
+      
+      // Navigate to Profile Photo screen if mounted
       if (mounted) {
         // Navigate to Profile Photo screen with a smooth transition
         Navigator.of(context).pushReplacement(
@@ -105,8 +98,11 @@ class _GenderScreenState extends State<GenderScreen> {
         );
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to save gender: ${e.toString()}');
+      // Handle error
+      print('GenderScreen: Error saving gender: $e');
+      _showErrorSnackBar('Error saving gender. Please try again.');
     } finally {
+      // Reset loading state
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -259,14 +255,14 @@ class _GenderScreenState extends State<GenderScreen> {
                         bottom: 30.0
                       ),
                       child: DuckBuckButton(
-                        text: 'Continue',
+                        text: _isLoading ? 'Loading...' : 'Continue',
                         onTap: _isLoading ? () {} : _saveGender,
                         color: const Color(0xFFD4A76A),
                         borderColor: const Color(0xFFB38B4D),
                         textColor: Colors.white,
                         alignment: MainAxisAlignment.center,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: _isLoading ? null : const Icon(Icons.arrow_forward, color: Colors.white),
+                        icon: const Icon(Icons.arrow_forward, color: Colors.white),
                         textStyle: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,

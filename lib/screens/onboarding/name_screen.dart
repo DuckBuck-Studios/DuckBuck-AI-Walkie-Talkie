@@ -16,25 +16,6 @@ class NameScreen extends StatefulWidget {
 class _NameScreenState extends State<NameScreen> {
   final TextEditingController _nameController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    // Set the onboarding stage to 'name' when this screen loads,
-    // but only if it's not already set to avoid unnecessary updates
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      final currentStage = await authProvider.getOnboardingStage();
-      
-      // Only update if we're not already at the name stage 
-      // (prevents repeated updates)
-      if (currentStage != auth.OnboardingStage.name) {
-        await authProvider.updateOnboardingStage(auth.OnboardingStage.name);
-      }
-    });
-  }
 
   @override
   void dispose() {
@@ -47,25 +28,21 @@ class _NameScreenState extends State<NameScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
+      // Get the auth provider
       final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      final name = _nameController.text.trim();
       
-      // Save name to displayName and also to metadata
+      // Save name to user profile
       await authProvider.updateUserProfile(
-        displayName: name,
-        metadata: {
-          'name': name,
-        },
+        displayName: _nameController.text.trim(),
       );
       
       // Update onboarding stage to dateOfBirth
       await authProvider.updateOnboardingStage(auth.OnboardingStage.dateOfBirth);
       
+      print('NameScreen: Saved name: ${_nameController.text.trim()}');
+      
+      // Navigate to DOB screen
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -82,12 +59,7 @@ class _NameScreenState extends State<NameScreen> {
       }
     } catch (e) {
       _showErrorSnackBar('Failed to save name: ${e.toString()}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      print('NameScreen: Error saving name: $e');
     }
   }
 
@@ -227,13 +199,13 @@ class _NameScreenState extends State<NameScreen> {
                     ),
                     child: DuckBuckButton(
                       text: 'Continue',
-                      onTap: _isLoading ? () {} : _saveName,
+                      onTap: _saveName,
                       color: const Color(0xFFD4A76A),
                       borderColor: const Color(0xFFB38B4D),
                       textColor: Colors.white,
                       alignment: MainAxisAlignment.center,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                      icon: _isLoading ? null : const Icon(Icons.arrow_forward, color: Colors.white),
+                      icon: const Icon(Icons.arrow_forward, color: Colors.white),
                       textStyle: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,

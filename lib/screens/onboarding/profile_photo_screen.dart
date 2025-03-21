@@ -5,7 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart' as auth;
 import '../../widgets/animated_background.dart';
-import 'profile_photo_preview_screen.dart'; 
+import 'profile_photo_preview_screen.dart';
 
 class ProfilePhotoScreen extends StatefulWidget {
   const ProfilePhotoScreen({super.key});
@@ -15,23 +15,134 @@ class ProfilePhotoScreen extends StatefulWidget {
 }
 
 class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
-  bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
-    
-    // Set the onboarding stage to 'profilePhoto' when this screen loads,
-    // but only if it's not already set to avoid unnecessary updates
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      final currentStage = await authProvider.getOnboardingStage();
-      
-      // Only update if needed
-      if (currentStage != auth.OnboardingStage.profilePhoto) {
-        await authProvider.updateOnboardingStage(auth.OnboardingStage.profilePhoto);
-      }
+    // Ensure onboarding stage is set correctly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkOnboardingStage();
     });
+  }
+
+  // Check and update onboarding stage if needed
+  Future<void> _checkOnboardingStage() async {
+    final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
+    final stage = await authProvider.getOnboardingStage();
+    
+    // If we're not at the profilePhoto stage, update it
+    if (stage != auth.OnboardingStage.profilePhoto) {
+      await authProvider.updateOnboardingStage(auth.OnboardingStage.profilePhoto);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async => false, // Prevent going back
+      child: Scaffold(
+        body: DuckBuckAnimatedBackground(
+          child: SafeArea(
+            child: Container(
+              height: MediaQuery.of(context).size.height,
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Spacer(flex: 2),
+                  
+                  // Camera icon
+                  Container(
+                    width: MediaQuery.of(context).size.width * 0.3,
+                    height: MediaQuery.of(context).size.width * 0.3,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4A76A).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      size: 60,
+                      color: Color(0xFFD4A76A),
+                    ),
+                  )
+                  .animate()
+                  .scale(
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOutBack,
+                    begin: const Offset(0.8, 0.8),
+                    end: const Offset(1.0, 1.0),
+                  ),
+                  
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.03),
+                  
+                  // Title and subtitle
+                  Text(
+                    "Set your profile photo",
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(duration: const Duration(milliseconds: 500))
+                  .slideY(begin: 0.3, end: 0),
+                  
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.01),
+                  
+                  Text(
+                    "Add a photo to help others recognize you",
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(
+                    duration: const Duration(milliseconds: 500),
+                    delay: const Duration(milliseconds: 200),
+                  ),
+                  
+                  const Spacer(flex: 4),
+                  
+                  // Choose profile picture button - move to bottom of screen
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: 30.0, 
+                        right: 30.0, 
+                        bottom: 30.0
+                      ),
+                      child: DuckBuckButton(
+                        text: 'Choose profile picture',
+                        onTap: _showImageSourceBottomSheet,
+                        color: const Color(0xFFD4A76A),
+                        borderColor: const Color(0xFFB38B4D),
+                        textColor: Colors.white,
+                        alignment: MainAxisAlignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+                        icon: const Icon(Icons.camera_alt, color: Colors.white),
+                        textStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                          letterSpacing: 0.5,
+                        ),
+                        height: 55,
+                        width: double.infinity,
+                      ),
+                    ),
+                  )
+                  .animate()
+                  .fadeIn(
+                    duration: const Duration(milliseconds: 500),
+                    delay: const Duration(milliseconds: 400),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _pickAndCropImage(ImageSource source) async {
@@ -48,9 +159,11 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
         return;
       }
       
-      // Navigate directly to preview screen
+      // Navigate to preview screen
       if (mounted) {
-        Navigator.of(context).push(
+        // Navigate to the preview screen with just a pushReplacement
+        // The preview screen will handle completing onboarding and navigating to home
+        Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => ProfilePhotoPreviewScreen(
               imagePath: pickedImage.path,
@@ -150,116 +263,6 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
         content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent going back
-      child: Scaffold(
-        body: DuckBuckAnimatedBackground(
-          child: SafeArea(
-            child: Container(
-              height: MediaQuery.of(context).size.height,
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 2),
-                  
-                  // Camera icon
-                  Container(
-                    width: MediaQuery.of(context).size.width * 0.3,
-                    height: MediaQuery.of(context).size.width * 0.3,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4A76A).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      size: 60,
-                      color: Color(0xFFD4A76A),
-                    ),
-                  )
-                  .animate()
-                  .scale(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOutBack,
-                    begin: const Offset(0.8, 0.8),
-                    end: const Offset(1.0, 1.0),
-                  ),
-                  
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.03),
-                  
-                  // Title and subtitle
-                  Text(
-                    "Set your profile photo",
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(duration: const Duration(milliseconds: 500))
-                  .slideY(begin: 0.3, end: 0),
-                  
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.01),
-                  
-                  Text(
-                    "Add a photo to help others recognize you",
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(
-                    duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 200),
-                  ),
-                  
-                  const Spacer(flex: 4),
-                  
-                  // Choose profile picture button - move to bottom of screen
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 30.0, 
-                        right: 30.0, 
-                        bottom: 30.0
-                      ),
-                      child: DuckBuckButton(
-                        text: 'Choose profile picture',
-                        onTap: _isLoading ? () {} : _showImageSourceBottomSheet,
-                        color: const Color(0xFFD4A76A),
-                        borderColor: const Color(0xFFB38B4D),
-                        textColor: Colors.white,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: _isLoading ? null : const Icon(Icons.camera_alt, color: Colors.white),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
-                        ),
-                        height: 55,
-                        width: double.infinity,
-                      ),
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(
-                    duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 400),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

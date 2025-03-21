@@ -32,6 +32,12 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
         );
       }
     });
+    // Auto-open scanner when tab is switched to scan QR
+    _tabController.addListener(() {
+      if (_tabController.index == 0) {
+        setState(() => _showScanner = true);
+      }
+    });
   }
   
   @override
@@ -118,7 +124,6 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
                               final String? code = barcodes.first.rawValue;
                               if (code != null) {
                                 setState(() => _showScanner = false);
-                                // Show search results for the scanned user ID
                                 _processScannedCode(code);
                               }
                             }
@@ -185,20 +190,64 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
                       child: Container(
                         height: 50,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.white.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(25),
                         ),
                         child: TabBar(
                           controller: _tabController,
                           indicator: BoxDecoration(
                             borderRadius: BorderRadius.circular(25),
-                            color: const Color(0xFFD4A76A),
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFFD4A76A),
+                                Color(0xFFB38B5D),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                           ),
-                          labelColor: const Color(0xFF3C1F1F),
-                          unselectedLabelColor: Colors.white,
-                          tabs: const [
-                            Tab(text: 'Scan QR'),
-                            Tab(text: 'Search ID'),
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Colors.white.withOpacity(0.5),
+                          labelStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          unselectedLabelStyle: const TextStyle(
+                            fontSize: 16,
+                          ),
+                          tabs: [
+                            Tab(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.qr_code_scanner,
+                                    size: 20,
+                                    color: _tabController.index == 0 
+                                        ? Colors.white 
+                                        : Colors.white.withOpacity(0.5),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text('Scan QR'),
+                                ],
+                              ),
+                            ),
+                            Tab(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.person_search,
+                                    size: 20,
+                                    color: _tabController.index == 1 
+                                        ? Colors.white 
+                                        : Colors.white.withOpacity(0.5),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text('Search ID'),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -237,69 +286,70 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
   }
 
   Widget _buildScanQRContent() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // QR Code Icon
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFFD4A76A).withOpacity(0.5),
-                width: 2,
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // QR Code Icon
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFFD4A76A).withOpacity(0.5),
+                  width: 2,
+                ),
               ),
-            ),
-            child: const Icon(
-              Icons.qr_code_scanner,
-              size: 60,
-              color: Color(0xFFD4A76A),
-            ),
-          ).animate()
-            .fadeIn(duration: 600.ms)
-            .scale(
-              begin: const Offset(0.8, 0.8),
-              end: const Offset(1.0, 1.0),
-              duration: 600.ms,
-              curve: Curves.elasticOut,
-            ),
+              child: const Icon(
+                Icons.qr_code_scanner,
+                size: 60,
+                color: Color(0xFFD4A76A),
+              ),
+            ).animate()
+              .fadeIn(duration: 600.ms)
+              .scale(
+                begin: const Offset(0.8, 0.8),
+                end: const Offset(1.0, 1.0),
+                duration: 600.ms,
+                curve: Curves.elasticOut,
+              ),
+              
+            const SizedBox(height: 24),
             
-          const SizedBox(height: 24),
-          
-          const Text(
-            'Scan your friend\'s QR code to add them',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white,
-            ),
-          ).animate()
-            .fadeIn(delay: 200.ms, duration: 400.ms),
+            const Text(
+              'Scan your friend\'s QR code to add them',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white,
+              ),
+            ).animate()
+              .fadeIn(delay: 200.ms, duration: 400.ms),
             
-          const SizedBox(height: 36),
-          
-          // Open Scanner Button
-          DuckBuckButton(
-            text: 'Open Scanner',
-            onTap: () => setState(() => _showScanner = true),
-            color: const Color(0xFF5C2F2F),
-            borderColor: const Color(0xFFD4A76A),
-            width: 200,
-            icon: const Icon(Icons.camera_alt, color: Colors.white),
-          ).animate()
-            .fadeIn(delay: 400.ms, duration: 400.ms)
-            .slideY(delay: 400.ms, begin: 0.2, end: 0, duration: 400.ms),
-        ],
+            const SizedBox(height: 36),
+            
+            // Open Scanner Button
+            DuckBuckButton(
+              text: 'Open Scanner',
+              onTap: () => setState(() => _showScanner = true),
+              color: const Color(0xFF2C1810),
+              borderColor: const Color(0xFFD4A76A),
+              width: 200,
+              icon: const Icon(Icons.camera_alt, color: Colors.white),
+            ).animate()
+              .fadeIn(delay: 400.ms, duration: 400.ms)
+              .slideY(delay: 400.ms, begin: 0.2, end: 0, duration: 400.ms),
+          ],
+        ),
       ),
     );
   }
 
   void _processScannedCode(String code) {
-    // Show the search user popup with the scanned code
     showDialog(
       context: context,
       builder: (context) => SearchUserPopup(initialSearchId: code),
@@ -328,7 +378,7 @@ class SearchUserView extends StatelessWidget {
               hintText: 'Enter User ID',
               hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
               filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
+              fillColor: Colors.white.withOpacity(0.1),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
@@ -351,14 +401,13 @@ class SearchUserView extends StatelessWidget {
               final userId = searchController.text.trim();
               if (userId.isNotEmpty) {
                 Navigator.pop(context);
-                // Show the search results in a new dialog
                 showDialog(
                   context: context,
                   builder: (context) => SearchUserPopup(initialSearchId: userId),
                 );
               }
             },
-            color: const Color(0xFF5C2F2F),
+            color: const Color(0xFF2C1810),
             borderColor: const Color(0xFFD4A76A),
             width: 200,
             icon: const Icon(Icons.search, color: Colors.white),
@@ -613,7 +662,7 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
                   hintText: 'Enter user ID',
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                   filled: true,
-                  fillColor: Colors.black.withOpacity(0.2),
+                  fillColor: Colors.white.withOpacity(0.1),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
@@ -678,7 +727,7 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
   Widget _buildUserCard() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF5C2F2F).withOpacity(0.3),
+        color: const Color(0xFF2C1810).withOpacity(0.3),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: const Color(0xFFD4A76A).withOpacity(0.3),
@@ -786,7 +835,7 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
                       onTap: _isSendingRequest 
                         ? () {} // Empty function when loading
                         : () { _sendFriendRequest(); },
-                      color: const Color(0xFF5C2F2F),
+                      color: const Color(0xFF2C1810),
                       borderColor: const Color(0xFFD4A76A),
                       isLoading: _isSendingRequest,
                     ),

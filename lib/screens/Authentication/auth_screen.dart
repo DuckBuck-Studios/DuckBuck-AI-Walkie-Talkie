@@ -3,13 +3,11 @@ import 'package:duckbuck/screens/onboarding/name_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:duckbuck/widgets/animated_background.dart';
-import 'package:duckbuck/widgets/cool_button.dart';
-import 'package:dots_indicator/dots_indicator.dart'; // Add this import for the dots indicator
+import 'package:dots_indicator/dots_indicator.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import '../../widgets/phone_auth_popup.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/auth_provider.dart' as auth_provider;
 import '../Home/home_screen.dart';
 import '../onboarding/dob_screen.dart';
 import '../onboarding/gender_screen.dart';
@@ -28,11 +26,32 @@ class _AuthScreenState extends State<AuthScreen> {
   double _currentPage = 0;
   bool _showBottomSheet = false;
   
-  // Auth state variables - no longer need to create AuthService directly
+  // Auth state variables
   bool _isGoogleLoading = false;
   bool _isAppleLoading = false;
   bool _isPhoneLoading = false;
-  
+
+  final List<Map<String, dynamic>> _onboardingData = [
+    {
+      'title': 'Connect Instantly',
+      'subtitle': 'Talk with friends and family in real-time with just one tap',
+      'features': ['No phone numbers needed', 'Instant voice connection', 'Crystal clear audio'],
+      'color': Color(0xFFD4A76A),
+    },
+    {
+      'title': 'Global Reach',
+      'subtitle': 'Stay connected with your friends no matter where they are',
+      'features': ['Connect worldwide', 'Private voice channels', 'Group conversations'],
+      'color': Color(0xFF6AD4A7),
+    },
+    {
+      'title': 'Ready to Talk?',
+      'subtitle': 'Join millions of people already connecting on DuckBuck',
+      'features': ['End-to-end encryption', 'Zero lag communication', 'Free forever'],
+      'color': Color(0xFF6A7AD4),
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -50,36 +69,19 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   @override
-  // Modify the build method to listen for auth changes
-  @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: true);
+    final authProvider = Provider.of<auth_provider.AuthProvider>(context, listen: true);
     
-    // Add this to handle successful authentication
     if (authProvider.isAuthenticated) {
+      print('AuthScreen: User is authenticated, checking user existence');
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        // Check if the user has completed onboarding
-        final onboardingStage = await authProvider.getOnboardingStage();
+        // First check if user exists in Firestore
+        final exists = await authProvider.authService.userExists(authProvider.currentUser!.uid);
+        print('AuthScreen: User exists in Firestore: $exists');
         
-        if (onboardingStage == OnboardingStage.completed) {
-          // If onboarding is completed, go to home screen
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  );
-                },
-                transitionDuration: const Duration(milliseconds: 300),
-              ),
-            );
-          }
-        } else {
-          // Otherwise start/resume onboarding flow
+        if (!exists) {
+          print('AuthScreen: New user, going to name screen');
+          // If user doesn't exist, go to name screen
           if (mounted) {
             Navigator.pushReplacement(
               context,
@@ -95,12 +97,60 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
             );
           }
+        } else {
+          print('AuthScreen: Existing user, checking onboarding status');
+          // For existing users, check onboarding status
+          final currentStage = await authProvider.getOnboardingStage();
+          print('AuthScreen: Current onboarding stage: $currentStage');
+          
+          Widget targetScreen;
+          
+          if (currentStage == auth_provider.OnboardingStage.notStarted || currentStage == auth_provider.OnboardingStage.completed) {
+            // If onboarding is not started or completed, go to home screen
+            print('AuthScreen: Onboarding not started or completed, going to home screen');
+            targetScreen = const HomeScreen();
+          } else {
+            // Otherwise, navigate to the appropriate onboarding screen
+            print('AuthScreen: Navigating to onboarding screen: $currentStage');
+            switch (currentStage) {
+              case auth_provider.OnboardingStage.name:
+                targetScreen = const NameScreen();
+                break;
+              case auth_provider.OnboardingStage.dateOfBirth:
+                targetScreen = const DOBScreen();
+                break;
+              case auth_provider.OnboardingStage.gender:
+                targetScreen = const GenderScreen();
+                break;
+              case auth_provider.OnboardingStage.profilePhoto:
+                targetScreen = const ProfilePhotoScreen();
+                break;
+              default:
+                targetScreen = const HomeScreen();
+            }
+          }
+          
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  );
+                },
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            );
+          }
         }
       });
     }
 
     // Update loading states based on the auth provider
-    if (authProvider.status == AuthStatus.loading) {
+    if (authProvider.status == auth_provider.AuthStatus.authenticated) {
       // Keep existing loading state to know which button is loading
     } else {
       // Reset loading states when auth is no longer loading
@@ -113,7 +163,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       
       // Show error if there is one
-      if (authProvider.status == AuthStatus.error && authProvider.errorMessage != null) {
+      if (authProvider.status == auth_provider.AuthStatus.error && authProvider.errorMessage != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showErrorSnackBar(authProvider.errorMessage!);
           // Clear the error
@@ -123,214 +173,238 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     return Scaffold(
-      body: DuckBuckAnimatedBackground(
-        child: Stack(
-          children: [
-            // Main content
-            SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      physics: _showBottomSheet
-                          ? const NeverScrollableScrollPhysics() // Disable swiping when bottom sheet is visible
-                          : const PageScrollPhysics(),
-                      children: [
-                        _buildPageContent("Welcome to DuckBuck", "This is the first page about the app."),
-                        _buildPageContent("Features", "This page describes the features of the app."),
-                        _buildPageContent("Get Started", "Instructions on how to get started with the app."),
-                      ],
-                    ),
-                  ),
+      body: Stack(
+        children: [
+          // Animated Background
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _onboardingData[_currentPage.floor()]['color'],
+                  _onboardingData[_currentPage.floor()]['color'].withOpacity(0.7),
                 ],
               ),
             ),
-
-            // DotsIndicator above the bottom sheet
-            Positioned(
-              bottom: _showBottomSheet ? 200 : 20, // Adjust position based on bottom sheet visibility
-              left: 0,
-              right: 0,
-              child: Center(
+          ),
+          
+          // Main Content
+          Column(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: (int page) {
+                    setState(() {
+                      _currentPage = page.toDouble();
+                      _showBottomSheet = page >= 2;
+                    });
+                  },
+                  itemCount: _onboardingData.length,
+                  itemBuilder: (context, index) {
+                    return _buildFeatureScreen(
+                      _onboardingData[index],
+                      index,
+                    );
+                  },
+                ),
+              ),
+              
+              // Dots Indicator
+              Padding(
+                padding: const EdgeInsets.only(bottom: 32.0),
                 child: DotsIndicator(
-                  dotsCount: 3,
+                  dotsCount: _onboardingData.length,
                   position: _currentPage,
                   decorator: DotsDecorator(
-                    activeColor: Colors.black,
-                    size: const Size.square(9.0),
-                    activeSize: const Size(18.0, 9.0),
+                    activeColor: Colors.white,
+                    size: const Size(8.0, 8.0),
+                    activeSize: const Size(24.0, 8.0),
                     activeShape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(5.0),
+                      borderRadius: BorderRadius.circular(4.0),
                     ),
                   ),
                 ),
               ),
-            ),
-            
-            // Bottom sheet with animation
-            if (_showBottomSheet)
-              Positioned(
-                bottom: 0,
-                child: Container(
-                  height: 200,
-                  width: MediaQuery.of(context).size.width,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(230),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
+            ],
+          ),
+          
+          // Get Started Button
+          if (_showBottomSheet)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(25),
-                        blurRadius: 10,
-                        spreadRadius: 0,
-                        offset: const Offset(0, -2),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _handleGoogleSignIn(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black87,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Auth buttons
-                          if (Platform.isIOS) ...[
-                            _buildAuthButton(
-                              context: context,
-                              text: "Continue with Google",
-                              icon: Icons.g_mobiledata,
-                              onTap: _signInWithGoogle,
-                              color: const Color(0xFF4285F4),
-                              borderColor: const Color(0xFF4285F4).withAlpha(204),
-                              isLoading: _isGoogleLoading,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildAuthButton(
-                              context: context,
-                              text: "Continue with Apple",
-                              icon: Icons.apple,
-                              onTap: _signInWithApple,
-                              color: Colors.black,
-                              borderColor: Colors.black87,
-                              isLoading: _isAppleLoading,
-                            ),
-                          ] else ...[
-                            _buildAuthButton(
-                              context: context,
-                              text: "Continue with Google",
-                              icon: Icons.g_mobiledata,
-                              onTap: _signInWithGoogle,
-                              color: const Color(0xFF4285F4),
-                              borderColor: const Color(0xFF4285F4).withAlpha(204),
-                              isLoading: _isGoogleLoading,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildAuthButton(
-                              context: context,
-                              text: "Continue with Phone",
-                              icon: Icons.phone_android,
-                              onTap: () {
-                                HapticFeedback.mediumImpact();
-                                _showPhoneAuthPopup();
-                              },
-                              color: const Color(0xFF34A853),
-                              borderColor: const Color(0xFF34A853).withAlpha(204),
-                              isLoading: _isPhoneLoading,
-                            ),
-                          ],
+                          Lottie.asset('assets/animations/google.json', height: 24),
+                          const SizedBox(width: 12),
+                          Text(_isGoogleLoading ? 'Please wait...' : 'Continue with Google'),
                         ],
                       ),
+                    ).animate()
+                      .fadeIn(delay: 300.ms)
+                      .slideY(begin: 0.5, end: 0),
+                      
+                    if (Platform.isIOS)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: ElevatedButton(
+                          onPressed: () => _handleAppleSignIn(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.apple, size: 24),
+                              const SizedBox(width: 12),
+                              Text(_isAppleLoading ? 'Please wait...' : 'Continue with Apple'),
+                            ],
+                          ),
+                        ).animate()
+                          .fadeIn(delay: 400.ms)
+                          .slideY(begin: 0.5, end: 0),
+                      ),
+                      
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: ElevatedButton(
+                        onPressed: () => _showPhoneAuthBottomSheet(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.phone_android, size: 24),
+                            const SizedBox(width: 12),
+                            Text(_isPhoneLoading ? 'Please wait...' : 'Continue with Phone'),
+                          ],
+                        ),
+                      ).animate()
+                        .fadeIn(delay: 500.ms)
+                        .slideY(begin: 0.5, end: 0),
                     ),
-                  ),
-                )
-                .animate(
-                  target: _showBottomSheet ? 1 : 0,
-                  onPlay: (controller) => controller.forward(),
-                )
-                .slideY(
-                  begin: 1,
-                  end: 0,
-                  duration: 500.ms,
-                  curve: Curves.easeOutQuart,
-                )
-                .fadeIn(
-                  duration: 300.ms,
-                  curve: Curves.easeOut,
+                  ],
                 ),
-              ),
-          ],
-        ),
+              ).animate()
+                .fadeIn()
+                .slideY(begin: 1, end: 0, curve: Curves.easeOutQuart),
+            ),
+        ],
       ),
     );
   }
-  
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
 
-  Widget _buildPageContent(String title, String description) {
+  Widget _buildFeatureScreen(Map<String, dynamic> data, int index) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Title
           Text(
-            title,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            description,
-            style: TextStyle(fontSize: 16),
+            data['title'],
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
             textAlign: TextAlign.center,
+          ).animate()
+            .fadeIn(delay: 200.ms)
+            .slideY(begin: 0.3, end: 0),
+
+          // Subtitle
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Text(
+              data['subtitle'],
+              style: const TextStyle(
+                fontSize: 18,
+                color: Colors.white70,
+              ),
+              textAlign: TextAlign.center,
+            ).animate()
+              .fadeIn(delay: 400.ms)
+              .slideY(begin: 0.3, end: 0),
+          ),
+
+          // Features List
+          ...List.generate(
+            data['features'].length,
+            (i) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.check, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    data['features'][i],
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ).animate()
+                .fadeIn(delay: Duration(milliseconds: 600 + (i * 200)))
+                .slideX(begin: 0.3, end: 0),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAuthButton({
-    required BuildContext context,
-    required String text,
-    required IconData icon,
-    required VoidCallback onTap,
-    Color color = const Color(0xFFD4A76A),
-    Color borderColor = const Color(0xFFB38B4D),
-    bool isLoading = false,
-  }) {
-    return DuckBuckButton(
-      text: isLoading ? '' : text,
-      onTap: isLoading ? () {} : onTap,
-      color: color,
-      borderColor: borderColor,
-      textColor: Colors.white,
-      alignment: MainAxisAlignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      icon: isLoading
-          ? Lottie.asset(
-              'assets/animations/loading.json',
-              width: 24,
-              height: 24,
-            )
-          : Icon(icon, color: Colors.white),
-      textStyle: const TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.w600,
-        fontSize: 16,
-      ),
-      height: 50,
-      width: double.infinity,
-    );
-  }
-
-  // Sign in with Google
-  Future<void> _signInWithGoogle() async {
+  void _handleGoogleSignIn(BuildContext context) async {
     if (_isGoogleLoading) return;
     
     setState(() {
@@ -340,7 +414,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       HapticFeedback.mediumImpact();
       // Use auth provider instead of the service directly
-      await Provider.of<AuthProvider>(context, listen: false).signInWithGoogle();
+      await Provider.of<auth_provider.AuthProvider>(context, listen: false).signInWithGoogle();
     } catch (e) {
       // Error handling is now managed by the provider
       // But we still set the local loading state back to false
@@ -352,8 +426,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // Sign in with Apple
-  Future<void> _signInWithApple() async {
+  void _handleAppleSignIn(BuildContext context) async {
     if (_isAppleLoading) return;
     
     setState(() {
@@ -363,7 +436,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       HapticFeedback.mediumImpact();
       // Use auth provider instead of the service directly
-      await Provider.of<AuthProvider>(context, listen: false).signInWithApple();
+      await Provider.of<auth_provider.AuthProvider>(context, listen: false).signInWithApple();
     } catch (e) {
       // Error handling is now managed by the provider
       // But we still set the local loading state back to false
@@ -375,8 +448,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  // Show phone auth popup
-  void _showPhoneAuthPopup() {
+  void _showPhoneAuthBottomSheet(BuildContext context) {
     if (_isPhoneLoading) return;
     
     setState(() {
@@ -407,7 +479,6 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
-  // Show error snackbar
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -419,15 +490,10 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  // Show success snackbar
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 }

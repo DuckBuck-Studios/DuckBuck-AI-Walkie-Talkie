@@ -56,19 +56,41 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
         return;
       }
       
+      // Set onboarding as completed in Firestore metadata
+      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
+      
+      // Get the current user metadata
+      final currentMetadata = authProvider.userModel?.metadata ?? {};
+      
+      // Create a clean metadata object with only essential user data
+      final cleanMetadata = {
+        'dateOfBirth': currentMetadata['dateOfBirth'],
+        'gender': currentMetadata['gender'],
+        'current_onboarding_stage': 'completed'  // Mark onboarding as complete
+      };
+      
+      // Update the user profile with clean metadata
+      await authProvider.updateUserProfile(
+        metadata: cleanMetadata,
+      );
+      
       setState(() {
         _progressMessage = 'Profile photo saved!';
       });
 
-      // Mark onboarding as completed
-      await Provider.of<auth.AuthProvider>(context, listen: false).updateOnboardingStage(auth.OnboardingStage.completed);
+      // Refresh user model to ensure it has the latest data
+      await authProvider.refreshUserModel();
+      
+      setState(() {
+        _progressMessage = 'Profile photo saved!';
+      });
       
       // Add a small delay to show success before navigating
       await Future.delayed(const Duration(milliseconds: 500));
       
-      // Navigate to home screen with animation if mounted
+      // Navigate to home screen with animation if mounted, clearing all previous screens
       if (mounted) {
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -82,6 +104,7 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
             },
             transitionDuration: const Duration(milliseconds: 500),
           ),
+          (route) => false, // Remove all previous routes
         );
       }
     } catch (e) {

@@ -17,24 +17,6 @@ class DOBScreen extends StatefulWidget {
 class _DOBScreenState extends State<DOBScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   DateTime? _selectedDate;
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    
-    // Set the onboarding stage to 'dateOfBirth' when this screen loads,
-    // but only if it's not already set to avoid unnecessary updates
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      final currentStage = await authProvider.getOnboardingStage();
-      
-      // Only update if needed
-      if (currentStage != auth.OnboardingStage.dateOfBirth) {
-        await authProvider.updateOnboardingStage(auth.OnboardingStage.dateOfBirth);
-      }
-    });
-  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime now = DateTime.now();
@@ -83,10 +65,6 @@ class _DOBScreenState extends State<DOBScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
       // Get the auth provider
       final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
@@ -108,6 +86,9 @@ class _DOBScreenState extends State<DOBScreen> {
       // Update onboarding stage to gender
       await authProvider.updateOnboardingStage(auth.OnboardingStage.gender);
       
+      // Log for debugging
+      print('DOBScreen: Saved DOB: ${_selectedDate!.toIso8601String()}, Age: $age');
+      
       // Navigate to Gender screen if mounted
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -125,12 +106,7 @@ class _DOBScreenState extends State<DOBScreen> {
       }
     } catch (e) {
       _showErrorSnackBar('Failed to save date of birth: ${e.toString()}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      print('DOBScreen: Error saving DOB: $e');
     }
   }
 
@@ -322,13 +298,13 @@ class _DOBScreenState extends State<DOBScreen> {
                       ),
                       child: DuckBuckButton(
                         text: 'Continue',
-                        onTap: _isLoading ? () {} : _saveDOB,
+                        onTap: _saveDOB,
                         color: const Color(0xFFD4A76A),
                         borderColor: const Color(0xFFB38B4D),
                         textColor: Colors.white,
                         alignment: MainAxisAlignment.center,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: _isLoading ? null : const Icon(Icons.arrow_forward, color: Colors.white),
+                        icon: const Icon(Icons.arrow_forward, color: Colors.white),
                         textStyle: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,

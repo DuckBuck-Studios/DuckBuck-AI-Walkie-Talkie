@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/friend_provider.dart';
 import '../../widgets/cool_button.dart';
 import '../../widgets/animated_background.dart';
@@ -18,6 +19,7 @@ class _FriendScreenState extends State<FriendScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showSearchBar = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -28,6 +30,9 @@ class _FriendScreenState extends State<FriendScreen> {
   Future<void> _initializeProvider() async {
     final friendProvider = Provider.of<FriendProvider>(context, listen: false);
     await friendProvider.initialize();
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -131,7 +136,7 @@ class _FriendScreenState extends State<FriendScreen> {
                                         ) 
                                       : null,
                                     filled: true,
-                                    fillColor: const Color(0xFF5C2F2F).withOpacity(0.5),
+                                    fillColor: Colors.white.withOpacity(0.1),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide.none,
@@ -153,192 +158,153 @@ class _FriendScreenState extends State<FriendScreen> {
                           duration: 300.ms,
                           curve: Curves.easeOutCubic,
                         ),
+                        // Add Friend Button below the header
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 16),
+                          child: DuckBuckButton(
+                            text: 'Add Friend',
+                            onTap: _showAddFriendOptions,
+                            color: const Color(0xFF2C1810),
+                            borderColor: const Color(0xFFD4A76A),
+                            icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
+                          ),
+                        ).animate()
+                          .fadeIn(duration: 400.ms)
+                          .slideY(
+                            begin: -0.2,
+                            end: 0,
+                            duration: 400.ms,
+                            curve: Curves.easeOutCubic,
+                          ),
                       ],
                     ),
                   ),
 
                   // Friends list
                   Expanded(
-                    child: Consumer<FriendProvider>(
-                      builder: (context, friendProvider, child) {
-                        final incomingRequests = friendProvider.incomingRequests;
-                        final friends = friendProvider.friends;
-
-                        final filteredFriends = friends.where((friend) {
-                          final name = friend['displayName']?.toString().toLowerCase() ?? '';
-                          return name.contains(_searchQuery.toLowerCase());
-                        }).toList();
-
-                        return ListView(
-                          padding: const EdgeInsets.only(
-                            left: 16, 
-                            right: 16, 
-                            bottom: 100 // Increased bottom padding to provide more space
-                          ),
-                          children: [
-                            // Pending Requests Section
-                            if (incomingRequests.isNotEmpty || friendProvider.outgoingRequests.isNotEmpty) ...[
-                              const Text(
-                                'Pending Requests',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              
-                              // Incoming Requests
-                              if (incomingRequests.isNotEmpty) ...[
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
-                                  child: Text(
-                                    'Incoming',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ),
-                                ...incomingRequests.map((request) => _buildRequestCard(
-                                  context,
-                                  request,
-                                  isIncoming: true,
-                                ).animate().slideX(
-                                  begin: -1,
-                                  end: 0,
-                                  duration: 400.ms,
-                                  curve: Curves.easeOutBack,
-                                )),
-                              ],
-
-                              // Outgoing Requests
-                              if (friendProvider.outgoingRequests.isNotEmpty) ...[
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
-                                  child: Text(
-                                    'Outgoing',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ),
-                                ...friendProvider.outgoingRequests.map((request) => _buildRequestCard(
-                                  context,
-                                  request,
-                                  isIncoming: false,
-                                ).animate().slideX(
-                                  begin: 1,
-                                  end: 0,
-                                  duration: 400.ms,
-                                  curve: Curves.easeOutBack,
-                                )),
-                              ],
-                              const SizedBox(height: 24),
-                            ],
-
-                            // Friends Section
-                            const Text(
-                              'Friends',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                    child: _isLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: const Color(0xFFD4A76A),
                             ),
-                            const SizedBox(height: 8),
-                            if (filteredFriends.isNotEmpty) 
-                              ...filteredFriends.map((friend) => _buildFriendCard(
-                                context,
-                                friend,
-                              ).animate().slideX(
-                                begin: 1,
-                                end: 0,
-                                duration: 400.ms,
-                                curve: Curves.easeOutBack,
-                              ))
-                            else
-                              Container(
-                                margin: const EdgeInsets.only(top: 30),
-                                alignment: Alignment.center,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.people_outline,
-                                      size: 60,
-                                      color: Colors.white70,
-                                    ),
-                                    const SizedBox(height: 16),
+                          )
+                        : Consumer<FriendProvider>(
+                            builder: (context, friendProvider, child) {
+                              final incomingRequests = friendProvider.incomingRequests;
+                              final outgoingRequests = friendProvider.outgoingRequests;
+                              final friends = friendProvider.friends;
+
+                              final filteredFriends = friends.where((friend) {
+                                final name = friend['displayName']?.toString().toLowerCase() ?? '';
+                                return name.contains(_searchQuery.toLowerCase());
+                              }).toList();
+
+                              final hasPendingRequests = incomingRequests.isNotEmpty || outgoingRequests.isNotEmpty;
+
+                              return ListView(
+                                padding: const EdgeInsets.only(
+                                  left: 16, 
+                                  right: 16, 
+                                  bottom: 100
+                                ),
+                                children: [
+                                  // Pending Requests Section
+                                  if (hasPendingRequests) ...[
                                     const Text(
-                                      'No friends yet',
+                                      'Pending Requests',
                                       style: TextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                       ),
-                                    ),
+                                    ).animate()
+                                      .fadeIn(duration: 400.ms)
+                                      .slideX(begin: -0.1, end: 0, duration: 400.ms),
                                     const SizedBox(height: 8),
-                                    const Text(
-                                      'Add friends to see them here',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white70,
+                                    
+                                    // Incoming Requests
+                                    if (incomingRequests.isNotEmpty) ...[
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          'Incoming',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      ...incomingRequests.map((request) => _buildRequestCard(
+                                        context,
+                                        request,
+                                        isIncoming: true,
+                                      ).animate().slideX(
+                                        begin: -1,
+                                        end: 0,
+                                        duration: 400.ms,
+                                        curve: Curves.easeOutBack,
+                                      )),
+                                    ],
+
+                                    // Outgoing Requests
+                                    if (outgoingRequests.isNotEmpty) ...[
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          'Outgoing',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ),
+                                      ...outgoingRequests.map((request) => _buildRequestCard(
+                                        context,
+                                        request,
+                                        isIncoming: false,
+                                      ).animate().slideX(
+                                        begin: 1,
+                                        end: 0,
+                                        duration: 400.ms,
+                                        curve: Curves.easeOutBack,
+                                      )),
+                                    ],
                                     const SizedBox(height: 24),
-                                    DuckBuckButton(
-                                      text: 'Add Friend',
-                                      onTap: _showAddFriendOptions,
-                                      color: const Color(0xFF5C2F2F),
-                                      borderColor: const Color(0xFFD4A76A),
-                                      width: 150,
-                                    ),
                                   ],
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+
+                                  // Friends Section
+                                  if (!hasPendingRequests || filteredFriends.isNotEmpty) ...[
+                                    const Text(
+                                      'Friends',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ).animate()
+                                      .fadeIn(duration: 400.ms)
+                                      .slideX(begin: -0.1, end: 0, duration: 400.ms),
+                                    const SizedBox(height: 8),
+                                    if (filteredFriends.isNotEmpty) 
+                                      ...filteredFriends.map((friend) => _buildFriendCard(
+                                        context,
+                                        friend,
+                                      ).animate().slideX(
+                                        begin: 1,
+                                        end: 0,
+                                        duration: 400.ms,
+                                        curve: Curves.easeOutBack,
+                                      ))
+                                    else if (!hasPendingRequests)
+                                      _buildEmptyState(),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
                   ),
                 ],
-              ),
-
-              // Floating Action Button
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 24, bottom: 24),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          spreadRadius: 1,
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: DuckBuckButton(
-                      text: '+',
-                      onTap: _showAddFriendOptions,
-                      color: const Color(0xFF5C2F2F),
-                      borderColor: const Color(0xFFD4A76A),
-                      width: 50,
-                      height: 50,
-                      padding: EdgeInsets.zero,
-                      textStyle: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -347,18 +313,53 @@ class _FriendScreenState extends State<FriendScreen> {
     );
   }
 
-  void _showAddFriendOptions() {
-    showDialog(
-      context: context,
-      builder: (context) => const AddFriendPopup(),
-    );
+  Widget _buildEmptyState() {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.6, // 60% of screen height
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.people_outline,
+              size: 80,
+              color: Colors.white70,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'No friends yet',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Add friends to see them here',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate()
+      .fadeIn(duration: 600.ms)
+      .scale(
+        begin: const Offset(0.8, 0.8),
+        end: const Offset(1.0, 1.0),
+        duration: 600.ms,
+        curve: Curves.easeOutBack,
+      );
   }
 
   Widget _buildRequestCard(BuildContext context, Map<String, dynamic> request, {bool isIncoming = true}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF5C2F2F).withOpacity(0.5),
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Slidable(
@@ -382,14 +383,36 @@ class _FriendScreenState extends State<FriendScreen> {
           ],
         ) : null,
         child: ListTile(
-          leading: CircleAvatar(
-            radius: 24,
-            backgroundImage: request['photoURL'] != null
-                ? NetworkImage(request['photoURL'])
-                : null,
-            child: request['photoURL'] == null
-                ? const Icon(Icons.person, color: Colors.white)
-                : null,
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.1),
+            ),
+            child: ClipOval(
+              child: request['photoURL'] != null
+                  ? CachedNetworkImage(
+                      imageUrl: request['photoURL'],
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(
+                        child: CircularProgressIndicator(
+                          color: const Color(0xFFD4A76A),
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+            ),
           ),
           title: Text(
             request['displayName'] ?? 'Unknown User',
@@ -417,7 +440,7 @@ class _FriendScreenState extends State<FriendScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF5C2F2F).withOpacity(0.5),
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Slidable(
@@ -436,14 +459,36 @@ class _FriendScreenState extends State<FriendScreen> {
         child: ListTile(
           leading: Stack(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundImage: friend['photoURL'] != null
-                    ? NetworkImage(friend['photoURL'])
-                    : null,
-                child: friend['photoURL'] == null
-                    ? const Icon(Icons.person, color: Colors.white)
-                    : null,
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+                child: ClipOval(
+                  child: friend['photoURL'] != null
+                      ? CachedNetworkImage(
+                          imageUrl: friend['photoURL'],
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const Center(
+                            child: CircularProgressIndicator(
+                              color: const Color(0xFFD4A76A),
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                ),
               ),
               if (friend['isOnline'] == true)
                 Positioned(
@@ -479,72 +524,10 @@ class _FriendScreenState extends State<FriendScreen> {
     );
   }
 
-  void _showAddFriendDialog(BuildContext context) {
-    final TextEditingController userIdController = TextEditingController();
-
+  void _showAddFriendOptions() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF3C1F1F),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Add Friend',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: userIdController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Enter user ID',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                  filled: true,
-                  fillColor: const Color(0xFF5C2F2F).withOpacity(0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  DuckBuckButton(
-                    text: 'Send Request',
-                    onTap: () {
-                      final userId = userIdController.text.trim();
-                      if (userId.isNotEmpty) {
-                        _sendFriendRequest(userId);
-                        Navigator.pop(context);
-                      }
-                    },
-                    color: const Color(0xFF5C2F2F),
-                    borderColor: const Color(0xFFD4A76A),
-                    width: 120,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => const AddFriendPopup(),
     );
   }
 

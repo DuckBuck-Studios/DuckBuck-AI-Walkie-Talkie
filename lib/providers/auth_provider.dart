@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart' as models;
 
@@ -49,9 +48,6 @@ class AuthProvider with ChangeNotifier {
   /// Instance of the auth service
   final AuthService _authService;
   
-  /// Secure storage instance for local data
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
   /// Current authentication status
   AuthStatus _status = AuthStatus.initial;
 
@@ -61,9 +57,6 @@ class AuthProvider with ChangeNotifier {
   /// Current user model with additional data
   models.UserModel? _userModel;
   
-  /// Current onboarding stage (cached)
-  OnboardingStage? _cachedOnboardingStage;
-
   /// Error message if authentication fails
   String? _errorMessage;
 
@@ -86,58 +79,115 @@ class AuthProvider with ChangeNotifier {
   /// Get the error message
   String? get errorMessage => _errorMessage;
 
+  /// Get the auth service instance
+  AuthService get authService => _authService;
+
+  /// Get the current user
+  User? get currentUser => _user;
+
   /// Check if the user is authenticated
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
   /// Check if the user has completed onboarding
-  bool get hasCompletedOnboarding => _cachedOnboardingStage == OnboardingStage.completed;
+  bool get hasCompletedOnboarding {
+    return _userModel?.metadata != null &&
+           _userModel!.metadata!['current_onboarding_stage'] == 'completed';
+  }
 
   /// Check if authentication is in progress
   bool get isLoading => _status == AuthStatus.loading;
 
   /// Get the current onboarding stage
   Future<OnboardingStage> getOnboardingStage() async {
-    // If cached value exists, return it
-    if (_cachedOnboardingStage != null) {
-      return _cachedOnboardingStage!;
-    }
-    
     try {
-      // If no cached value, get from secure storage
       final userId = _user?.uid;
-      if (userId == null) return OnboardingStage.notStarted;
-      
-      final stageString = await _secureStorage.read(key: 'onboarding_stage_$userId');
-      if (stageString == null) return OnboardingStage.notStarted;
-      
-      // Parse stage from storage
-      OnboardingStage stage;
-      switch (stageString) {
-        case 'name':
-          stage = OnboardingStage.name;
-          break;
-        case 'dateOfBirth':
-          stage = OnboardingStage.dateOfBirth;
-          break;
-        case 'gender':
-          stage = OnboardingStage.gender;
-          break;
-        case 'profilePhoto':
-          stage = OnboardingStage.profilePhoto;
-          break;
-        case 'completed':
-          stage = OnboardingStage.completed;
-          break;
-        default:
-          stage = OnboardingStage.notStarted;
+      if (userId == null) {
+        return OnboardingStage.notStarted;
       }
       
-      // Cache the result
-      _cachedOnboardingStage = stage;
-      return stage;
+      // Always check Firestore first to see if the user exists
+      final userModel = await _authService.getUserModel(userId);
+      
+      // If user doesn't exist in database, don't use cache and don't recreate the user
+      if (userModel == null) {
+        // Clear any cached user model to prevent recreating deleted users
+        _userModel = null;
+        
+        // Return notStarted to force the user through onboarding again
+        return OnboardingStage.notStarted;
+      }
+      
+      // Update the cached user model
+      _userModel = userModel;
+      
+      // Check the current_onboarding_stage field in metadata if it exists
+      if (userModel.metadata != null && 
+          userModel.metadata!['current_onboarding_stage'] != null) {
+        
+        final stageString = userModel.metadata!['current_onboarding_stage'];
+        switch (stageString) {
+          case 'name':
+            return OnboardingStage.name;
+          case 'dateOfBirth':
+            return OnboardingStage.dateOfBirth;
+          case 'gender':
+            return OnboardingStage.gender;
+          case 'profilePhoto':
+            return OnboardingStage.profilePhoto;
+          case 'completed':
+            return OnboardingStage.completed;
+          default:
+            // Continue to check individual fields
+        }
+      }
+      
+      // For new users or if stage is not set, start with name
+      return OnboardingStage.name;
+      
     } catch (e) {
       debugPrint('Error getting onboarding stage: $e');
-      return OnboardingStage.notStarted;
+      return OnboardingStage.name; // Default to name
+    }
+  }
+
+  /// Update the onboarding stage in Firestore
+  Future<void> updateOnboardingStage(OnboardingStage stage) async {
+    try {
+      final userId = _user?.uid;
+      if (userId == null) {
+        return;
+      }
+      
+      String stageString;
+      switch (stage) {
+        case OnboardingStage.name:
+          stageString = 'name';
+          break;
+        case OnboardingStage.dateOfBirth:
+          stageString = 'dateOfBirth';
+          break;
+        case OnboardingStage.gender:
+          stageString = 'gender';
+          break;
+        case OnboardingStage.profilePhoto:
+          stageString = 'profilePhoto';
+          break;
+        case OnboardingStage.completed:
+          stageString = 'completed';
+          break;
+        default:
+          stageString = 'name';
+      }
+      
+      // Update the current onboarding stage in Firestore
+      await updateUserProfile(
+        metadata: {'current_onboarding_stage': stageString},
+      );
+      
+      // Refresh the user model to ensure we have the latest data
+      await refreshUserModel();
+    } catch (e) {
+      debugPrint('Error updating onboarding stage: $e');
     }
   }
 
@@ -148,18 +198,35 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     // Listen to auth state changes
-    _authService.authStateChanges.listen((User? user) {
+    _authService.authStateChanges.listen((User? user) async {
       _user = user;
       if (user != null) {
-        _status = AuthStatus.authenticated;
-        // Fetch user data from Firestore
-        _fetchUserModel(user.uid);
-        // Reset cached onboarding stage on new sign-in
-        _cachedOnboardingStage = null;
+        _status = AuthStatus.loading;
+        notifyListeners();
+
+        try {
+          // First check if user exists in Firestore
+          final exists = await _authService.userExists(user.uid);
+          
+          if (!exists) {
+            // New user - set initial onboarding stage
+            await updateOnboardingStage(OnboardingStage.name);
+            _status = AuthStatus.authenticated;
+          } else {
+            // Existing user - fetch user model 
+            await _fetchUserModel(user.uid);
+            
+            _status = AuthStatus.authenticated;
+          }
+        } catch (e) {
+          debugPrint('Error initializing auth state: $e');
+          _status = AuthStatus.error;
+          _errorMessage = e.toString();
+        }
       } else {
         _status = AuthStatus.unauthenticated;
         _userModel = null;
-        _cachedOnboardingStage = null;
+        _errorMessage = null;
       }
       notifyListeners();
     });
@@ -168,11 +235,22 @@ class AuthProvider with ChangeNotifier {
   /// Fetch the user model from Firestore
   Future<void> _fetchUserModel(String uid) async {
     try {
-      _userModel = await _authService.getUserModel(uid);
-      notifyListeners();
+      // Get user model from Firestore
+      final userModel = await _authService.getUserModel(uid);
+      
+      // Only update the user model if it exists in Firestore
+      // This prevents recreating deleted users from cache
+      if (userModel != null) {
+        _userModel = userModel;
+        notifyListeners();
+      } else {
+        // If the user doesn't exist in Firestore but is authenticated,
+        // clear the cached model to prevent recreating it
+        _userModel = null;
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('Error fetching user model: $e');
-      // We don't change the auth status here since the user is still authenticated
     }
   }
 
@@ -302,46 +380,6 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Update the onboarding stage
-  Future<void> updateOnboardingStage(OnboardingStage stage) async {
-    try {
-      final userId = _user?.uid;
-      if (userId == null) return;
-      
-      String stageValue;
-      
-      switch (stage) {
-        case OnboardingStage.name:
-          stageValue = 'name';
-          break;
-        case OnboardingStage.dateOfBirth:
-          stageValue = 'dateOfBirth';
-          break;
-        case OnboardingStage.gender:
-          stageValue = 'gender';
-          break;
-        case OnboardingStage.profilePhoto:
-          stageValue = 'profilePhoto';
-          break;
-        case OnboardingStage.completed:
-          stageValue = 'completed';
-          break;
-        default:
-          stageValue = '';
-      }
-      
-      // Store in secure storage
-      await _secureStorage.write(key: 'onboarding_stage_$userId', value: stageValue);
-      
-      // Update cache
-      _cachedOnboardingStage = stage;
-      
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error updating onboarding stage: $e');
-    }
-  }
-
   /// Mark onboarding as completed
   Future<void> completeOnboarding() async {
     try {
@@ -371,6 +409,11 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Get the user model from the auth service
+  Future<models.UserModel?> getUserModel() async {
+    return await _authService.getCurrentUserModel();
+  }
+
   /// Sign out
   Future<void> signOut() async {
     try {
@@ -379,7 +422,6 @@ class AuthProvider with ChangeNotifier {
 
       // Clear any cached data
       _userModel = null;
-      _cachedOnboardingStage = null;
       _errorMessage = null;
 
       // Sign out from Firebase Auth
@@ -426,4 +468,4 @@ extension AuthProviderExtension on BuildContext {
   
   /// Check if the user is authenticated
   bool get isAuthenticated => Provider.of<AuthProvider>(this, listen: false).isAuthenticated;
-} 
+}
