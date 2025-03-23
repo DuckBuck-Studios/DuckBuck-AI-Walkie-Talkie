@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -467,53 +468,48 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
     });
 
     try {
+      // Get current user ID to prevent self-search
+      final friendService = FriendService();
+      final currentUserId = friendService.currentUserId;
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      
+      // Don't allow searching for yourself
+      if (uid == currentUserId) {
+        HapticFeedback.vibrate();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('You cannot add yourself as a friend'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+        setState(() {
+          _isLoading = false;
+          _foundUser = null;
+        });
+        return;
+      }
+      
+      // Check blocking status - do this before fetching user data
+      final isUserBlocked = await friendProvider.isUserBlocked(uid);
+      final isBlockedByUser = await friendService.isBlockedBy(uid);
+      
+      // Get the user document regardless of block status
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
-
-      if (userDoc.exists) {
-        final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-        final requestStatus = await friendProvider.getFriendRequestStatus(uid);
-        final isFriend = await friendProvider.isFriend(uid);
-        final isBlocked = await friendProvider.isUserBlocked(uid);
-
-        if (isBlocked) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Cannot add blocked user'),
-                backgroundColor: Colors.red.shade700,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            );
-          }
-          return;
-        }
-
-        if (isFriend) {
-          setState(() {
-            _requestStatus = FriendRequestStatus.accepted;
-          });
-        } else if (requestStatus != null) {
-          setState(() {
-            _requestStatus = requestStatus;
-          });
-        }
-
+          
+      if (!userDoc.exists) {
         setState(() {
-          _foundUser = userDoc.data()!;
-          _foundUser!['id'] = userDoc.id;
           _isLoading = false;
-        });
-      } else {
-        setState(() {
           _foundUser = null;
-          _isLoading = false;
         });
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -521,12 +517,68 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
               backgroundColor: Colors.red.shade700,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(10),
               ),
+              margin: const EdgeInsets.all(10),
             ),
           );
         }
+        return;
       }
+      
+      // Set user data and block status if applicable
+      final userData = userDoc.data()!;
+      userData['id'] = userDoc.id;
+      
+      if (isUserBlocked || isBlockedByUser) {
+        setState(() {
+          _foundUser = userData;
+          _isLoading = false;
+          _requestStatus = FriendRequestStatus.blocked;
+          
+          // Store who blocked whom for display purposes
+          _foundUser!['blockedBy'] = isUserBlocked ? 'me' : 'them';
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isUserBlocked 
+                ? 'You have blocked this user' 
+                : 'You are blocked by this user'),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              margin: const EdgeInsets.all(10),
+            ),
+          );
+        }
+        return;
+      }
+
+      // If not blocked, check other relationship statuses
+      // Check friend request status and friend status
+      final requestStatus = await friendProvider.getFriendRequestStatus(uid);
+      final isFriend = await friendProvider.isFriend(uid);
+      
+      // Check for pending outgoing requests
+      final hasPendingOutgoing = friendProvider.outgoingRequests.any((req) => req['id'] == uid);
+
+      setState(() {
+        _foundUser = userData;
+        _isLoading = false;
+        
+        if (isFriend) {
+          _requestStatus = FriendRequestStatus.accepted;
+        } else if (hasPendingOutgoing) {
+          // Handle outgoing pending request case
+          _requestStatus = FriendRequestStatus.pending;
+        } else if (requestStatus != null) {
+          _requestStatus = requestStatus;
+        }
+      });
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -547,17 +599,52 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
   Future<void> _sendFriendRequest() async {
     if (_foundUser == null) return;
 
+    HapticFeedback.selectionClick();
     setState(() => _isSendingRequest = true);
 
     try {
-      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-      final success = await friendProvider.sendFriendRequest(_foundUser!['id']);
-
-      if (mounted) {
-        if (success) {
+      // Check if there's a blocking relationship before sending the request
+      final friendService = FriendService();
+      final isUserBlocked = await friendService.isUserBlocked(_foundUser!['id']);
+      final isBlockedByUser = await friendService.isBlockedBy(_foundUser!['id']);
+      
+      if (isUserBlocked || isBlockedByUser) {
+        // Update UI to reflect block status
+        setState(() {
+          _isSendingRequest = false;
+          _requestStatus = FriendRequestStatus.blocked;
+          _foundUser!['blockedBy'] = isUserBlocked ? 'me' : 'them';
+        });
+        
+        // Show appropriate message
+        if (mounted) {
+          HapticFeedback.vibrate();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Friend request sent successfully'),
+              content: Text(isUserBlocked 
+                ? 'You cannot send a request to a blocked user' 
+                : 'You cannot send a request to this user'),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // If no blocking relationship, proceed with sending the friend request
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      final result = await friendProvider.sendFriendRequestWithValidation(_foundUser!['id']);
+
+      if (mounted) {
+        if (result['success'] == true) {
+          HapticFeedback.mediumImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Friend request sent successfully'),
               backgroundColor: Colors.green.shade700,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
@@ -568,10 +655,14 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
           setState(() {
             _requestStatus = FriendRequestStatus.pending;
           });
+          
+          // Return success result to the original caller
+          Navigator.pop(context, result);
         } else {
+          HapticFeedback.vibrate();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Failed to send friend request'),
+              content: Text(result['error'] ?? 'Failed to send friend request'),
               backgroundColor: Colors.red.shade700,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
@@ -582,10 +673,11 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         }
       }
     } catch (e) {
+      HapticFeedback.vibrate();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error sending friend request: ${e.toString()}'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -725,6 +817,13 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
   }
 
   Widget _buildUserCard() {
+    // Determine blocked status
+    final bool isBlocked = _requestStatus == FriendRequestStatus.blocked;
+    // Check who blocked whom
+    final String blockType = isBlocked && _foundUser!.containsKey('blockedBy') 
+        ? _foundUser!['blockedBy'] 
+        : '';
+    
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2C1810).withOpacity(0.3),
@@ -785,8 +884,9 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
                         ),
                       ),
                       const SizedBox(height: 4),
+                      // Remove UID display - show username or email instead
                       Text(
-                        _foundUser!['id'],
+                        _foundUser!['username'] ?? _foundUser!['email'] ?? 'User',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.white.withOpacity(0.7),
@@ -804,7 +904,7 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            _getStatusText(_requestStatus!),
+                            _getStatusText(_requestStatus!, blockType),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -822,47 +922,94 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
           // Divider
           Divider(color: Colors.white.withOpacity(0.1), height: 1),
           
-          // Action Buttons
+          // Action Buttons - Now stacked vertically
           Padding(
             padding: const EdgeInsets.all(20),
-            child: Row(
+            child: Column(
               children: [
-                if (_requestStatus == null)
-                  // Send Request Button
-                  Expanded(
-                    child: DuckBuckButton(
-                      text: _isSendingRequest ? 'Sending...' : 'Send Request',
-                      onTap: _isSendingRequest 
-                        ? () {} // Empty function when loading
-                        : () { _sendFriendRequest(); },
-                      color: const Color(0xFF2C1810),
-                      borderColor: const Color(0xFFD4A76A),
-                      isLoading: _isSendingRequest,
+                // Status Info Text for blocked users or friend status
+                if (isBlocked)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.block,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            blockType == 'me'
+                                ? 'You have blocked this user'
+                                : 'You are blocked by this user',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   )
-                else
-                  // Status Info Text
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        _getActionText(_requestStatus!),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
+                else if (_requestStatus != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(_requestStatus!).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _getStatusColor(_requestStatus!).withOpacity(0.3),
+                        width: 1,
                       ),
+                    ),
+                    child: Text(
+                      _getActionText(_requestStatus!, blockType),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 
-                const SizedBox(width: 12),
+                // Send Request Button - only show if no status/relationship exists
+                if (_requestStatus == null)
+                  DuckBuckButton(
+                    text: _isSendingRequest ? 'Sending...' : 'Send Friend Request',
+                    onTap: _isSendingRequest 
+                      ? () {} // Empty function when loading
+                      : () { _sendFriendRequest(); },
+                    color: const Color(0xFF2C1810),
+                    borderColor: const Color(0xFFD4A76A),
+                    isLoading: _isSendingRequest,
+                    width: double.infinity,
+                  ),
                 
-                // Close Button
+                // Always include space between buttons if the send request button is shown
+                if (_requestStatus == null)
+                  const SizedBox(height: 12),
+                
+                // Close Button - always show at bottom
                 DuckBuckButton(
                   text: 'Close',
                   onTap: () => Navigator.pop(context),
                   color: Colors.grey.withOpacity(0.3),
                   borderColor: Colors.grey,
-                  width: 100,
+                  width: double.infinity,
                 ),
               ],
             ),
@@ -885,7 +1032,7 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
     }
   }
 
-  String _getStatusText(FriendRequestStatus status) {
+  String _getStatusText(FriendRequestStatus status, [String blockType = '']) {
     switch (status) {
       case FriendRequestStatus.pending:
         return 'Request Pending';
@@ -894,20 +1041,22 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
       case FriendRequestStatus.declined:
         return 'Request Declined';
       case FriendRequestStatus.blocked:
-        return 'Blocked';
+        return blockType == 'me' ? 'Blocked by You' : 'You Are Blocked';
     }
   }
   
-  String _getActionText(FriendRequestStatus status) {
+  String _getActionText(FriendRequestStatus status, [String blockType = '']) {
     switch (status) {
       case FriendRequestStatus.pending:
         return 'Friend request already sent';
       case FriendRequestStatus.accepted:
-        return 'You are already friends';
+        return 'You are already friends with this user';
       case FriendRequestStatus.declined:
-        return 'Your request was declined';
+        return 'Your friend request was declined by this user';
       case FriendRequestStatus.blocked:
-        return 'This user is blocked';
+        return blockType == 'me' 
+            ? 'You have blocked this user' 
+            : 'You cannot interact with this user because they have blocked you';
     }
   }
 } 

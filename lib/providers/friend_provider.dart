@@ -1,49 +1,105 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../services/friend_service.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FriendProvider with ChangeNotifier {
   final FriendService _friendService = FriendService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> _friends = [];
   List<Map<String, dynamic>> _incomingRequests = [];
   List<Map<String, dynamic>> _outgoingRequests = [];
+  List<Map<String, dynamic>> _blockedUsers = [];
+  
   StreamSubscription? _friendsSubscription;
   StreamSubscription? _incomingRequestsSubscription;
   StreamSubscription? _outgoingRequestsSubscription;
+  StreamSubscription? _blockedUsersSubscription;
   Map<String, StreamSubscription> _friendStreamSubscriptions = {};
-
+  
+  // Loading states for better UI feedback
+  bool _isInitializing = false;
+  String? _lastError;
+  
   // Getters
   List<Map<String, dynamic>> get friends => _friends;
   List<Map<String, dynamic>> get incomingRequests => _incomingRequests;
   List<Map<String, dynamic>> get outgoingRequests => _outgoingRequests;
+  List<Map<String, dynamic>> get blockedUsers => _blockedUsers;
+  bool get isInitializing => _isInitializing;
+  String? get lastError => _lastError;
 
   // Initialize provider
-  Future<void> initialize() async {
-    await _setupSubscriptions();
+  Future<bool> initialize() async {
+    try {
+      _isInitializing = true;
+      _lastError = null;
+      notifyListeners();
+      
+      final success = await _setupSubscriptions();
+      _isInitializing = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _isInitializing = false;
+      _lastError = "Failed to initialize: $e";
+      notifyListeners();
+      return false;
+    }
   }
 
   // Setup all subscriptions
-  Future<void> _setupSubscriptions() async {
-    await _clearSubscriptions();
+  Future<bool> _setupSubscriptions() async {
+    try {
+      await _clearSubscriptions();
 
-    // Setup friends stream
-    _friendsSubscription = _friendService.getFriendsStream().listen((friends) {
-      _friends = friends;
-      _setupFriendStreams(friends);
-      notifyListeners();
-    });
+      // Setup friends stream
+      _friendsSubscription = _friendService.getFriendsStream().listen((friends) {
+        _friends = friends;
+        _setupFriendStreams(friends);
+        notifyListeners();
+      }, onError: (error) {
+        print("Error in friends stream: $error");
+        _lastError = "Error loading friends: $error";
+        notifyListeners();
+      });
 
-    // Setup incoming requests stream
-    _incomingRequestsSubscription = _friendService.getIncomingRequestsStream().listen((requests) {
-      _incomingRequests = requests;
-      notifyListeners();
-    });
+      // Setup incoming requests stream
+      _incomingRequestsSubscription = _friendService.getIncomingRequestsStream().listen((requests) {
+        _incomingRequests = requests;
+        notifyListeners();
+      }, onError: (error) {
+        print("Error in incoming requests stream: $error");
+        _lastError = "Error loading friend requests: $error";
+        notifyListeners();
+      });
 
-    // Setup outgoing requests stream
-    _outgoingRequestsSubscription = _friendService.getOutgoingRequestsStream().listen((requests) {
-      _outgoingRequests = requests;
+      // Setup outgoing requests stream
+      _outgoingRequestsSubscription = _friendService.getOutgoingRequestsStream().listen((requests) {
+        _outgoingRequests = requests;
+        notifyListeners();
+      }, onError: (error) {
+        print("Error in outgoing requests stream: $error");
+        _lastError = "Error loading outgoing requests: $error";
+        notifyListeners();
+      });
+      
+      // Setup blocked users stream
+      _blockedUsersSubscription = _friendService.getBlockedUsersStream().listen((users) {
+        _blockedUsers = users;
+        notifyListeners();
+      }, onError: (error) {
+        print("Error in blocked users stream: $error");
+        _lastError = "Error loading blocked users: $error";
+        notifyListeners();
+      });
+      
+      return true;
+    } catch (e) {
+      _lastError = "Failed to set up subscriptions: $e";
       notifyListeners();
-    });
+      return false;
+    }
   }
 
   // Setup individual friend streams
@@ -124,54 +180,302 @@ class FriendProvider with ChangeNotifier {
     }
   }
 
-  // Send a friend request
-  Future<bool> sendFriendRequest(String targetUserId) async {
-    return await _friendService.sendFriendRequest(targetUserId);
+  // Send a friend request with enhanced validation
+  Future<Map<String, dynamic>> sendFriendRequestWithValidation(String targetUserId) async {
+    try {
+      // Prevent sending request to self
+      if (targetUserId == _friendService.currentUserId) {
+        return {
+          'success': false,
+          'error': 'You cannot add yourself as a friend'
+        };
+      }
+      
+      // Check if already friends
+      final isAlreadyFriend = await isFriend(targetUserId);
+      if (isAlreadyFriend) {
+        return {
+          'success': false,
+          'error': 'This user is already in your friends list'
+        };
+      }
+      
+      // Get detailed block status
+      final blockStatus = await _friendService.getBlockStatus(targetUserId);
+      final isBlocked = blockStatus['blockedByMe'] == true;
+      final isBlockedByTarget = blockStatus['blockedByThem'] == true;
+      
+      if (isBlocked) {
+        return {
+          'success': false,
+          'error': 'You have blocked this user. Unblock them first to send a request.',
+          'blockStatus': blockStatus
+        };
+      }
+      
+      if (isBlockedByTarget) {
+        return {
+          'success': false,
+          'error': 'Unable to send request to this user',
+          'blockStatus': blockStatus,
+          'reason': 'You are blocked by this user'
+        };
+      }
+      
+      // Check for existing requests
+      final hasPendingIncoming = _incomingRequests.any((req) => req['id'] == targetUserId);
+      if (hasPendingIncoming) {
+        return {
+          'success': false,
+          'error': 'This user already sent you a request. Check your incoming requests.'
+        };
+      }
+      
+      final hasPendingOutgoing = _outgoingRequests.any((req) => req['id'] == targetUserId);
+      if (hasPendingOutgoing) {
+        return {
+          'success': false,
+          'error': 'You already sent a request to this user'
+        };
+      }
+      
+      // Try to send the request
+      final result = await _friendService.sendFriendRequest(targetUserId);
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while sending the request',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Accept a friend request
-  Future<bool> acceptFriendRequest(String senderId) async {
-    return await _friendService.acceptFriendRequest(senderId);
+  // Accept a friend request with enhanced feedback
+  Future<Map<String, dynamic>> acceptFriendRequest(String senderId) async {
+    try {
+      final result = await _friendService.acceptFriendRequest(senderId);
+      if (result) {
+        return {
+          'success': true,
+          'message': 'Friend request accepted',
+          'friendId': senderId
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to accept friend request'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while accepting the request',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Decline a friend request
-  Future<bool> declineFriendRequest(String senderId) async {
-    return await _friendService.declineFriendRequest(senderId);
+  // Decline a friend request with enhanced feedback
+  Future<Map<String, dynamic>> declineFriendRequest(String senderId) async {
+    try {
+      final result = await _friendService.declineFriendRequest(senderId);
+      if (result) {
+        return {
+          'success': true,
+          'message': 'Friend request declined',
+          'friendId': senderId
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to decline friend request'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while declining the request',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Remove a friend
-  Future<bool> removeFriend(String friendId) async {
-    return await _friendService.removeFriend(friendId);
+  // Remove a friend with enhanced feedback
+  Future<Map<String, dynamic>> removeFriend(String friendId) async {
+    try {
+      final result = await _friendService.removeFriend(friendId);
+      if (result) {
+        return {
+          'success': true,
+          'message': 'Friend removed successfully',
+          'friendId': friendId
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to remove friend'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while removing the friend',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Block a user
-  Future<bool> blockUser(String targetUserId) async {
-    return await _friendService.blockUser(targetUserId);
+  // Block a user with enhanced feedback
+  Future<Map<String, dynamic>> blockUser(String targetUserId) async {
+    try {
+      // Check first if they are a friend
+      final isFriendRelationship = await isFriend(targetUserId);
+      
+      // Perform the block operation
+      final result = await _friendService.blockUser(targetUserId);
+      
+      // Add specific messaging for the UI
+      if (result['success'] == true) {
+        if (isFriendRelationship) {
+          result['message'] = 'User blocked and removed from friends';
+          result['wasFriend'] = true;
+        }
+      }
+      
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while blocking the user',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Report a user
-  Future<bool> reportUser(String targetUserId, String reason) async {
-    return await _friendService.reportUser(targetUserId, reason);
+  // Report a user with enhanced feedback
+  Future<Map<String, dynamic>> reportUser(String targetUserId, String reason) async {
+    try {
+      // Check first if they are a friend
+      final isFriendRelationship = await isFriend(targetUserId);
+      final blockStatus = await _friendService.getBlockStatus(targetUserId);
+      
+      // Perform the report operation
+      final result = await _friendService.reportUser(targetUserId, reason);
+      
+      // Add additional context to the result
+      if (result['success'] == true) {
+        result['wasFriend'] = isFriendRelationship;
+        result['blockStatus'] = blockStatus;
+      }
+      
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while reporting the user',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Cancel a friend request
-  Future<bool> cancelFriendRequest(String targetUserId) async {
-    return await _friendService.cancelFriendRequest(targetUserId);
+  // Cancel a friend request with enhanced feedback
+  Future<Map<String, dynamic>> cancelFriendRequest(String targetUserId) async {
+    try {
+      final result = await _friendService.cancelFriendRequest(targetUserId);
+      if (result) {
+        return {
+          'success': true,
+          'message': 'Friend request canceled',
+          'userId': targetUserId
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Failed to cancel friend request'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while canceling the request',
+        'exception': e.toString()
+      };
+    }
   }
 
-  // Check if a user is blocked
+  // Get detailed block status information
+  Future<Map<String, dynamic>> getBlockStatus(String targetUserId) async {
+    try {
+      return await _friendService.getBlockStatus(targetUserId);
+    } catch (e) {
+      return {
+        'isBlocked': false,
+        'error': 'Failed to check block status',
+        'exception': e.toString()
+      };
+    }
+  }
+
+  // Check if a user is blocked by the current user
   Future<bool> isUserBlocked(String targetUserId) async {
-    return await _friendService.isUserBlocked(targetUserId);
+    try {
+      return await _friendService.isUserBlocked(targetUserId);
+    } catch (e) {
+      print('Error checking if user is blocked: $e');
+      return false;
+    }
   }
 
   // Check if a user is a friend
   Future<bool> isFriend(String targetUserId) async {
-    return await _friendService.isFriend(targetUserId);
+    try {
+      return await _friendService.isFriend(targetUserId);
+    } catch (e) {
+      print('Error checking if user is friend: $e');
+      return false;
+    }
+  }
+
+  // Send a friend request with just boolean feedback
+  Future<bool> sendFriendRequest(String targetUserId) async {
+    try {
+      final result = await sendFriendRequestWithValidation(targetUserId);
+      return result['success'] == true;
+    } catch (e) {
+      print('Error sending friend request: $e');
+      return false;
+    }
   }
 
   // Get friend request status
   Future<FriendRequestStatus?> getFriendRequestStatus(String targetUserId) async {
-    return await _friendService.getFriendRequestStatus(targetUserId);
+    try {
+      return await _friendService.getFriendRequestStatus(targetUserId);
+    } catch (e) {
+      print('Error getting friend request status: $e');
+      return null;
+    }
+  }
+
+  // Unblock a user
+  Future<Map<String, dynamic>> unblockUser(String targetUserId) async {
+    try {
+      final result = await _friendService.unblockUser(targetUserId);
+      
+      if (result['success'] == true) {
+        // Notify listeners to refresh the UI
+        notifyListeners();
+      }
+      
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'An error occurred while unblocking the user',
+        'exception': e.toString()
+      };
+    }
   }
 
   // Clear all subscriptions
@@ -184,6 +488,9 @@ class FriendProvider with ChangeNotifier {
 
     await _outgoingRequestsSubscription?.cancel();
     _outgoingRequestsSubscription = null;
+
+    await _blockedUsersSubscription?.cancel();
+    _blockedUsersSubscription = null;
 
     for (var subscription in _friendStreamSubscriptions.values) {
       await subscription.cancel();

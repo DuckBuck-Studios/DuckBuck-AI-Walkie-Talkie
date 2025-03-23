@@ -9,13 +9,18 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Get screen dimensions for responsive sizing
+    final Size screenSize = MediaQuery.of(context).size;
+    final double titleSize = screenSize.width * 0.15; // Responsive title size
+    final double particleSize = math.min(screenSize.width, screenSize.height) * 0.6;
+    
     return DuckBuckAnimatedBackground(
       child: Center(
         child: Stack(
           alignment: Alignment.center,
           children: [
             // Animated floating particles
-            ParticleOverlay(),
+            ParticleOverlay(size: particleSize),
             
             // 3D DuckBuck title with shimmer (copied from welcome screen)
             Stack(
@@ -23,12 +28,12 @@ class SplashScreen extends StatelessWidget {
               children: [
                 // Shadow layers for 3D effect
                 Positioned(
-                  left: 3,
-                  top: 3,
+                  left: titleSize * 0.05,
+                  top: titleSize * 0.05,
                   child: Text(
                     "DuckBuck",
                     style: TextStyle(
-                      fontSize: 60, // Increased size from 36 to 60
+                      fontSize: titleSize,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
                       color: Colors.brown.shade900.withOpacity(0.3),
@@ -36,12 +41,12 @@ class SplashScreen extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  left: 2,
-                  top: 2,
+                  left: titleSize * 0.033,
+                  top: titleSize * 0.033,
                   child: Text(
                     "DuckBuck",
                     style: TextStyle(
-                      fontSize: 60, // Increased size from 36 to 60
+                      fontSize: titleSize,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
                       color: Colors.brown.shade800.withOpacity(0.5),
@@ -55,7 +60,7 @@ class SplashScreen extends StatelessWidget {
                   child: Text(
                     "DuckBuck",
                     style: TextStyle(
-                      fontSize: 60, // Increased size from 36 to 60
+                      fontSize: titleSize,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
                     ),
@@ -64,7 +69,13 @@ class SplashScreen extends StatelessWidget {
               ],
             ).animate(autoPlay: false, onInit: (controller) {
               Future.delayed(const Duration(seconds: 5), () {
-                controller.forward();
+                // Use try-catch to safely handle if controller is disposed
+                try {
+                  controller.forward();
+                } catch (e) {
+                  // Controller might be disposed, ignore the error
+                  print('Animation controller error: $e');
+                }
               });
             }).fadeOut(duration: 800.ms),
           ],
@@ -76,7 +87,9 @@ class SplashScreen extends StatelessWidget {
 
 // Custom particle animation
 class ParticleOverlay extends StatefulWidget {
-  const ParticleOverlay({super.key});
+  final double size;
+
+  const ParticleOverlay({super.key, this.size = 240.0});
 
   @override
   State<ParticleOverlay> createState() => _ParticleOverlayState();
@@ -97,12 +110,14 @@ class _ParticleOverlayState extends State<ParticleOverlay> with TickerProviderSt
     
     // Create particles with random properties
     final random = math.Random();
+    final halfSize = widget.size / 2;
+    
     for (int i = 0; i < particleCount; i++) {
       _particles.add(
         Particle(
-          x: random.nextDouble() * 240 - 120,
-          y: random.nextDouble() * 240 - 120,
-          size: random.nextDouble() * 3 + 1.5,
+          x: random.nextDouble() * widget.size - halfSize,
+          y: random.nextDouble() * widget.size - halfSize,
+          size: (random.nextDouble() * 3 + 1.5) * (widget.size / 240), // Scale particle size based on container size
           speedX: (random.nextDouble() - 0.5) * 0.5,
           speedY: (random.nextDouble() - 0.5) * 0.5,
           opacity: 0.2 + random.nextDouble() * 0.4,
@@ -123,7 +138,7 @@ class _ParticleOverlayState extends State<ParticleOverlay> with TickerProviderSt
       animation: _controller,
       builder: (context, child) {
         return CustomPaint(
-          size: const Size(240, 240),
+          size: Size(widget.size, widget.size),
           painter: ParticlePainter(
             _particles,
             _controller.value,
@@ -163,17 +178,18 @@ class ParticlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
+    final scaleFactor = size.width / 240; // Base scale is 240
     
     for (final particle in particles) {
       // Update particle position in a circular motion
       final angle = animation * 2 * math.pi + (particle.x + particle.y) * 0.01;
       
-      final wobble = math.sin(animation * 2 * math.pi + particle.size) * 4;
+      final wobble = math.sin(animation * 2 * math.pi + particle.size) * 4 * scaleFactor;
       
       final x = center.dx + particle.x + 
-                math.sin(angle) * particle.speedX * 20 + wobble;
+                math.sin(angle) * particle.speedX * 20 * scaleFactor + wobble;
       final y = center.dy + particle.y + 
-                math.cos(angle) * particle.speedY * 20 - wobble;
+                math.cos(angle) * particle.speedY * 20 * scaleFactor - wobble;
       
       // Draw the particle
       final paint = Paint()

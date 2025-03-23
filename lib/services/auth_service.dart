@@ -37,6 +37,56 @@ class AuthService {
   /// Stream of auth changes
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// Gets a user-friendly error message, hiding implementation details
+  String getFriendlyErrorMessage(dynamic error) {
+    // Don't expose raw Firebase error messages to users
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'user-not-found':
+          return 'Account not found. Please check your credentials.';
+        case 'wrong-password':
+          return 'Incorrect password. Please try again.';
+        case 'invalid-credential':
+          return 'Invalid login credentials. Please try again.';
+        case 'email-already-in-use':
+          return 'This email is already registered.';
+        case 'invalid-email':
+          return 'The email address is not valid.';
+        case 'weak-password':
+          return 'Password is too weak. Please use a stronger password.';
+        case 'operation-not-allowed':
+          return 'This login method is not enabled.';
+        case 'invalid-verification-code':
+          return 'The verification code is invalid. Please try again.';
+        case 'invalid-verification-id':
+          return 'Your verification session has expired. Please try again.';
+        case 'network-request-failed':
+          return 'Network error. Please check your connection and try again.';
+        case 'too-many-requests':
+          return 'Too many attempts. Please try again later.';
+        case 'popup-closed-by-user':
+          return 'Login canceled. Please try again.';
+        case 'ERROR_ABORTED_BY_USER':
+          return 'Sign in process was canceled.';
+        default:
+          return 'Authentication error. Please try again later.';
+      }
+    } else if (error is FirebaseException) {
+      if (error.code == 'unavailable' || 
+          error.code == 'deadline-exceeded' ||
+          error.code == 'network-request-failed') {
+        return 'Network error. Please check your connection and try again.';
+      }
+      return 'Service error. Please try again later.';
+    } else if (error is PlatformException) {
+      if (error.code == 'network_error') {
+        return 'Network error. Please check your connection and try again.';
+      }
+      return 'Service error. Please try again.';
+    }
+    return 'An unexpected error occurred. Please try again.';
+  }
+
   /// Initiate phone number verification
   /// 
   /// This method starts the phone verification process by sending an SMS code
@@ -56,7 +106,17 @@ class AuthService {
           await _auth.verifyPhoneNumber(
             phoneNumber: phoneNumber,
             verificationCompleted: verificationCompleted,
-            verificationFailed: verificationFailed,
+            verificationFailed: (FirebaseAuthException e) {
+              debugPrint('Phone verification failed: ${e.code} - ${e.message}');
+              // Transform the error before passing it on
+              final friendlyMessage = getFriendlyErrorMessage(e);
+              verificationFailed(
+                FirebaseAuthException(
+                  code: e.code,
+                  message: friendlyMessage,
+                )
+              );
+            },
             codeSent: codeSent,
             codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
             timeout: timeout,
@@ -67,7 +127,7 @@ class AuthService {
       );
     } catch (e) {
       debugPrint('Error starting phone verification after retries: $e');
-      rethrow;
+      throw Exception(getFriendlyErrorMessage(e));
     }
   }
 
@@ -254,7 +314,7 @@ class AuthService {
       );
     } catch (e) {
       debugPrint('Error signing in with Google after retries: $e');
-      rethrow;
+      throw Exception(getFriendlyErrorMessage(e));
     }
   }
 
@@ -302,7 +362,7 @@ class AuthService {
       );
     } catch (e) {
       debugPrint('Error signing in with Apple after retries: $e');
-      rethrow;
+      throw Exception(getFriendlyErrorMessage(e));
     }
   }
 
@@ -338,7 +398,7 @@ class AuthService {
       );
     } catch (e) {
       debugPrint('Error signing in with phone number after retries: $e');
-      rethrow;
+      throw Exception(getFriendlyErrorMessage(e));
     }
   }
 

@@ -442,13 +442,10 @@ class AuthProvider with ChangeNotifier {
 
   /// Clear any error message
   void clearError() {
-    _errorMessage = null;
-    if (_status == AuthStatus.error) {
-      _status = _user != null 
-          ? AuthStatus.authenticated 
-          : AuthStatus.unauthenticated;
+    if (_errorMessage != null) {
+      _errorMessage = null;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   @override

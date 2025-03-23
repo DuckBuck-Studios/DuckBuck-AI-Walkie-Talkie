@@ -105,7 +105,7 @@ class _DOBScreenState extends State<DOBScreen> {
         );
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to save date of birth: ${e.toString()}');
+      _showErrorSnackBar('Unable to save your date of birth. Please try again.');
       print('DOBScreen: Error saving DOB: $e');
     }
   }

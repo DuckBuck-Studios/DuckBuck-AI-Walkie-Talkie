@@ -151,6 +151,32 @@ class UserProvider with ChangeNotifier {
     _userStatusSubscription = null;
   }
   
+  // Force refresh user data from Firestore
+  Future<bool> refreshUserData() async {
+    if (_currentUser == null) return false;
+    
+    try {
+      final userData = await _userService.getUserById(_currentUser!.uid);
+      if (userData != null) {
+        _currentUser = userData;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("UserProvider: Error refreshing user data: $e");
+      return false;
+    }
+  }
+  
+  // Set user online status (without changing animation)
+  Future<void> setOnlineStatus(bool isOnline) async {
+    if (_currentUser == null) return;
+    await _userService.setUserOnlineStatus(_currentUser!.uid, isOnline);
+    _isOnline = isOnline;
+    notifyListeners();
+  }
+  
   @override
   void dispose() {
     _clearSubscriptions();

@@ -87,7 +87,8 @@ class _PhoneAuthPopupState extends State<PhoneAuthPopup> with SingleTickerProvid
         codeAutoRetrievalTimeout: _handleCodeAutoRetrievalTimeout,
       );
     } catch (e) {
-      _showErrorSnackBar('Failed to send verification code: ${e.toString()}');
+      _showErrorSnackBar('Unable to send verification code. Please check your phone number and try again.');
+      print('Verification code error: $e');
       setState(() {
         _isLoading = false;
       });
@@ -118,7 +119,8 @@ class _PhoneAuthPopupState extends State<PhoneAuthPopup> with SingleTickerProvid
         widget.onSubmit(_countryCode, _phoneController.text);
       }
     } catch (e) {
-      _showErrorSnackBar('Verification failed: ${e.toString()}');
+      _showErrorSnackBar('Invalid verification code. Please try again.');
+      print('Verification failed: $e');
       setState(() {
         _isLoading = false;
       });
@@ -164,7 +166,8 @@ class _PhoneAuthPopupState extends State<PhoneAuthPopup> with SingleTickerProvid
         widget.onSubmit(_countryCode, _phoneController.text);
       }
     } catch (e) {
-      _showErrorSnackBar('Auto-verification failed: ${e.toString()}');
+      _showErrorSnackBar('Unable to verify code automatically. Please enter the code manually.');
+      print('Auto-verification error: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -174,7 +177,21 @@ class _PhoneAuthPopupState extends State<PhoneAuthPopup> with SingleTickerProvid
   }
 
   void _handleVerificationFailed(FirebaseAuthException exception) {
-    _showErrorSnackBar('Verification failed: ${exception.message}');
+    // Get a user-friendly message based on the error code
+    String friendlyMessage = 'Phone verification failed. Please try again.';
+    
+    // Map common error codes to user-friendly messages
+    if (exception.code == 'invalid-phone-number') {
+      friendlyMessage = 'The phone number format is invalid. Please check and try again.';
+    } else if (exception.code == 'too-many-requests') {
+      friendlyMessage = 'Too many attempts. Please try again later.';
+    } else if (exception.code == 'network-request-failed') {
+      friendlyMessage = 'Network error. Please check your connection and try again.';
+    }
+    
+    _showErrorSnackBar(friendlyMessage);
+    print('Verification failed with code: ${exception.code} - ${exception.message}');
+    
     setState(() {
       _isLoading = false;
     });

@@ -468,4 +468,44 @@ class UserService {
       print('Error clearing user status: $e');
     }
   }
+
+  // Method to set user's online status without changing animation
+  Future<void> setUserOnlineStatus(String userId, bool isOnline) async {
+    try {
+      print("UserService: Setting user online status to $isOnline for user: $userId");
+      
+      final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
+      
+      // Get current animation status if it exists
+      String? currentAnimation;
+      final snapshot = await statusRef.get();
+      if (snapshot.exists) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
+        currentAnimation = data['animation'] as String?;
+        print("UserService: Retrieved existing animation: ${currentAnimation ?? 'null'}");
+      }
+      
+      // Update only online status while preserving animation
+      await statusRef.update({
+        'isOnline': isOnline,
+        'timestamp': database.ServerValue.timestamp,
+        'lastSeen': database.ServerValue.timestamp,
+      });
+      
+      print("UserService: Online status updated to $isOnline successfully");
+
+      // If setting to online, also setup the onDisconnect handler
+      if (isOnline) {
+        statusRef.onDisconnect().update({
+          'isOnline': false,
+          'timestamp': database.ServerValue.timestamp,
+          'lastSeen': database.ServerValue.timestamp,
+          // Keep the animation as is
+        });
+        print("UserService: Set onDisconnect handler to mark user as offline");
+      }
+    } catch (e) {
+      print('Error updating user online status: $e');
+    }
+  }
 }

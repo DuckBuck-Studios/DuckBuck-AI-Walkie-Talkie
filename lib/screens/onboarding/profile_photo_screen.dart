@@ -179,7 +179,8 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
         );
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to pick image: ${e.toString()}');
+      _showErrorSnackBar('Unable to access image. Please try again.');
+      print('Profile photo error: $e');
     }
   }
 

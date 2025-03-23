@@ -1,7 +1,17 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:lottie/lottie.dart';
 import '../../providers/auth_provider.dart' as auth;
 import '../../providers/user_provider.dart';
 import '../../widgets/animated_background.dart';
@@ -9,8 +19,71 @@ import '../../models/user_model.dart';
 import 'settings_screen.dart';
 import '../Authentication/welcome_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final GlobalKey _qrKey = GlobalKey();
+  bool _isConnected = true;
+  bool _isCheckingConnectivity = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectivity();
+  }
+
+  Future<void> _checkConnectivity() async {
+    setState(() => _isCheckingConnectivity = true);
+    
+    try {
+      // Simple connectivity check by trying to get data
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final success = await userProvider.refreshUserData();
+      setState(() => _isConnected = success);
+    } catch (e) {
+      setState(() => _isConnected = false);
+      print('Connectivity error: $e');
+    } finally {
+      setState(() => _isCheckingConnectivity = false);
+    }
+  }
+
+  Future<void> _captureAndShareQR() async {
+    try {
+      // Capture QR code image
+      RenderRepaintBoundary boundary = _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (byteData != null) {
+        Uint8List pngBytes = byteData.buffer.asUint8List();
+        
+        // Save to temporary file
+        final tempDir = await getTemporaryDirectory();
+        final file = await File('${tempDir.path}/duckbuck_qr_code.png').create();
+        await file.writeAsBytes(pngBytes);
+        
+        // Share the file
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Add me on DuckBuck!',
+          subject: 'DuckBuck Profile QR Code'
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sharing QR code: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   void _showQRCode(BuildContext context, UserModel userModel) {
     final qrData = userModel.uid;
@@ -21,6 +94,7 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -36,36 +110,71 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Your Profile QR Code',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF8B4513),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.qr_code,
+                    color: Color(0xFFD4A76A),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Your DuckBuck QR Code',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF8B4513),
+                    ),
+                  ),
+                ],
               ).animate()
                 .fadeIn(duration: 600.ms)
                 .slideY(begin: -0.2, end: 0),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 15,
-                      spreadRadius: 3,
-                    ),
-                  ],
+              const SizedBox(height: 8),
+              Text(
+                'Share this code with friends to connect',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
                 ),
-                child: QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 200,
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF8B4513),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              RepaintBoundary(
+                key: _qrKey,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 15,
+                        spreadRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF8B4513),
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: Color(0xFFD4A76A),
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: Color(0xFF8B4513),
+                    ),
+                    embeddedImage: const AssetImage('assets/images/logo.png'),
+                    embeddedImageStyle: QrEmbeddedImageStyle(
+                      size: const Size(40, 40),
+                    ),
+                  ),
                 ),
               ).animate()
                 .scale(
@@ -75,13 +184,32 @@ class ProfileScreen extends StatelessWidget {
                   curve: Curves.easeOutBack,
                 ),
               const SizedBox(height: 24),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close, color: Color(0xFF8B4513)),
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B4513).withOpacity(0.1),
-                  padding: const EdgeInsets.all(12),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _captureAndShareQR(),
+                    icon: const Icon(Icons.share, size: 18),
+                    label: const Text('Share'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD4A76A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Color(0xFF8B4513)),
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B4513).withOpacity(0.1),
+                      padding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
               ).animate()
                 .fadeIn(duration: 600.ms)
                 .scale(
@@ -103,124 +231,186 @@ class ProfileScreen extends StatelessWidget {
         final userModel = userProvider.currentUser;
         
         return Scaffold(
-          body: DuckBuckAnimatedBackground(
-            opacity: 0.03,
-            child: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    // Top Bar with back button and title only
-                    _buildTopBar(context)
-                        .animate()
-                        .fadeIn(duration: 400.ms)
-                        .slideY(begin: -0.2, end: 0, curve: Curves.easeOutBack),
-                    
-                    const SizedBox(height: 30),
-                    
-                    // Profile Photo Section
-                    _buildProfilePhoto(userModel)
-                        .animate()
-                        .scale(
-                          delay: 200.ms,
-                          duration: 600.ms,
-                          begin: const Offset(0.8, 0.8),
-                          end: const Offset(1.0, 1.0),
-                          curve: Curves.easeOutBack,
+          body: _isConnected 
+              ? DuckBuckAnimatedBackground(
+                  opacity: 0.03,
+                  child: SafeArea(
+                    child: RefreshIndicator(
+                      color: const Color(0xFFD4A76A),
+                      onRefresh: () async {
+                        try {
+                          await userProvider.refreshUserData();
+                        } catch (e) {
+                          print('Error refreshing: $e');
+                          // Show a snackbar with the error
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text('Failed to refresh. Check your connection.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          children: [
+                            // Profile Header with title text only
+                            _buildHeader()
+                                .animate()
+                                .fadeIn(duration: 400.ms)
+                                .slideY(begin: -0.2, end: 0, curve: Curves.easeOutBack),
+                            
+                            const SizedBox(height: 30),
+                            
+                            // Profile Photo Section
+                            _buildProfilePhoto(userModel)
+                                .animate()
+                                .scale(
+                                  delay: 200.ms,
+                                  duration: 600.ms,
+                                  begin: const Offset(0.8, 0.8),
+                                  end: const Offset(1.0, 1.0),
+                                  curve: Curves.easeOutBack,
+                                ),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // QR and Settings buttons
+                            _buildActionButtons(context, userModel)
+                                .animate()
+                                .fadeIn(delay: 300.ms, duration: 400.ms)
+                                .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // User Info Cards with stacked animation
+                            _buildInfoSection(userModel),
+                            
+                            const SizedBox(height: 30),
+                            
+                            // Logout Button with bounce animation
+                            _buildLogoutButton(context)
+                                .animate()
+                                .fadeIn(delay: 900.ms)
+                                .scaleXY(
+                                  begin: 0.5,
+                                  end: 1.0,
+                                  duration: 600.ms,
+                                  curve: Curves.elasticOut,
+                                ),
+                            
+                            const SizedBox(height: 40),
+                          ],
                         ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // QR and Settings buttons
-                    _buildActionButtons(context, userModel)
-                        .animate()
-                        .fadeIn(delay: 300.ms, duration: 400.ms)
-                        .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // User Info Cards with stacked animation
-                    _buildInfoSection(userModel),
-                    
-                    const SizedBox(height: 30),
-                    
-                    // Logout Button with bounce animation
-                    _buildLogoutButton(context)
-                        .animate()
-                        .fadeIn(delay: 900.ms)
-                        .scaleXY(
-                          begin: 0.5,
-                          end: 1.0,
-                          duration: 600.ms,
-                          curve: Curves.elasticOut,
-                        ),
-                    
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
+                      ),
+                    ),
+                  ),
+                )
+              : _buildNoConnectionView(),
         ).animate().fadeIn(duration: 300.ms);
       },
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
-          onPressed: () => Navigator.pop(context),
-          color: const Color(0xFFD4A76A),
-        ),
-        const Expanded(
-          child: Text(
-            'Profile',
-            textAlign: TextAlign.center,
+  Widget _buildNoConnectionView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Lottie.asset(
+            'assets/animations/loading.json',
+            width: 150,
+            height: 150,
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'No Internet Connection',
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFFD4A76A),
+              color: Color(0xFF8B4513),
             ),
           ),
+          const SizedBox(height: 16),
+          const Text(
+            'Check your connection and try again',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _checkConnectivity,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4A76A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      alignment: Alignment.center,
+      child: const Text(
+        'My Profile',
+        style: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFFD4A76A),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildActionButtons(BuildContext context, UserModel? userModel) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // QR Code button
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFD4A76A).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: 1,
           ),
-          child: IconButton(
-            iconSize: 28,
-            icon: const Icon(Icons.qr_code),
-            onPressed: () {
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // QR Code button
+          _buildActionButton(
+            icon: Icons.qr_code,
+            label: 'QR Code',
+            onTap: () {
               if (userModel != null) {
                 _showQRCode(context, userModel);
               }
             },
-            color: const Color(0xFFD4A76A),
           ),
-        ),
-        const SizedBox(width: 20),
-        // Settings button
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFD4A76A).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            iconSize: 28,
-            icon: const Icon(Icons.settings),
-            onPressed: () {
+          const SizedBox(width: 48),
+          // Settings button
+          _buildActionButton(
+            icon: Icons.settings,
+            label: 'Settings',
+            onTap: () {
               if (userModel != null) {
                 Navigator.push(
                   context,
@@ -230,10 +420,49 @@ class ProfileScreen extends StatelessWidget {
                 );
               }
             },
-            color: const Color(0xFFD4A76A),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD4A76A).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: const Color(0xFFD4A76A),
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF8B4513),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -262,13 +491,27 @@ class ProfileScreen extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(60),
               child: userModel?.photoURL != null
-                  ? Image.network(
-                      userModel!.photoURL!,
+                  ? CachedNetworkImage(
+                      imageUrl: userModel!.photoURL!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.person, size: 60, color: Color(0xFFD4A76A)),
+                      placeholder: (context, url) => Container(
+                        color: const Color(0xFFD4A76A).withOpacity(0.1),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation(Color(0xFFD4A76A)),
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: const Color(0xFFD4A76A).withOpacity(0.1),
+                        child: const Icon(Icons.person, size: 60, color: Color(0xFFD4A76A)),
+                      ),
                     )
-                  : const Icon(Icons.person, size: 60, color: Color(0xFFD4A76A)),
+                  : Container(
+                      color: const Color(0xFFD4A76A).withOpacity(0.1),
+                      child: const Icon(Icons.person, size: 60, color: Color(0xFFD4A76A)),
+                    ),
             ),
           ),
         ),
@@ -329,47 +572,10 @@ class ProfileScreen extends StatelessWidget {
       ),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 8.0, bottom: 12.0),
-          child: Text(
-            'Personal Information',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF555555),
-            ),
-          ),
-        ),
-        ...infoCards.asMap().entries.map((entry) {
-          final index = entry.key;
-          final card = entry.value;
-          return card.animate()
-            .fadeIn(delay: Duration(milliseconds: 200 + (index * 100)))
-            .slideY(
-              begin: 0.5, 
-              end: 0,
-              duration: 600.ms,
-              curve: Curves.easeOutQuad,
-              delay: Duration(milliseconds: 200 + (index * 100)),
-            );
-        }).toList(),
-      ],
-    );
-  }
-
-  Widget _buildInfoCard(String title, String value, IconData icon) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFD4A76A).withOpacity(0.3),
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -378,21 +584,76 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  color: Color(0xFFD4A76A),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Personal Information',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF8B4513),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+          ...infoCards.asMap().entries.map((entry) {
+            final index = entry.key;
+            final card = entry.value;
+            return card.animate()
+              .fadeIn(delay: Duration(milliseconds: 200 + (index * 100)))
+              .slideY(
+                begin: 0.5, 
+                end: 0,
+                duration: 600.ms,
+                curve: Curves.easeOutQuad,
+                delay: Duration(milliseconds: 200 + (index * 100)),
+              );
+          }).toList(),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(String title, String value, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFD4A76A).withOpacity(0.2),
+        ),
+      ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFD4A76A).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFD4A76A).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
               color: const Color(0xFFD4A76A),
-              size: 24,
+              size: 20,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,15 +661,15 @@ class ProfileScreen extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF333333),
                   ),
@@ -422,66 +683,69 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildLogoutButton(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: () async {
-        try {
-          // Show loading indicator
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
-              ),
-            ),
-          );
-
-          // Get the auth provider
-          final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-          
-          // Sign out
-          await authProvider.signOut();
-
-          // Close loading dialog
-          if (context.mounted) {
-            Navigator.of(context).pop();
-          }
-
-          // Force navigation to welcome screen
-          if (context.mounted) {
-            // Clear the entire navigation stack and push welcome screen
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-              (route) => false,
-            );
-          }
-        } catch (e) {
-          // Close loading dialog if it's still showing
-          if (context.mounted) {
-            Navigator.of(context).pop();
-          }
-
-          // Show error message
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error signing out: ${e.toString()}'),
-                backgroundColor: Colors.red,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: ElevatedButton.icon(
+        onPressed: () async {
+          try {
+            // Show loading indicator
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
+                ),
               ),
             );
+  
+            // Get the auth provider
+            final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
+            
+            // Sign out
+            await authProvider.signOut();
+  
+            // Close loading dialog
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+  
+            // Force navigation to welcome screen
+            if (context.mounted) {
+              // Clear the entire navigation stack and push welcome screen
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                (route) => false,
+              );
+            }
+          } catch (e) {
+            // Close loading dialog if it's still showing
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+  
+            // Show error message
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error signing out: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
-        }
-      },
-      icon: const Icon(Icons.logout),
-      label: const Text('Sign Out'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFD4A76A),
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+        },
+        icon: const Icon(Icons.logout),
+        label: const Text('Sign Out'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFD4A76A),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 3,
         ),
-        elevation: 3,
       ),
     );
   }

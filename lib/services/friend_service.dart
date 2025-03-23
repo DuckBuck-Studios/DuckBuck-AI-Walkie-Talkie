@@ -11,6 +11,13 @@ enum FriendRequestStatus {
   blocked
 }
 
+/// Block relationship type to track who blocked whom
+enum BlockRelationshipType {
+  blockedByMe,
+  blockedByThem,
+  mutualBlock
+}
+
 /// Service class to handle all friend-related operations
 class FriendService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -21,13 +28,91 @@ class FriendService {
   String? get currentUserId => _auth.currentUser?.uid;
 
   /// Send a friend request to another user
-  Future<bool> sendFriendRequest(String targetUserId) async {
-    if (currentUserId == null) return false;
+  Future<Map<String, dynamic>> sendFriendRequest(String targetUserId) async {
+    if (currentUserId == null) {
+      return {
+        'success': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
+    
+    // Prevent sending request to self
+    if (currentUserId == targetUserId) {
+      return {
+        'success': false,
+        'error': 'Cannot send friend request to yourself',
+        'errorCode': 'request/self-request'
+      };
+    }
 
     try {
-      // Check if user is blocked
-      final isBlocked = await isUserBlocked(targetUserId);
-      if (isBlocked) return false;
+      // Check if the user is blocked by the current user
+      final isBlockedByMe = await isUserBlocked(targetUserId);
+      if (isBlockedByMe) {
+        return {
+          'success': false,
+          'error': 'Cannot send friend request to a blocked user',
+          'errorCode': 'request/blocked-user',
+          'blockType': BlockRelationshipType.blockedByMe.toString().split('.').last
+        };
+      }
+      
+      // Check if current user is blocked by the target user
+      final isBlockedByThem = await isBlockedBy(targetUserId);
+      if (isBlockedByThem) {
+        return {
+          'success': false,
+          'error': 'Cannot send friend request as you are blocked by this user',
+          'errorCode': 'request/blocked-by-user',
+          'blockType': BlockRelationshipType.blockedByThem.toString().split('.').last
+        };
+      }
+      
+      // Check if already friends
+      final alreadyFriends = await isFriend(targetUserId);
+      if (alreadyFriends) {
+        return {
+          'success': false,
+          'error': 'Already friends with this user',
+          'errorCode': 'request/already-friends'
+        };
+      }
+      
+      // Check if request already exists
+      final existingIncomingRequest = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('incomingRequests')
+          .doc(targetUserId)
+          .get();
+          
+      if (existingIncomingRequest.exists) {
+        final status = existingIncomingRequest.data()?['status'];
+        return {
+          'success': false,
+          'error': 'Incoming request already exists from this user',
+          'errorCode': 'request/existing-incoming',
+          'requestStatus': status
+        };
+      }
+      
+      final existingOutgoingRequest = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('outgoingRequests')
+          .doc(targetUserId)
+          .get();
+          
+      if (existingOutgoingRequest.exists) {
+        final status = existingOutgoingRequest.data()?['status'];
+        return {
+          'success': false,
+          'error': 'Outgoing request already exists to this user',
+          'errorCode': 'request/existing-outgoing',
+          'requestStatus': status
+        };
+      }
 
       // Add to sender's outgoing requests
       await _firestore
@@ -53,10 +138,19 @@ class FriendService {
         'sentBy': currentUserId,
       });
 
-      return true;
+      return {
+        'success': true,
+        'message': 'Friend request sent successfully',
+        'targetUserId': targetUserId
+      };
     } catch (e) {
       print('Error sending friend request: $e');
-      return false;
+      return {
+        'success': false,
+        'error': 'An error occurred while sending friend request',
+        'errorCode': 'request/unknown-error',
+        'exception': e.toString()
+      };
     }
   }
 
@@ -214,11 +308,36 @@ class FriendService {
     }
   }
 
-  /// Block a user
-  Future<bool> blockUser(String targetUserId) async {
-    if (currentUserId == null) return false;
+  /// Block a user and provide detailed information about the block
+  Future<Map<String, dynamic>> blockUser(String targetUserId) async {
+    if (currentUserId == null) {
+      return {
+        'success': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
 
     try {
+      // Check if already blocked
+      final alreadyBlocked = await isUserBlocked(targetUserId);
+      if (alreadyBlocked) {
+        return {
+          'success': false,
+          'error': 'This user is already blocked',
+          'errorCode': 'block/already-blocked'
+        };
+      }
+      
+      // Check if blocked by the target user
+      final blockedByTarget = await isBlockedBy(targetUserId);
+      final blockType = blockedByTarget 
+          ? BlockRelationshipType.mutualBlock 
+          : BlockRelationshipType.blockedByMe;
+      
+      // Check if they are friends
+      final isFriendRelationship = await isFriend(targetUserId);
+
       // Add to blocked users list for the blocker
       await _firestore
           .collection('users')
@@ -228,6 +347,8 @@ class FriendService {
           .set({
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedBy': currentUserId,
+        'blockType': blockType.toString().split('.').last,
+        'wasFriend': isFriendRelationship,
       });
 
       // Add to blockedBy list for the blocked user
@@ -239,89 +360,146 @@ class FriendService {
           .set({
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedBy': currentUserId,
+        'blockType': blockType.toString().split('.').last,
+        'wasFriend': isFriendRelationship,
       });
 
       // Remove any existing friend relationship
-      await removeFriend(targetUserId);
+      if (isFriendRelationship) {
+        await removeFriend(targetUserId);
+      }
 
       // Update any existing requests to blocked status
-      await Future.wait([
-        _firestore
-            .collection('users')
-            .doc(currentUserId)
-            .collection('outgoingRequests')
-            .doc(targetUserId)
-            .update({
-          'status': FriendRequestStatus.blocked.toString().split('.').last,
-          'blockedAt': FieldValue.serverTimestamp(),
-          'blockedBy': currentUserId,
-        }),
-        _firestore
-            .collection('users')
-            .doc(targetUserId)
-            .collection('incomingRequests')
-            .doc(currentUserId)
-            .update({
-          'status': FriendRequestStatus.blocked.toString().split('.').last,
-          'blockedAt': FieldValue.serverTimestamp(),
-          'blockedBy': currentUserId,
-        }),
-      ]);
+      try {
+        await Future.wait([
+          _firestore
+              .collection('users')
+              .doc(currentUserId)
+              .collection('outgoingRequests')
+              .doc(targetUserId)
+              .update({
+            'status': FriendRequestStatus.blocked.toString().split('.').last,
+            'blockedAt': FieldValue.serverTimestamp(),
+            'blockedBy': currentUserId,
+          }),
+          _firestore
+              .collection('users')
+              .doc(targetUserId)
+              .collection('incomingRequests')
+              .doc(currentUserId)
+              .update({
+            'status': FriendRequestStatus.blocked.toString().split('.').last,
+            'blockedAt': FieldValue.serverTimestamp(),
+            'blockedBy': currentUserId,
+          }),
+        ]);
+      } catch (e) {
+        // It's okay if these fail, they might not exist
+        print('Non-critical error updating request docs: $e');
+      }
 
-      return true;
+      return {
+        'success': true,
+        'message': 'User blocked successfully',
+        'blockType': blockType.toString().split('.').last,
+        'wasFriend': isFriendRelationship,
+        'isMutualBlock': blockedByTarget
+      };
     } catch (e) {
       print('Error blocking user: $e');
-      return false;
+      return {
+        'success': false,
+        'error': 'Failed to block user',
+        'errorCode': 'block/unknown-error',
+        'exception': e.toString()
+      };
     }
   }
 
-  /// Report a user
-  Future<bool> reportUser(String targetUserId, String reason) async {
-    if (currentUserId == null) return false;
+  /// Report a user with enhanced feedback about what happened
+  Future<Map<String, dynamic>> reportUser(String targetUserId, String reason) async {
+    if (currentUserId == null) {
+      return {
+        'success': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
 
     try {
+      // Check if already reported
+      final query = await _firestore
+          .collection('reports')
+          .where('reporterId', isEqualTo: currentUserId)
+          .where('reportedId', isEqualTo: targetUserId)
+          .get();
+          
+      if (query.docs.isNotEmpty) {
+        return {
+          'success': false,
+          'error': 'You have already reported this user',
+          'errorCode': 'report/already-reported',
+          'existingReportId': query.docs.first.id
+        };
+      }
+      
+      // Check current relationship status
+      final isFriendRelationship = await isFriend(targetUserId);
+      final isBlockedByMe = await isUserBlocked(targetUserId);
+      final isBlockedByThem = await isBlockedBy(targetUserId);
+      
       // Create the report
-      await _firestore.collection('reports').add({
+      final reportRef = await _firestore.collection('reports').add({
         'reporterId': currentUserId,
         'reportedId': targetUserId,
         'reason': reason,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'pending',
+        'actionTaken': 'auto-blocked',
+        'wasFriend': isFriendRelationship,
+        'wasBlockedBefore': isBlockedByMe,
+        'wasBlockedByBefore': isBlockedByThem,
       });
 
-      // Remove friend relationship if exists
-      await removeFriend(targetUserId);
+      // Block the user if not already blocked
+      Map<String, dynamic> blockResult;
+      if (!isBlockedByMe) {
+        // Remove friend relationship if exists
+        if (isFriendRelationship) {
+          await removeFriend(targetUserId);
+        }
+        
+        // Call block user
+        blockResult = await blockUser(targetUserId);
+      } else {
+        blockResult = {
+          'success': true,
+          'message': 'User was already blocked',
+          'wasAlreadyBlocked': true
+        };
+      }
 
-      // Update any existing requests to declined status
-      await Future.wait([
-        _firestore
-            .collection('users')
-            .doc(currentUserId)
-            .collection('outgoingRequests')
-            .doc(targetUserId)
-            .update({
-          'status': FriendRequestStatus.declined.toString().split('.').last,
-          'declinedAt': FieldValue.serverTimestamp(),
-          'declinedBy': currentUserId,
-          'reported': true,
-        }),
-        _firestore
-            .collection('users')
-            .doc(targetUserId)
-            .collection('incomingRequests')
-            .doc(currentUserId)
-            .update({
-          'status': FriendRequestStatus.declined.toString().split('.').last,
-          'declinedAt': FieldValue.serverTimestamp(),
-          'declinedBy': currentUserId,
-          'reported': true,
-        }),
-      ]);
+      // Update report with block result
+      await reportRef.update({
+        'blockResult': blockResult,
+      });
 
-      return true;
+      return {
+        'success': true,
+        'message': 'User has been reported and blocked',
+        'reportId': reportRef.id,
+        'blockStatus': blockResult,
+        'wasFriend': isFriendRelationship,
+        'wasBlockedBefore': isBlockedByMe,
+      };
     } catch (e) {
       print('Error reporting user: $e');
-      return false;
+      return {
+        'success': false,
+        'error': 'Failed to report user',
+        'errorCode': 'report/unknown-error',
+        'exception': e.toString()
+      };
     }
   }
 
@@ -526,22 +704,78 @@ class FriendService {
   }
 
   /// Check if a user is blocked
-  Future<bool> isUserBlocked(String targetUserId) async {
-    if (currentUserId == null) return false;
+  Future<Map<String, dynamic>> getBlockStatus(String targetUserId) async {
+    if (currentUserId == null) {
+      return {
+        'isBlocked': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
 
     try {
-      final doc = await _firestore
+      // Check if current user has blocked target
+      final blockedDoc = await _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('blockedUsers')
           .doc(targetUserId)
           .get();
 
-      return doc.exists;
+      // Check if target has blocked current user
+      final blockedByDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('blockedBy')
+          .doc(targetUserId)
+          .get();
+
+      final blockedByMe = blockedDoc.exists;
+      final blockedByThem = blockedByDoc.exists;
+      
+      BlockRelationshipType? blockType;
+      if (blockedByMe && blockedByThem) {
+        blockType = BlockRelationshipType.mutualBlock;
+      } else if (blockedByMe) {
+        blockType = BlockRelationshipType.blockedByMe;
+      } else if (blockedByThem) {
+        blockType = BlockRelationshipType.blockedByThem;
+      }
+      
+      Map<String, dynamic> blockData = {};
+      if (blockedDoc.exists) {
+        blockData = blockedDoc.data() ?? {};
+      }
+      
+      return {
+        'isBlocked': blockedByMe || blockedByThem,
+        'blockedByMe': blockedByMe,
+        'blockedByThem': blockedByThem,
+        'blockType': blockType?.toString().split('.').last,
+        'blockData': blockData,
+        'timestamp': blockData['blockedAt'],
+      };
     } catch (e) {
-      print('Error checking if user is blocked: $e');
-      return false;
+      print('Error checking block status: $e');
+      return {
+        'isBlocked': false,
+        'error': 'Failed to check block status',
+        'errorCode': 'block/unknown-error',
+        'exception': e.toString()
+      };
     }
+  }
+
+  /// Convenience method for checking if a user is blocked by current user
+  Future<bool> isUserBlocked(String targetUserId) async {
+    final blockStatus = await getBlockStatus(targetUserId);
+    return blockStatus['blockedByMe'] == true;
+  }
+
+  /// Convenience method for checking if current user is blocked by target user
+  Future<bool> isBlockedBy(String userId) async {
+    final blockStatus = await getBlockStatus(userId);
+    return blockStatus['blockedByThem'] == true;
   }
 
   /// Check if a user is a friend
@@ -591,6 +825,149 @@ class FriendService {
     }
   }
 
+  /// Get stream of blocked users
+  Stream<List<Map<String, dynamic>>> getBlockedUsersStream() {
+    if (currentUserId == null) return Stream.value([]);
+
+    print("FriendService: Getting blocked users stream for user: $currentUserId");
+    
+    // Create a controller to handle errors and retries
+    final controller = StreamController<List<Map<String, dynamic>>>();
+    
+    // Set up the stream with retry logic and error handling
+    void setupStream() {
+      print("FriendService: Setting up blocked users stream");
+      
+      StreamSubscription? subscription;
+      subscription = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('blockedUsers')
+          .snapshots()
+          .asyncMap((snapshot) async {
+            print("FriendService: Got ${snapshot.docs.length} blocked users docs");
+            final blockedUsers = <Map<String, dynamic>>[];
+            
+            try {
+              for (var doc in snapshot.docs) {
+                final userId = doc.id;
+                print("FriendService: Processing blocked user: $userId, data: ${doc.data()}");
+                
+                try {
+                  final userDoc = await _firestore.collection('users').doc(userId).get();
+                  
+                  if (userDoc.exists) {
+                    final userData = userDoc.data() ?? {};
+                    final blockData = doc.data();
+                    
+                    // Combine the user data with the block data
+                    blockedUsers.add({
+                      'id': userId,
+                      'displayName': userData['displayName'] ?? 'Unknown User',
+                      'username': userData['username'],
+                      'photoURL': userData['photoURL'],
+                      'blockedAt': blockData['blockedAt'] is Timestamp 
+                          ? (blockData['blockedAt'] as Timestamp).toDate() 
+                          : null,
+                      'blockReason': blockData['reason'] ?? 'Manual block',
+                      'blockType': blockData['blockType'] ?? 'blockedByMe',
+                      'wasFriend': blockData['wasFriend'] ?? false
+                    });
+                    
+                    print("FriendService: Added blocked user to list: $userId");
+                  } else {
+                    print("FriendService: User document doesn't exist for blocked user: $userId");
+                    // Add a placeholder entry with minimal information
+                    blockedUsers.add({
+                      'id': userId,
+                      'displayName': 'User $userId',
+                      'blockedAt': null,
+                      'blockReason': 'User information unavailable',
+                      'blockType': 'blockedByMe',
+                      'wasFriend': false
+                    });
+                  }
+                } catch (e) {
+                  print("FriendService: Error fetching user doc for blocked user $userId: $e");
+                  // Add a placeholder entry with error information
+                  blockedUsers.add({
+                    'id': userId,
+                    'displayName': 'User $userId',
+                    'blockedAt': null,
+                    'blockReason': 'Error loading user data',
+                    'blockType': 'blockedByMe',
+                    'wasFriend': false,
+                    'loadError': e.toString()
+                  });
+                }
+              }
+              
+              print("FriendService: Returning ${blockedUsers.length} blocked users");
+              return blockedUsers;
+            } catch (e) {
+              print("FriendService: Error processing blocked users: $e");
+              throw e;
+            }
+          })
+          .listen(
+            (users) {
+              // On data, add to the controller
+              if (!controller.isClosed) {
+                controller.add(users);
+              }
+            },
+            onError: (error) {
+              // On error, log and try to recover
+              print("FriendService: Error in blocked users stream: $error");
+              
+              if (!controller.isClosed) {
+                // Try to add empty list to avoid breaking UI
+                try {
+                  controller.add([]);
+                } catch (e) {
+                  print("FriendService: Error adding empty list to controller: $e");
+                }
+                
+                // Retry after delay
+                Future.delayed(Duration(seconds: 5), () {
+                  if (!controller.isClosed) {
+                    print("FriendService: Retrying blocked users stream setup");
+                    subscription?.cancel();
+                    setupStream();
+                  }
+                });
+              }
+            },
+            onDone: () {
+              // If the stream is done (should rarely happen), retry
+              print("FriendService: Blocked users stream done, retrying");
+              if (!controller.isClosed) {
+                Future.delayed(Duration(seconds: 2), () {
+                  if (!controller.isClosed) {
+                    print("FriendService: Restarting blocked users stream");
+                    subscription?.cancel();
+                    setupStream();
+                  }
+                });
+              }
+            },
+            cancelOnError: false,
+          );
+      
+      // Clean up on controller close
+      controller.onCancel = () {
+        print("FriendService: Cancelling blocked users stream");
+        subscription?.cancel();
+      };
+    }
+    
+    // Start the stream
+    setupStream();
+    
+    // Return the controlled stream
+    return controller.stream;
+  }
+
   /// Monitor a friend's status in real-time
   Future<bool> monitorFriendStatus(String friendId) async {
     try {
@@ -602,5 +979,95 @@ class FriendService {
       print("Error monitoring friend status: $e");
       return false;
     }
+  }
+
+  /// Unblock a user with retries for network errors
+  Future<Map<String, dynamic>> unblockUser(String targetUserId) async {
+    if (currentUserId == null) {
+      return {
+        'success': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
+
+    // Function to perform the unblock operation with proper error handling
+    Future<Map<String, dynamic>> performUnblock() async {
+      try {
+        // Check if the user is currently blocked
+        final blockStatus = await getBlockStatus(targetUserId);
+        if (blockStatus['blockedByMe'] != true) {
+          return {
+            'success': false,
+            'error': 'This user is not blocked',
+            'errorCode': 'unblock/not-blocked'
+          };
+        }
+
+        // Remove from blocked users collection
+        await _firestore
+            .collection('users')
+            .doc(currentUserId)
+            .collection('blockedUsers')
+            .doc(targetUserId)
+            .delete();
+
+        // Remove from blockedBy collection for the other user
+        await _firestore
+            .collection('users')
+            .doc(targetUserId)
+            .collection('blockedBy')
+            .doc(currentUserId)
+            .delete();
+
+        return {
+          'success': true,
+          'message': 'User unblocked successfully',
+          'userId': targetUserId,
+        };
+      } catch (e) {
+        print('Error in unblock operation: $e');
+        // Classify error type
+        String errorCode = 'unblock/unknown-error';
+        if (e.toString().contains('network')) {
+          errorCode = 'unblock/network-error';
+        } else if (e.toString().contains('permission')) {
+          errorCode = 'unblock/permission-denied';
+        } else if (e.toString().contains('not-found')) {
+          errorCode = 'unblock/document-not-found';
+        }
+        
+        return {
+          'success': false,
+          'error': 'Failed to unblock user',
+          'errorCode': errorCode,
+          'exception': e.toString(),
+          'isNetworkError': errorCode == 'unblock/network-error'
+        };
+      }
+    }
+
+    // First attempt
+    var result = await performUnblock();
+    
+    // Retry logic for network errors only
+    int retries = 0;
+    while (!result['success'] && 
+           result['isNetworkError'] == true && 
+           retries < 2) {
+      retries++;
+      print('Retrying unblock operation, attempt $retries');
+      
+      // Wait before retry with exponential backoff
+      await Future.delayed(Duration(seconds: retries * 2));
+      result = await performUnblock();
+    }
+    
+    // Add retry information to the result
+    if (retries > 0) {
+      result['retries'] = retries;
+    }
+    
+    return result;
   }
 } 

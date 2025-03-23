@@ -100,7 +100,7 @@ class _GenderScreenState extends State<GenderScreen> {
     } catch (e) {
       // Handle error
       print('GenderScreen: Error saving gender: $e');
-      _showErrorSnackBar('Error saving gender. Please try again.');
+      _showErrorSnackBar('Unable to save your gender. Please try again.');
     } finally {
       // Reset loading state
       if (mounted) {

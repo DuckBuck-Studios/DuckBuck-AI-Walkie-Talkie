@@ -58,7 +58,7 @@ class _NameScreenState extends State<NameScreen> {
         );
       }
     } catch (e) {
-      _showErrorSnackBar('Failed to save name: ${e.toString()}');
+      _showErrorSnackBar('Unable to save your name. Please try again.');
       print('NameScreen: Error saving name: $e');
     }
   }

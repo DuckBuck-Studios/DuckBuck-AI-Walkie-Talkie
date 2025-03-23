@@ -27,27 +27,6 @@ class FCMService {
     }
   }
   
-  // Send a room acknowledgement
-  Future<bool> sendRoomAcknowledgement({
-    required String channelId,
-    required String receiverUid,
-    required String senderUid,
-  }) async {
-    try {
-      final payload = {
-        'channel_id': channelId,
-        'receiver_uid': receiverUid,
-        'sender_uid': senderUid,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
-      
-      return _sendThroughBackend('$_backendUrl/ack', payload);
-    } catch (e) {
-      debugPrint('Error sending room acknowledgement: $e');
-      return false;
-    }
-  }
-  
   // Get current user auth token
   Future<String?> _getAuthToken() async {
     try {

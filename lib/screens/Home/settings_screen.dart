@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../widgets/animated_background.dart';
 import '../../widgets/phone_auth_popup.dart';
 import '../onboarding/profile_photo_preview_screen.dart';
+import '../Home/blocked_users_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -113,6 +114,17 @@ class SettingsScreen extends StatelessWidget {
                         title: 'Privacy',
                         icon: Icons.lock,
                         children: [
+                          _buildSettingOption(
+                            context: context,
+                            title: 'Blocked Users',
+                            subtitle: 'Manage users you\'ve blocked',
+                            icon: Icons.block,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
+                            ),
+                            delay: 600,
+                          ),
                           _buildPrivacyToggle(
                             context: context,
                             title: 'Show Social Links',
@@ -120,7 +132,7 @@ class SettingsScreen extends StatelessWidget {
                             icon: Icons.share,
                             value: userModel.getMetadata('showSocialLinks') ?? true,
                             onChanged: (value) => _updatePrivacySetting(context, 'showSocialLinks', value),
-                            delay: 600,
+                            delay: 700,
                           ),
                           _buildPrivacyToggle(
                             context: context,
@@ -129,7 +141,7 @@ class SettingsScreen extends StatelessWidget {
                             icon: Icons.visibility,
                             value: userModel.getMetadata('showOnlineStatus') ?? true,
                             onChanged: (value) => _updatePrivacySetting(context, 'showOnlineStatus', value),
-                            delay: 700,
+                            delay: 800,
                           ),
                           _buildPrivacyToggle(
                             context: context,
@@ -138,10 +150,10 @@ class SettingsScreen extends StatelessWidget {
                             icon: Icons.access_time,
                             value: userModel.getMetadata('showLastSeen') ?? true,
                             onChanged: (value) => _updatePrivacySetting(context, 'showLastSeen', value),
-                            delay: 800,
+                            delay: 900,
                           ),
                         ],
-                        delay: 300,
+                        delay: 400,
                       ),
                       
                       const SizedBox(height: 24),
@@ -153,7 +165,7 @@ class SettingsScreen extends StatelessWidget {
                         children: [
                           _buildNotificationToggle(context, userModel),
                         ],
-                        delay: 400,
+                        delay: 500,
                       ),
                       
                       const SizedBox(height: 24),
@@ -165,7 +177,7 @@ class SettingsScreen extends StatelessWidget {
                         children: [
                           _buildSubscriptionStatus(context, userModel),
                         ],
-                        delay: 500,
+                        delay: 600,
                       ),
                       
                       const SizedBox(height: 32),
@@ -181,8 +193,18 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildTopBar(BuildContext context) {
+    // Get screen dimensions and safe area for responsive layout
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final EdgeInsets safePadding = MediaQuery.of(context).padding;
+    final bool isSmallScreen = screenWidth < 360;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+      padding: EdgeInsets.only(
+        left: 8, 
+        right: 8, 
+        top: 16 + safePadding.top, // Account for safe area at top
+        bottom: 16
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFD4A76A).withOpacity(0.1),
         borderRadius: const BorderRadius.only(
@@ -199,23 +221,31 @@ class SettingsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios),
-            onPressed: () => Navigator.pop(context),
-            color: const Color(0xFFD4A76A),
+          // Back button - make tap target larger on small screens
+          SizedBox(
+            width: isSmallScreen ? 44 : 48,
+            height: isSmallScreen ? 44 : 48,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios),
+              iconSize: isSmallScreen ? 20 : 24,
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.pop(context),
+              color: const Color(0xFFD4A76A),
+            ),
           ),
-          const Expanded(
+          Expanded(
             child: Text(
               'Settings',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: isSmallScreen ? 20 : 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFD4A76A),
+                color: const Color(0xFFD4A76A),
               ),
             ),
           ),
-          const SizedBox(width: 48), // For centering the title
+          // Maintain symmetry with a placeholder of the same size as the back button
+          SizedBox(width: isSmallScreen ? 44 : 48),
         ],
       ),
     ).animate()

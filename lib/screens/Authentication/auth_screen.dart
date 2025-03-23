@@ -1,5 +1,4 @@
 import 'dart:io'; 
-import 'package:duckbuck/screens/onboarding/name_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,10 +7,13 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import '../../widgets/phone_auth_popup.dart';
 import '../../providers/auth_provider.dart' as auth_provider;
-import '../Home/home_screen.dart';
-import '../onboarding/dob_screen.dart';
-import '../onboarding/gender_screen.dart';
-import '../onboarding/profile_photo_screen.dart';
+import '../../screens/onboarding/name_screen.dart';
+import '../../screens/onboarding/dob_screen.dart';
+import '../../screens/onboarding/gender_screen.dart';
+import '../../screens/onboarding/profile_photo_screen.dart';
+import '../../screens/Home/home_screen.dart';
+import '../../widgets/animated_background.dart';
+import 'dart:math' as math;
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -21,7 +23,7 @@ class AuthScreen extends StatefulWidget {
   _AuthScreenState createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
+class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   final PageController _pageController = PageController();
   double _currentPage = 0;
   bool _showBottomSheet = false;
@@ -33,22 +35,37 @@ class _AuthScreenState extends State<AuthScreen> {
 
   final List<Map<String, dynamic>> _onboardingData = [
     {
-      'title': 'Connect Instantly',
-      'subtitle': 'Talk with friends and family in real-time with just one tap',
-      'features': ['No phone numbers needed', 'Instant voice connection', 'Crystal clear audio'],
-      'color': Color(0xFFD4A76A),
+      'title': 'Instant Voice Chat',
+      'subtitle': 'Connect with friends instantly',
+      'features': [
+        'No call setup required',
+        'Push-to-talk simplicity',
+        'Crystal clear audio'
+      ],
+      'color': const Color(0xFF3C1F1F),
+      'animation': 'assets/animations/walkie-talkie1.json',
     },
     {
       'title': 'Global Reach',
-      'subtitle': 'Stay connected with your friends no matter where they are',
-      'features': ['Connect worldwide', 'Private voice channels', 'Group conversations'],
-      'color': Color(0xFF6AD4A7),
+      'subtitle': 'Talk to friends anywhere',
+      'features': [
+        'Works across countries',
+        'Low data usage',
+        'End-to-end encryption'
+      ],
+      'color': const Color(0xFF2C1810),
+      'animation': 'assets/animations/walkie-talkie2.json',
     },
     {
-      'title': 'Ready to Talk?',
-      'subtitle': 'Join millions of people already connecting on DuckBuck',
-      'features': ['End-to-end encryption', 'Zero lag communication', 'Free forever'],
-      'color': Color(0xFF6A7AD4),
+      'title': '', // Empty title for the last screen
+      'subtitle': '', // Empty subtitle for the last screen
+      'features': [
+        '', // Empty features to keep structure but not display text
+        '',
+        ''
+      ],
+      'color': const Color(0xFF3C1F1F),
+      'animation': 'assets/animations/loading.json',
     },
   ];
 
@@ -66,10 +83,25 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       });
     });
+    
+    // Remove preloading from initState
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // No need to preload images as we're using Lottie animations instead
   }
 
   @override
   Widget build(BuildContext context) {
+    // Get screen dimensions and safe area information for responsive layout
+    final Size screenSize = MediaQuery.of(context).size;
+    final EdgeInsets safePadding = MediaQuery.of(context).padding;
+    final bool isSmallScreen = screenSize.height < 600;
+    final bool isLandscape = screenSize.width > screenSize.height;
+    
     final authProvider = Provider.of<auth_provider.AuthProvider>(context, listen: true);
     
     if (authProvider.isAuthenticated) {
@@ -165,7 +197,23 @@ class _AuthScreenState extends State<AuthScreen> {
       // Show error if there is one
       if (authProvider.status == auth_provider.AuthStatus.error && authProvider.errorMessage != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showErrorSnackBar(authProvider.errorMessage!);
+          // Display a user-friendly error message
+          String friendlyMessage = 'An error occurred during authentication. Please try again.';
+          
+          // Check if the error message contains any service names to hide
+          // This is a backup in case the auth provider didn't already sanitize the message
+          if (authProvider.errorMessage!.contains('firebase') || 
+              authProvider.errorMessage!.contains('Firebase') ||
+              authProvider.errorMessage!.contains('Google') ||
+              authProvider.errorMessage!.contains('Apple')) {
+            // Log the original error for debugging but don't show to user
+            print('Auth error: ${authProvider.errorMessage}');
+          } else {
+            // If the message is already sanitized, use it
+            friendlyMessage = authProvider.errorMessage!;
+          }
+          
+          _showErrorSnackBar(friendlyMessage);
           // Clear the error
           authProvider.clearError();
         });
@@ -173,62 +221,272 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Animated Background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _onboardingData[_currentPage.floor()]['color'],
-                  _onboardingData[_currentPage.floor()]['color'].withOpacity(0.7),
-                ],
-              ),
-            ),
-          ),
-          
-          // Main Content
-          Column(
+      body: DuckBuckAnimatedBackground(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate responsive sizes
+            final double titleFontSize = constraints.maxWidth * 0.085;
+            final double subtitleFontSize = constraints.maxWidth * 0.045;
+            final double featureFontSize = constraints.maxWidth * 0.035;
+            final double bottomSheetHeight = isLandscape 
+                ? constraints.maxHeight * 0.65
+                : (isSmallScreen ? constraints.maxHeight * 0.48 : constraints.maxHeight * 0.42);
+            
+            return Stack(
             children: [
-              Expanded(
-                child: PageView.builder(
+                // Onboarding Content PageView
+                PageView.builder(
                   controller: _pageController,
-                  onPageChanged: (int page) {
+                  itemCount: _onboardingData.length,
+                  onPageChanged: (index) {
                     setState(() {
-                      _currentPage = page.toDouble();
-                      _showBottomSheet = page >= 2;
+                      // Show bottom sheet only when on last page
+                      _showBottomSheet = index >= 2;
                     });
                   },
-                  itemCount: _onboardingData.length,
                   itemBuilder: (context, index) {
-                    return _buildFeatureScreen(
-                      _onboardingData[index],
-                      index,
+                    return Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        20, 
+                        safePadding.top + 20, 
+                        20, 
+                        _showBottomSheet ? bottomSheetHeight + 20 : 20
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Large Animation at top (walkie-talkie) - BIGGER SIZE
+                          Expanded(
+                            flex: 6, // Increased from 5 to 6
+                            child: Center(
+                              child: index == 2 
+                                ? _buildDBLogo() // For the last page, show DB logo
+                                : Lottie.asset(
+                                    _onboardingData[index]['animation']!,
+                                    width: constraints.maxWidth * 1.0, 
+                                    height: constraints.maxHeight * 0.5, 
+                                    fit: BoxFit.contain,
+                                  ),
+                            ),
+                          ),
+                          
+                          // Flexible spacer to prevent overflow
+                          const Spacer(flex: 1),
+                                                  
+                          // Title with improved styling and enhanced animations
+                          index == 2 ? Container() : Text(
+                            _onboardingData[index]['title'],
+                            style: TextStyle(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(1, 1),
+                                  blurRadius: 4,
+                                  color: Colors.black.withOpacity(0.5),
+                                ),
+                              ],
+                              letterSpacing: 0.5,
+                            ),
+                          ).animate(
+                            autoPlay: true,
+                            onComplete: (controller) => controller.repeat(), // Subtle repeat effect
+                          )
+                            .fadeIn(duration: 600.ms, delay: 200.ms, curve: Curves.easeOut)
+                            .slideX(begin: -0.2, end: 0, duration: 600.ms, delay: 200.ms, curve: Curves.easeOutQuart)
+                            .then(delay: 3000.ms) // Add subtle shine effect
+                            .shimmer(
+                              duration: 2000.ms,
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                            
+                          const SizedBox(height: 12),
+                          
+                          // Subtitle with improved styling and animations
+                          index == 2 ? Container() : Text(
+                            _onboardingData[index]['subtitle'],
+                            style: TextStyle(
+                              fontSize: subtitleFontSize,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.9),
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(1, 1),
+                                  blurRadius: 2,
+                                  color: Colors.black.withOpacity(0.3),
+                                ),
+                              ],
+                            ),
+                          ).animate()
+                            .fadeIn(duration: 600.ms, delay: 400.ms, curve: Curves.easeOut)
+                            .slideX(begin: -0.2, end: 0, duration: 600.ms, delay: 400.ms, curve: Curves.easeOutQuart),
+                            
+                          const SizedBox(height: 24),
+                          
+                          // Features with improved styling and staggered animations
+                          if (index != 2)
+                            ...(_onboardingData[index]['features'] as List<String>).asMap().entries.map((entry) {
+                              final int featureIndex = entry.key;
+                              final String feature = entry.value;
+                              
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 32, // Increased from 24 to 32
+                                      height: 32, // Increased from 24 to 32
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFFD4A76A),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            offset: const Offset(0, 2),
+                                            blurRadius: 4,
+                                            color: Colors.black.withOpacity(0.3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 18, // Adjusted from 16 to 18
+                                      ),
+                                    ).animate()
+                                      .fadeIn(duration: 300.ms, delay: 600.ms + (featureIndex * 200).ms)
+                                      .scale(
+                                        begin: const Offset(0.0, 0.0),
+                                        end: const Offset(1.0, 1.0), 
+                                        duration: 400.ms, 
+                                        delay: 600.ms + (featureIndex * 200).ms,
+                                        curve: Curves.elasticOut
+                                      ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        feature,
+                                        style: TextStyle(
+                                          fontSize: featureFontSize * 1.1, // Increased size slightly
+                                          color: Colors.white.withOpacity(0.9),
+                                          fontWeight: FontWeight.w500,
+                                          shadows: [
+                                            Shadow(
+                                              offset: const Offset(1, 1),
+                                              blurRadius: 2,
+                                              color: Colors.black.withOpacity(0.3),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ).animate()
+                                      .fadeIn(duration: 600.ms, delay: 700.ms + (featureIndex * 200).ms)
+                                      .slideX(begin: 0.2, end: 0, duration: 600.ms, delay: 700.ms + (featureIndex * 200).ms, curve: Curves.easeOutQuart),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          
+                          const Spacer(),
+                        ],
+                      ),
                     );
                   },
                 ),
-              ),
-              
-              // Dots Indicator
-              Padding(
-                padding: const EdgeInsets.only(bottom: 32.0),
-                child: DotsIndicator(
-                  dotsCount: _onboardingData.length,
-                  position: _currentPage,
-                  decorator: DotsDecorator(
-                    activeColor: Colors.white,
-                    size: const Size(8.0, 8.0),
-                    activeSize: const Size(24.0, 8.0),
-                    activeShape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4.0),
-                    ),
+                
+                // Dots Indicator with enhanced styling
+                if (!_showBottomSheet || isLandscape)
+                  Positioned(
+                    bottom: _showBottomSheet 
+                        ? (isLandscape ? 12.0 : 24.0) 
+                        : (isSmallScreen ? 32.0 : 48.0),
+                    left: 0,
+                    right: 0,
+                    child: Column(
+                      children: [
+                        // Animated page indicator
+                        AnimatedBuilder(
+                          animation: _pageController,
+                          builder: (context, child) {
+                            // Current page for smoother animation
+                            final page = _pageController.hasClients 
+                                ? _pageController.page ?? 0 
+                                : _currentPage;
+                                
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                _onboardingData.length,
+                                (i) {
+                                  // Determine if this dot is active
+                                  final isActive = i == page.round();
+                                  // Calculate color and size based on distance from current page
+                                  final distance = (page - i).abs();
+                                  final distanceFactor = 1.0 - (distance > 1.0 ? 1.0 : distance);
+                                  
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                                    height: 8,
+                                    width: isActive ? 24 : 8,
+                                    decoration: BoxDecoration(
+                                      color: isActive 
+                                          ? Colors.white 
+                                          : Colors.white.withOpacity(0.5 - (distance * 0.2).clamp(0.0, 0.5)),
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: isActive ? [
+                                        BoxShadow(
+                                          color: Colors.white.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        )
+                                      ] : null,
+                                    ),
+                                  ).animate(target: distanceFactor).custom(
+                                    duration: 300.ms,
+                                    builder: (context, value, child) => Transform.scale(
+                                      scale: 0.8 + (0.2 * value),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        
+                        // Screen title indicator
+                        SizedBox(height: 12),
+                        AnimatedSwitcher(
+                          duration: Duration(milliseconds: 300),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.0, 0.2),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            _onboardingData[_currentPage.round()]['title'],
+                            key: ValueKey<int>(_currentPage.round()),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1.2,
                   ),
                 ),
               ),
             ],
           ),
+                  ).animate()
+                    .fadeIn(duration: 600.ms, delay: 800.ms),
           
           // Get Started Button
           if (_showBottomSheet)
@@ -237,7 +495,13 @@ class _AuthScreenState extends State<AuthScreen> {
               left: 0,
               right: 0,
               child: Container(
-                padding: const EdgeInsets.all(24),
+                      height: bottomSheetHeight,
+                      padding: EdgeInsets.only(
+                        left: 24,
+                        right: 24,
+                        top: isSmallScreen ? 16 : 24,
+                        bottom: safePadding.bottom + (isSmallScreen ? 16 : 24),
+                      ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -251,249 +515,304 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => _handleGoogleSignIn(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Lottie.asset('assets/animations/google.json', height: 24),
-                          const SizedBox(width: 12),
-                          Text(_isGoogleLoading ? 'Please wait...' : 'Continue with Google'),
-                        ],
-                      ),
+                          if (!isLandscape) // Don't show in landscape to save space
+                            Text(
+                              "Join DuckBuck",
+                              style: TextStyle(
+                                fontSize: titleFontSize * 0.8,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.brown.shade800,
+                              ),
+                              textAlign: TextAlign.center,
                     ).animate()
-                      .fadeIn(delay: 300.ms)
-                      .slideY(begin: 0.5, end: 0),
+                              .fadeIn(duration: 400.ms)
+                              .scale(
+                                begin: const Offset(0.9, 0.9),
+                                end: const Offset(1.0, 1.0),
+                                duration: 600.ms,
+                                curve: Curves.easeOutBack,
+                              ),
+                          
+                          SizedBox(height: isSmallScreen ? 8 : 16),
+                          
+                          // Auth Buttons with staggered animations
+                          _buildAuthButton(
+                            "Continue with Google",
+                            null,
+                            _isGoogleLoading,
+                            () => _onGoogleSignIn(authProvider),
+                            isSmallScreen,
+                            lottieAsset: 'assets/animations/google.json',
+                            animationDelay: 200,
+                          ),
+                          SizedBox(height: isSmallScreen ? 8 : 16),
                       
                     if (Platform.isIOS)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: ElevatedButton(
-                          onPressed: () => _handleAppleSignIn(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                            _buildAuthButton(
+                              "Continue with Apple",
+                              null,
+                              _isAppleLoading,
+                              () => _onAppleSignIn(authProvider),
+                              isSmallScreen,
+                              lottieAsset: 'assets/animations/apple.json',
+                              animationDelay: 300,
                             ),
+                          if (Platform.isIOS)
+                            SizedBox(height: isSmallScreen ? 8 : 16),
+                          
+                          _buildAuthButton(
+                            "Continue with Phone",
+                            null,
+                            _isPhoneLoading,
+                            () => _onPhoneSignIn(context),
+                            isSmallScreen,
+                            lottieAsset: 'assets/animations/phone.json',
+                            animationDelay: Platform.isIOS ? 400 : 300,
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.apple, size: 24),
-                              const SizedBox(width: 12),
-                              Text(_isAppleLoading ? 'Please wait...' : 'Continue with Apple'),
-                            ],
-                          ),
+                          
+                          // More space for showing disclaimer
+                          SizedBox(height: isSmallScreen ? 12 : 20),
+                          
+                          // Terms and conditions text with fade in animation
+                          if (!isSmallScreen || !isLandscape) // Don't show in small landscape screens
+                            Text(
+                              "By continuing, you agree to our Terms of Service & Privacy Policy.",
+                              style: TextStyle(
+                                fontSize: subtitleFontSize * 0.75,
+                                color: Colors.grey,
+                              ),
+                              textAlign: TextAlign.center,
                         ).animate()
-                          .fadeIn(delay: 400.ms)
-                          .slideY(begin: 0.5, end: 0),
+                              .fadeIn(duration: 600.ms, delay: 700.ms),
+                        ],
                       ),
-                      
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: ElevatedButton(
-                        onPressed: () => _showPhoneAuthBottomSheet(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          foregroundColor: Colors.black87,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.phone_android, size: 24),
-                            const SizedBox(width: 12),
-                            Text(_isPhoneLoading ? 'Please wait...' : 'Continue with Phone'),
-                          ],
-                        ),
-                      ).animate()
-                        .fadeIn(delay: 500.ms)
-                        .slideY(begin: 0.5, end: 0),
                     ),
-                  ],
-                ),
-              ).animate()
-                .fadeIn()
-                .slideY(begin: 1, end: 0, curve: Curves.easeOutQuart),
-            ),
-        ],
+                  ).animate()
+                    .fadeIn(duration: 500.ms)
+                    .slideY(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutQuart),
+              ],
+            );
+          }
+        ),
       ),
     );
   }
 
-  Widget _buildFeatureScreen(Map<String, dynamic> data, int index) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
+  Widget _buildAuthButton(
+    String text, 
+    String? iconPath, 
+    bool isLoading, 
+    VoidCallback onPressed,
+    bool isSmallScreen,
+    {String? lottieAsset, int? animationDelay}
+  ) {
+    Widget button = ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.brown.shade800,
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.grey.shade300),
+        ),
+        padding: EdgeInsets.symmetric(
+          vertical: isSmallScreen ? 12 : 16,
+          horizontal: 20,
+        ),
+      ),
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Title
-          Text(
-            data['title'],
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
-          ).animate()
-            .fadeIn(delay: 200.ms)
-            .slideY(begin: 0.3, end: 0),
-
-          // Subtitle
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: Text(
-              data['subtitle'],
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.white70,
+          if (isLoading)
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.brown.shade800),
               ),
-              textAlign: TextAlign.center,
-            ).animate()
-              .fadeIn(delay: 400.ms)
-              .slideY(begin: 0.3, end: 0),
-          ),
-
-          // Features List
-          ...List.generate(
-            data['features'].length,
-            (i) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.check, color: Colors.white),
+            )
+          else if (lottieAsset != null)
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: Lottie.asset(
+                lottieAsset,
+                fit: BoxFit.contain,
+              ),
+            )
+          else if (iconPath != null)
+            Image.asset(
+              iconPath,
+              width: 28,
+              height: 28,
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    data['features'][i],
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ).animate()
-                .fadeIn(delay: Duration(milliseconds: 600 + (i * 200)))
-                .slideX(begin: 0.3, end: 0),
+            text,
+            style: TextStyle(
+              fontSize: isSmallScreen ? 15 : 17,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
             ),
           ),
         ],
       ),
     );
-  }
-
-  void _handleGoogleSignIn(BuildContext context) async {
-    if (_isGoogleLoading) return;
     
-    setState(() {
-      _isGoogleLoading = true;
-    });
-
-    try {
-      HapticFeedback.mediumImpact();
-      // Use auth provider instead of the service directly
-      await Provider.of<auth_provider.AuthProvider>(context, listen: false).signInWithGoogle();
-    } catch (e) {
-      // Error handling is now managed by the provider
-      // But we still set the local loading state back to false
-      if (mounted) {
-        setState(() {
-          _isGoogleLoading = false;
-        });
-      }
+    if (animationDelay != null) {
+      return button.animate()
+        .fadeIn(duration: 600.ms, delay: animationDelay.ms)
+        .slideY(begin: 0.3, end: 0, duration: 800.ms, delay: animationDelay.ms, curve: Curves.easeOutQuart)
+        .then(delay: 200.ms)
+        .custom(
+          duration: 1500.ms,
+          builder: (context, value, child) => Transform.scale(
+            scale: 1.0 + 0.01 * math.sin(value * math.pi),
+            child: child,
+          ),
+        );
     }
+    
+    return button;
   }
 
-  void _handleAppleSignIn(BuildContext context) async {
-    if (_isAppleLoading) return;
-    
-    setState(() {
-      _isAppleLoading = true;
-    });
-
-    try {
-      HapticFeedback.mediumImpact();
-      // Use auth provider instead of the service directly
-      await Provider.of<auth_provider.AuthProvider>(context, listen: false).signInWithApple();
-    } catch (e) {
-      // Error handling is now managed by the provider
-      // But we still set the local loading state back to false
-      if (mounted) {
-        setState(() {
-          _isAppleLoading = false;
-        });
-      }
-    }
+  // Auth methods
+  
+  void _onGoogleSignIn(auth_provider.AuthProvider authProvider) async {
+    setState(() => _isGoogleLoading = true);
+    HapticFeedback.selectionClick();
+    await authProvider.signInWithGoogle();
   }
 
-  void _showPhoneAuthBottomSheet(BuildContext context) {
-    if (_isPhoneLoading) return;
+  void _onAppleSignIn(auth_provider.AuthProvider authProvider) async {
+    setState(() => _isAppleLoading = true);
+    HapticFeedback.selectionClick();
+    await authProvider.signInWithApple();
+  }
+
+  void _onPhoneSignIn(BuildContext context) async {
+    setState(() => _isPhoneLoading = true);
+    HapticFeedback.selectionClick();
     
-    setState(() {
-      _isPhoneLoading = true;
-    });
+    // Reset loading state
+    setState(() => _isPhoneLoading = false);
     
+    // Show phone auth popup
     showDialog(
       context: context,
-      barrierDismissible: !_isPhoneLoading,
-      builder: (dialogContext) => PhoneAuthPopup(
+      barrierDismissible: true,
+      builder: (context) => PhoneAuthPopup(
         onSubmit: (countryCode, phoneNumber) async {
-          // Authentication is handled inside the popup
-          // Popup is now responsible for communicating with the provider
-          if (mounted) {
-            setState(() {
-              _isPhoneLoading = false;
-            });
-          }
+          // Handle by the popup internally
+          print('Phone auth initiated with $countryCode $phoneNumber');
         },
-      ),
-    ).then((_) {
-      // Dialog closed, reset loading state if needed
-      if (mounted && _isPhoneLoading) {
-        setState(() {
-          _isPhoneLoading = false;
-        });
-      }
-    });
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
       ),
     );
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
+}
+
+Widget _buildDBLogo() {
+  return SizedBox(
+    width: 280,
+    height: 280,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        // Generate shadow layers for 3D effect
+        ...List.generate(5, (index) {
+          final double offset = (index + 1) * 2.0;
+          final double opacity = 0.8 - (index * 0.15);
+          
+          return Positioned(
+            left: offset,
+            top: offset,
+            child: Text(
+              "db", // Changed to lowercase "db"
+              style: TextStyle(
+                fontSize: 180, // Increased size
+                fontWeight: FontWeight.bold,
+                fontStyle: FontStyle.italic,
+                color: Colors.black.withOpacity(opacity.clamp(0.0, 1.0)),
+                letterSpacing: -2,
+              ),
+            ),
+          );
+        }).reversed,
+        
+        // Main DB text with shimmer effect
+        ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [
+              const Color(0xFFD4A76A),
+              Colors.white,
+              const Color(0xFFD4A76A),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            transform: GradientRotation(math.pi / 4),
+          ).createShader(bounds),
+          child: Text(
+            "db", // Changed to lowercase "db"
+            style: TextStyle(
+              fontSize: 180, // Increased size
+              fontWeight: FontWeight.bold,
+              fontStyle: FontStyle.italic,
+              color: Colors.white,
+              letterSpacing: -2,
+            ),
+          ),
+        ),
+      ],
+    ).animate()
+      .fadeIn(duration: 1000.ms)
+      .scale(
+        begin: const Offset(0.5, 0.5),
+        end: const Offset(1.0, 1.0),
+        duration: 1000.ms,
+        curve: Curves.elasticOut,
+      )
+      .custom(
+        duration: 3000.ms,
+        builder: (context, value, child) => Transform.translate(
+          offset: Offset(0, 4 * math.sin(value * math.pi * 2)),
+          child: child,
+        ),
+      )
+      .shimmer(
+        duration: 2000.ms,
+        color: Colors.white.withOpacity(0.8),
+        angle: math.pi / 4,
+        size: 8,
+      ),
+  );
 }
