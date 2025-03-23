@@ -17,6 +17,8 @@ import 'screens/onboarding/profile_photo_screen.dart';
 import 'screens/Home/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/fcm_receiver_service.dart';
+import 'providers/call_provider.dart';
+import 'package:flutter/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,10 +31,28 @@ void main() async {
   // Initialize Firebase App Check
   await _initializeAppCheck();
   
-  // Initialize FCM Receiver Service
-  await FCMReceiverService().initialize();
+  // Create call provider for initialization
+  final callProvider = CallProvider();
   
-  runApp(const MyApp());
+  // Set system UI overlay style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+  
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ChangeNotifierProvider(create: (_) => FriendProvider()),
+      ChangeNotifierProvider(create: (_) => UserProvider()),
+      ChangeNotifierProvider.value(value: callProvider),
+    ],
+    child: const MyApp(),
+  ));
 }
 
 // Platform-specific App Check initialization
@@ -53,8 +73,46 @@ Future<void> _initializeAppCheck() async {
 }
 
 /// Main app widget
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  // FCM and Notification service initialization
+  final FCMReceiverService _fcmService = FCMReceiverService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Initialize FCM after build is complete to have access to context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializePushNotifications();
+    });
+  }
+
+  // Initialize push notifications
+  Future<void> _initializePushNotifications() async {
+    // Initialize FCM service with context
+    await _fcmService.initialize(context);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Handle app lifecycle changes if needed
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,17 +124,16 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'DuckBuck',
+        debugShowCheckedModeBanner: false,
+        navigatorKey: FCMReceiverService.navigatorKey,
         theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFD4A76A),
+          primarySwatch: Colors.brown,
+          colorScheme: ColorScheme.fromSwatch(
+            primarySwatch: Colors.brown,
             brightness: Brightness.light,
           ),
         ),
         home: const AuthenticationWrapper(),
-        debugShowCheckedModeBanner: false,
       ),
     );
   }

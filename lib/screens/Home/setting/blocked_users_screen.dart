@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import '../../providers/friend_provider.dart';
-import '../../widgets/animated_background.dart';
+import '../../../providers/friend_provider.dart';
+import '../../../widgets/animated_background.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
   const BlockedUsersScreen({super.key});

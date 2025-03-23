@@ -3,13 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../../providers/auth_provider.dart' as auth;
-import '../../providers/user_provider.dart';
-import '../../models/user_model.dart';
-import '../../widgets/animated_background.dart';
-import '../../widgets/phone_auth_popup.dart';
-import '../onboarding/profile_photo_preview_screen.dart';
-import '../Home/blocked_users_screen.dart';
+import '../../../providers/auth_provider.dart' as auth;
+import '../../../providers/user_provider.dart';
+import '../../../models/user_model.dart';
+import '../../../widgets/animated_background.dart';
+import '../../../widgets/phone_auth_popup.dart';
+import '../../onboarding/profile_photo_preview_screen.dart';
+import 'blocked_users_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

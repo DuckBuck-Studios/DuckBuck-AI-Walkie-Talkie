@@ -16,7 +16,7 @@ import '../../providers/auth_provider.dart' as auth;
 import '../../providers/user_provider.dart';
 import '../../widgets/animated_background.dart';
 import '../../models/user_model.dart';
-import 'settings_screen.dart';
+import 'setting/settings_screen.dart';
 import '../Authentication/welcome_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
