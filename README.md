@@ -1,6 +1,6 @@
 # DuckBuck - Internet Walkie Talkie
 
-![DuckBuck Logo](assets/app_icon.png)
+![DuckBuck Logo](assets/app_icon.jpg)
 
 ## 🧠 Project Attribution
 
