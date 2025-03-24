@@ -3,14 +3,14 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:lottie/lottie.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'swipe_path_painter.dart';
 import '../../../providers/call_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../../services/fcm_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
+import 'friend_card_initiator.dart';
+import 'friend_card_receiver.dart';
+import 'friend_card_ui.dart';
 
 // Friend Card Widget
 class FriendCard extends StatefulWidget {
@@ -22,6 +22,38 @@ class FriendCard extends StatefulWidget {
   // Static registry to track friend cards for FCM handling
   static final Map<String, _FriendCardState> _activeCards = {};
 
+  // Static method to trigger an outgoing call to a friend
+  static void initiateCall(BuildContext context, Map<String, dynamic> friend) {
+    try {
+      // Create a temporary friend card
+      final friendCard = FriendCard(
+        friend: friend,
+        isIncoming: false,
+      );
+      
+      // Show the card as a dialog
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          opaque: false,
+          pageBuilder: (context, animation, secondaryAnimation) {
+            return Material(
+              type: MaterialType.transparency,
+              child: friendCard,
+            );
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      print("FriendCard: Error initiating call: $e");
+    }
+  }
+  
   // Static method to handle incoming calls from FCM
   static void handleIncomingCall(BuildContext context, Map<String, dynamic> callData) {
     print("FriendCard: Handling incoming call with data: $callData");
@@ -46,7 +78,7 @@ class FriendCard extends StatefulWidget {
           );
           
           // Show the incoming call UI
-          _showIncomingCallScreen(context, receiverCard);
+          FriendCardReceiver.showIncomingCallScreen(context, receiverCard);
           return;
         }
       }
@@ -72,7 +104,7 @@ class FriendCard extends StatefulWidget {
       );
       
       // Show the incoming call UI
-      _showIncomingCallScreen(context, receiverCard);
+      FriendCardReceiver.showIncomingCallScreen(context, receiverCard);
     } else {
       print("FriendCard: No exact matching card found for caller $callerId, trying fallback");
       
@@ -114,7 +146,7 @@ class FriendCard extends StatefulWidget {
         );
         
         // Show the incoming call UI
-        _showIncomingCallScreen(context, receiverCard);
+        FriendCardReceiver.showIncomingCallScreen(context, receiverCard);
         return;
       }
       
@@ -133,7 +165,7 @@ class FriendCard extends StatefulWidget {
           );
           
           // Show the incoming call UI
-          _showIncomingCallScreen(context, receiverCard);
+          FriendCardReceiver.showIncomingCallScreen(context, receiverCard);
         } else {
           print("FriendCard: No cards available to handle the call");
         }
@@ -143,51 +175,6 @@ class FriendCard extends StatefulWidget {
     }
   }
   
-  // Show incoming call screen
-  static void _showIncomingCallScreen(BuildContext context, FriendCard receiverCard) {
-    // Update call provider with call data
-    final callProvider = Provider.of<CallProvider>(context, listen: false);
-    callProvider.handleIncomingCall(receiverCard.callData!);
-    
-    // Use the context that has a Navigator (must be a BuildContext that's part of the widget tree)
-    try {
-      // Show the receiver card as an overlay using a dialog or modal bottom sheet
-      // for more reliable rendering without Navigator issues
-      showDialog(
-        context: context,
-        barrierDismissible: false, // Prevent dismissing by tapping outside
-        barrierColor: Colors.black.withOpacity(0.5),
-        builder: (dialogContext) {
-          return Material(
-            type: MaterialType.transparency,
-            child: receiverCard,
-          );
-        },
-      );
-    } catch (e) {
-      print("FriendCard: Error showing incoming call screen: $e");
-      // Fallback - try to show as a route if dialog fails
-      try {
-        Navigator.of(context).push(
-          PageRouteBuilder(
-            opaque: false,
-            pageBuilder: (context, animation, secondaryAnimation) {
-              return receiverCard;
-            },
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-          ),
-        );
-      } catch (e) {
-        print("FriendCard: Error showing incoming call with fallback: $e");
-      }
-    }
-  }
-
   const FriendCard({
     Key? key,
     required this.friend,
@@ -201,8 +188,9 @@ class FriendCard extends StatefulWidget {
 }
 
 class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateMixin {
-  // FCM service for sending call notifications
-  final FCMService _fcmService = FCMService();
+  // Modular components
+  late FriendCardInitiator _initiator;
+  late FriendCardReceiver? _receiver;
   
   late AnimationController _controller;
   late Animation<double> _sizeAnimation;
@@ -217,8 +205,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
   Offset? _pathEndPosition; // Store the calculated end position
   Timer? _intermediateStateTimer;
   Timer? _vibrationTimer;
-  double _vibrationOffset = 0.0;
-  double _vibrationAngle = 0.0; // For pendulum-like rotation
   double _vibrationProgress = 0.0; // Animation progress from 0 to 1
   
   // Call duration timer and state
@@ -252,6 +238,49 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     _sizeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut)
     );
+    
+    // Initialize the initiator module
+    _initiator = FriendCardInitiator(
+      context: context,
+      friend: widget.friend,
+      setLongPressed: (value) => setState(() => _isLongPressed = value),
+      setLocked: (value) => setState(() => _isLocked = value),
+      setInIntermediateState: (value) => setState(() => _isInIntermediateState = value),
+      setMovingToFullScreen: (value) => setState(() => _isMovingToFullScreen = value),
+      setDragStartPosition: (value) => setState(() => _dragStartPosition = value),
+      setDragProgress: (value) => setState(() => _dragProgress = value),
+      setCurrentPathDirection: (value) => setState(() => _currentPathDirection = value),
+      setPathEndPosition: (value) => setState(() => _pathEndPosition = value),
+      setChannelId: (value) => setState(() => _channelId = value),
+      captureInitialCardPosition: () => _captureInitialCardPosition(context),
+      showOverlay: _showOverlay,
+      removeOverlay: _removeOverlay,
+      startIntermediateState: _startIntermediateState,
+      listenForRemoteUsers: _listenForRemoteUsers,
+      connectToCall: _connectToCall,
+      controller: _controller,
+    );
+    
+    // Initialize the receiver module if this is an incoming call
+    if (widget.isIncoming) {
+      _receiver = FriendCardReceiver(
+        context: context,
+        friend: widget.friend,
+        callData: widget.callData,
+        setInIntermediateState: (value) => setState(() => _isInIntermediateState = value),
+        setMovingToFullScreen: (value) => setState(() => _isMovingToFullScreen = value),
+        setLocked: (value) => setState(() => _isLocked = value),
+        setIntermediateProgress: (value) => setState(() => _intermediateProgress = value),
+        setVibrationProgress: (value) => setState(() => _vibrationProgress = value),
+        setVibrationOffset: (value) {}, // No-op as we've removed the field
+        setVibrationAngle: (value) {}, // No-op as we've removed the field
+        setChannelId: (value) => setState(() => _channelId = value),
+        startCallTimer: _startCallTimer,
+        updateOverlay: _updateOverlay,
+        connectToCall: _connectToCall,
+        controller: _controller,
+      );
+    }
     
     // Register this card in the static registry with debug info
     if (widget.friend['id'] != null) {
@@ -302,14 +331,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     super.dispose();
   }
   
-  // Generate a random channel ID
-  String _generateChannelId() {
-    final random = Random();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final randomNum = random.nextInt(10000);
-    return 'channel_${timestamp}_$randomNum';
-  }
-  
   // Listen for remote users joining the call
   void _listenForRemoteUsers() {
     final callProvider = Provider.of<CallProvider>(context, listen: false);
@@ -356,41 +377,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     });
   }
   
-  // Send call invitation via FCM
-  Future<bool> _sendCallInvitation() async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        print("FriendCard: Cannot send invitation - not logged in");
-        return false;
-      }
-      
-      final receiverUid = widget.friend['id'];
-      if (receiverUid == null || receiverUid.isEmpty) {
-        print("FriendCard: Cannot send invitation - no receiver ID");
-        return false;
-      }
-      
-      // Generate a channel ID
-      _channelId = _generateChannelId();
-      
-      print("FriendCard: Sending call invitation to: $receiverUid with channel: $_channelId");
-      
-      // Send the invitation via FCM
-      final success = await _fcmService.sendRoomInvitation(
-        channelId: _channelId,
-        receiverUid: receiverUid,
-        senderUid: currentUser.uid,
-      );
-      
-      print("FriendCard: FCM invitation sent: $success");
-      return success;
-    } catch (e) {
-      print("FriendCard: Error sending call invitation: $e");
-      return false;
-    }
-  }
-
   // Method to start a call duration timer
   void _startCallTimer() {
     _callTimer?.cancel();
@@ -410,10 +396,7 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
   
   // Format duration for display
   String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final String minutes = twoDigits(duration.inMinutes.remainder(60));
-    final String seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$minutes:$seconds';
+    return FriendCardUI.formatDuration(duration);
   }
   
   // Update overlay without removing/recreating
@@ -425,43 +408,45 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
   
   // Method for receiver to go directly to full screen
   void _goToFullScreenDirectly() {
-    print("DEBUG: Going directly to full screen for incoming call");
-    
-    setState(() {
-      _isInIntermediateState = false;
-      _isMovingToFullScreen = true;
-      _intermediateProgress = 5;
-      _vibrationProgress = 0.0;
-      _vibrationOffset = 0.0;
-      _vibrationAngle = 0.0;
-    });
-    
-    // Set longer duration for animation
-    _controller.duration = const Duration(milliseconds: 800);
-    _controller.reset();
-    
-    // Show overlay
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showOverlay();
-    });
-    
-    // Automatically go to full screen
-    _controller.forward().then((_) {
-      if (mounted) {
-        setState(() {
-          _isLocked = true;
-        });
-        
-        // Start tracking call duration
-        _startCallTimer();
-        
-        // Update UI
-        _updateOverlay();
-      }
-    });
-    
-    // Connect to the Agora channel
-    _connectToCall();
+    if (widget.isIncoming && _receiver != null) {
+      _receiver!.goToFullScreenDirectly();
+    } else {
+      print("DEBUG: Going directly to full screen for incoming call");
+      
+      setState(() {
+        _isInIntermediateState = false;
+        _isMovingToFullScreen = true;
+        _intermediateProgress = 5;
+        _vibrationProgress = 0.0;
+      });
+      
+      // Set longer duration for animation
+      _controller.duration = const Duration(milliseconds: 800);
+      _controller.reset();
+      
+      // Show overlay
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showOverlay();
+      });
+      
+      // Automatically go to full screen
+      _controller.forward().then((_) {
+        if (mounted) {
+          setState(() {
+            _isLocked = true;
+          });
+          
+          // Start tracking call duration
+          _startCallTimer();
+          
+          // Update UI
+          _updateOverlay();
+        }
+      });
+      
+      // Connect to the Agora channel
+      _connectToCall();
+    }
   }
   
   // Connect to Agora channel
@@ -484,56 +469,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
       await callProvider.startCall(callData);
     }
     // For receiver: the call data was already passed to CallProvider in _showIncomingCallScreen
-  }
-  
-  // Method to programmatically trigger call animation from FCM
-  void _triggerCallAnimation() {
-    // Ensure we're not already in a call state
-    if (_isLocked || _isInIntermediateState || _isMovingToFullScreen) {
-      print("DEBUG: Card already in animated state, ignoring trigger");
-      return;
-    }
-    
-    print("DEBUG: Triggering call animation programmatically");
-    
-    // First send the FCM notification as initiator
-    _sendCallInvitation().then((success) {
-      if (success) {
-        // Capture initial card position if needed
-        if (_initialCardRect == null) {
-          _captureInitialCardPosition(context);
-        }
-        
-        // Show the overlay first
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showOverlay();
-        });
-        
-        // Start the initial animation
-        _controller.forward().then((_) {
-          if (mounted) {
-            // Move to intermediate state (connecting animation)
-            _startIntermediateState();
-            
-            // Listen for remote users joining
-            _listenForRemoteUsers();
-            
-            // Connect to the call channel
-            _connectToCall();
-          }
-        });
-      } else {
-        // Show error if FCM notification failed
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to initiate call. Please try again.'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    });
   }
 
   void _captureInitialCardPosition(BuildContext context) {
@@ -701,7 +636,11 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
                               // Card content
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(borderRadius),
-                                child: _buildCardContent(isFullScreen: _isMovingToFullScreen || _isInIntermediateState),
+                                child: FriendCardUI.buildCardContent(
+                                  friend: widget.friend,
+                                  showStatus: widget.showStatus,
+                                  isFullScreen: _isMovingToFullScreen || _isInIntermediateState,
+                                ),
                               ),
                               // Blur overlay for initial animation and intermediate state, but not full screen
                               if ((_sizeAnimation.value > 0.0 || _isInIntermediateState) && !isFullyExpandedScreen)
@@ -979,7 +918,7 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
       _isInIntermediateState = false;
       _isMovingToFullScreen = false;
       _intermediateProgress = 0;
-      _vibrationOffset = 0.0;
+      _vibrationProgress = 0.0;
     }
   }
 
@@ -996,7 +935,7 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     setState(() {
       _isInIntermediateState = true;
       _isMovingToFullScreen = false;
-      _vibrationOffset = 0.0;
+      _vibrationProgress = 0.0;
     });
     
     _removeOverlay();
@@ -1092,8 +1031,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
       _isMovingToFullScreen = true;
       _intermediateProgress = 5; // Set to max to prevent further updates
       _vibrationProgress = 0.0; // Reset vibration
-      _vibrationOffset = 0.0;
-      _vibrationAngle = 0.0;
     });
     
     // Reset animation controller with longer duration for full screen animation
@@ -1127,403 +1064,6 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     });
   }
 
-  Widget _buildCardContent({bool isFullScreen = false}) {
-    final String name = widget.friend['displayName'] ?? widget.friend['name'] ?? 'Friend';
-    final String? statusAnimation = widget.friend['statusAnimation'];
-    final bool isOnline = widget.friend['isOnline'] == true;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Friend Photo as Background
-        ShaderMask(
-          shaderCallback: (rect) {
-            return LinearGradient(
-              begin: Alignment.center,
-              end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-            ).createShader(rect);
-          },
-          blendMode: BlendMode.srcOver,
-          child: widget.friend['photoURL'] != null && widget.friend['photoURL'].toString().isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: widget.friend['photoURL'],
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: Colors.brown.shade100,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: Colors.brown.shade800,
-                    ),
-                  ),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  color: Colors.brown.shade100,
-                  child: Center(
-                    child: Icon(
-                      Icons.person,
-                      size: isFullScreen ? 120 : 80,
-                      color: Colors.brown.shade800,
-                    ),
-                  ),
-                ),
-              )
-            : Container(
-                color: Colors.brown.shade100,
-                child: Center(
-                  child: Icon(
-                    Icons.person,
-                    size: isFullScreen ? 120 : 80,
-                    color: Colors.brown.shade800,
-                  ),
-                ),
-              ),
-        ),
-        
-        // Status animation at the top center
-        if (widget.showStatus && statusAnimation != null)
-          Positioned(
-            top: isFullScreen ? 40 : 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: isFullScreen ? 120 : 90,
-                height: isFullScreen ? 120 : 90,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(isFullScreen ? 60 : 45),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 15,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(isFullScreen ? 58 : 43),
-                  child: Lottie.asset(
-                    _getStatusAnimationPath(statusAnimation),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stacktrace) {
-                      print('Error loading status animation: ${_getStatusAnimationPath(statusAnimation)}');
-                      return const Icon(
-                        Icons.error_outline,
-                        color: Colors.white,
-                        size: 30,
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        // Friend name and status at the bottom
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Container(
-            padding: EdgeInsets.all(isFullScreen ? 24.0 : 16.0),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.8),
-                ],
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: isFullScreen ? 32 : 24,
-                    fontWeight: FontWeight.bold,
-                    shadows: const [
-                      Shadow(
-                        color: Colors.black,
-                        blurRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.showStatus)
-                  Row(
-                    children: [
-                      Container(
-                        width: isFullScreen ? 12 : 8,
-                        height: isFullScreen ? 12 : 8,
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isOnline ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      Text(
-                        isOnline ? 'Online' : 'Offline',
-                        style: TextStyle(
-                          color: isOnline ? Colors.green.shade300 : Colors.grey.shade400,
-                          fontSize: isFullScreen ? 20 : 16,
-                          shadows: const [
-                            Shadow(
-                              color: Colors.black,
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // For incoming calls, immediately show full screen overlay
-    if (widget.isIncoming) {
-      // Ensure we have enough space for the card
-      return InkWell(
-        onTap: () {
-          // If tapped and not already in full screen, immediately go there
-          if (!_isMovingToFullScreen && !_isLocked) {
-            _goToFullScreenDirectly();
-          }
-        },
-        child: Stack(
-          children: [
-            // Main content
-            Container(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.height,
-              color: Colors.transparent,
-              child: _buildCardContent(isFullScreen: true),
-            ),
-            
-            // Call controls overlay at bottom
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AnimatedOpacity(
-                opacity: 1.0,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.7),
-                      ],
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Mic toggle button
-                      _buildCallControlButton(
-                        icon: _isMicOn
-                          ? Icons.mic
-                          : Icons.mic_off,
-                        color: _isMicOn
-                          ? Colors.white
-                          : Colors.red,
-                        onPressed: _toggleMicrophone,
-                        label: _isMicOn ? 'Mute' : 'Unmute',
-                      ),
-                      // Video toggle button
-                      _buildCallControlButton(
-                        icon: _isVideoOn
-                          ? Icons.videocam
-                          : Icons.videocam_off,
-                        color: _isVideoOn
-                          ? Colors.white
-                          : Colors.red,
-                        onPressed: _toggleVideo,
-                        label: _isVideoOn ? 'Video Off' : 'Video On',
-                      ),
-                      // End call button (larger and red)
-                      _buildCallControlButton(
-                        icon: Icons.call_end,
-                        color: Colors.white,
-                        backgroundColor: Colors.red.shade700,
-                        size: 64,
-                        onPressed: () {
-                          // End call through provider
-                          final callProvider = Provider.of<CallProvider>(context, listen: false);
-                          callProvider.endCall();
-                          
-                          // Close the incoming call screen
-                          Navigator.of(context).pop();
-                        },
-                        label: 'End',
-                      ),
-                      // Speaker toggle button
-                      _buildCallControlButton(
-                        icon: _isSpeakerOn
-                          ? Icons.volume_up
-                          : Icons.volume_off,
-                        color: _isSpeakerOn
-                          ? Colors.white
-                          : Colors.red,
-                        onPressed: _toggleSpeaker,
-                        label: _isSpeakerOn ? 'Speaker' : 'Earpiece',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // Normal card for showing in the list
-    return GestureDetector(
-      onLongPressStart: (details) {
-        print("DEBUG: Long press started");
-        // Capture the current position and size of the card first
-        _captureInitialCardPosition(context);
-        
-        // Determine path direction and end position once at the start of the gesture
-        final Size screenSize = MediaQuery.of(context).size;
-        _currentPathDirection = SwipePathPainter.determineDirection(details.globalPosition, screenSize);
-        _pathEndPosition = SwipePathPainter.calculateEndPosition(details.globalPosition, screenSize, _currentPathDirection!);
-        
-        setState(() {
-          _isLongPressed = true;
-          _dragStartPosition = details.globalPosition;
-          _dragProgress = 0.0;
-        });
-        
-        // Trigger call animation which will send FCM and show connecting UI
-        _triggerCallAnimation();
-      },
-      onLongPressEnd: (details) {
-        print("DEBUG: Long press ended");
-        setState(() {
-          _isLongPressed = false;
-        });
-        
-        // Always return to original size when released, unless locked
-        if (!_isLocked) {
-          print("DEBUG: Returning to original size on release - not locked");
-          
-          // Cancel any pending transition to full screen
-          _intermediateStateTimer?.cancel();
-          _intermediateStateTimer = null;
-          
-          // Reset states
-          setState(() {
-            _isInIntermediateState = false;
-            _isMovingToFullScreen = false;
-          });
-          
-          // End the call since user released without locking
-          final callProvider = Provider.of<CallProvider>(context, listen: false);
-          callProvider.endCall();
-          
-          // Animate back to original size
-          _controller.reverse();
-          _removeOverlay();
-        } else {
-          print("DEBUG: Not returning to original size - card is locked");
-        }
-      },
-      onLongPressMoveUpdate: (details) {
-        // Only allow locking when in full screen mode
-        if (_isLongPressed && !_isLocked && _dragStartPosition != null && _pathEndPosition != null && 
-            _isMovingToFullScreen && _controller.value >= 0.99) {
-          // Calculate displacement based on the fixed direction
-          final Offset displacement = details.globalPosition - _dragStartPosition!;
-          final Offset pathVector = _pathEndPosition! - _dragStartPosition!;
-          
-          // Project displacement onto the path direction to get progress
-          double dotProduct = displacement.dx * pathVector.dx + displacement.dy * pathVector.dy;
-          double pathLengthSquared = pathVector.dx * pathVector.dx + pathVector.dy * pathVector.dy;
-          
-          // Calculate normalized projection (progress along the path)
-          double progress = (dotProduct / pathLengthSquared).clamp(0.0, 1.0);
-          
-          // Update drag progress
-          setState(() {
-            _dragProgress = progress;
-          });
-          
-          // If overlay is null, recreate it to update the UI
-          if (_overlayEntry != null) {
-            _removeOverlay();
-            _showOverlay();
-          }
-          
-          // If progress is sufficient, lock the card
-          if (progress > 0.9) {  // Threshold for locking
-            setState(() {
-              _isLocked = true;
-              _isLongPressed = false;
-            });
-            
-            // Vibrate for haptic feedback
-            HapticFeedback.mediumImpact();
-            
-            // Show a visual feedback that card is locked
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Card locked! Use the End button to close.'),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-        }
-      },
-      child: Hero(
-        tag: 'friend-card-${widget.friend['id']}-fullscreen',
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.65,
-          height: MediaQuery.of(context).size.height * 0.4,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 15,
-                spreadRadius: 0,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: _buildCardContent(),
-          ),
-        ),
-      ),
-    );
-  }
-
   // Helper method to build call control buttons
   Widget _buildCallControlButton({
     required IconData icon,
@@ -1533,51 +1073,15 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
     double size = 48,
     Color? backgroundColor,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: backgroundColor ?? Colors.black.withOpacity(0.4),
-          ),
-          child: IconButton(
-            icon: Icon(
-              icon,
-              color: color,
-              size: size * 0.5,
-            ),
-            onPressed: onPressed,
-            padding: EdgeInsets.zero,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
+    // Use the UI helper
+    return FriendCardUI.buildCallControlButton(
+      icon: icon,
+      color: color,
+      onPressed: onPressed,
+      label: label,
+      size: size,
+      backgroundColor: backgroundColor,
     );
-  }
-
-  String _getStatusAnimationPath(String? status) {
-    if (status == null) return 'assets/status/offline.json';
-    
-    // Handle different status types
-    if (status.startsWith('blue-demon')) {
-      return 'assets/status/blue-demon/$status.json';
-    } else if (status.startsWith('usr-emoji')) {
-      return 'assets/status/usr-emoji/$status.json';
-    }
-    
-    // Default case - try direct path
-    return 'assets/status/$status.json';
   }
 
   // Toggle microphone mute state
@@ -1692,5 +1196,170 @@ class _FriendCardState extends State<FriendCard> with SingleTickerProviderStateM
       // Update UI
       _updateOverlay();
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // For incoming calls, immediately show full screen overlay
+    if (widget.isIncoming) {
+      // Ensure we have enough space for the card
+      return InkWell(
+        onTap: () {
+          // If tapped and not already in full screen, immediately go there
+          if (!_isMovingToFullScreen && !_isLocked) {
+            _goToFullScreenDirectly();
+          }
+        },
+        child: Stack(
+          children: [
+            // Main content
+            Container(
+              width: MediaQuery.of(context).size.width,
+              height: MediaQuery.of(context).size.height,
+              color: Colors.transparent,
+              child: FriendCardUI.buildCardContent(
+                friend: widget.friend,
+                showStatus: widget.showStatus,
+                isFullScreen: true
+              ),
+            ),
+            
+            // Call controls overlay at bottom
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedOpacity(
+                opacity: 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Mic toggle button
+                      _buildCallControlButton(
+                        icon: _isMicOn
+                          ? Icons.mic
+                          : Icons.mic_off,
+                        color: _isMicOn
+                          ? Colors.white
+                          : Colors.red,
+                        onPressed: _toggleMicrophone,
+                        label: _isMicOn ? 'Mute' : 'Unmute',
+                      ),
+                      // Video toggle button
+                      _buildCallControlButton(
+                        icon: _isVideoOn
+                          ? Icons.videocam
+                          : Icons.videocam_off,
+                        color: _isVideoOn
+                          ? Colors.white
+                          : Colors.red,
+                        onPressed: _toggleVideo,
+                        label: _isVideoOn ? 'Video Off' : 'Video On',
+                      ),
+                      // End call button (larger and red)
+                      _buildCallControlButton(
+                        icon: Icons.call_end,
+                        color: Colors.white,
+                        backgroundColor: Colors.red.shade700,
+                        size: 64,
+                        onPressed: () {
+                          // End call through provider
+                          final callProvider = Provider.of<CallProvider>(context, listen: false);
+                          callProvider.endCall();
+                          
+                          // Close the incoming call screen
+                          Navigator.of(context).pop();
+                        },
+                        label: 'End',
+                      ),
+                      // Speaker toggle button
+                      _buildCallControlButton(
+                        icon: _isSpeakerOn
+                          ? Icons.volume_up
+                          : Icons.volume_off,
+                        color: _isSpeakerOn
+                          ? Colors.white
+                          : Colors.red,
+                        onPressed: _toggleSpeaker,
+                        label: _isSpeakerOn ? 'Speaker' : 'Earpiece',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Normal card for showing in the list
+    return GestureDetector(
+      onLongPressStart: (details) {
+        // End any ongoing call before starting a new one
+        final callProvider = Provider.of<CallProvider>(context, listen: false);
+        if (callProvider.status != CallStatus.idle) {
+          print("FriendCard: Ending ongoing call before starting a new one");
+          callProvider.endCall();
+        }
+        
+        // Reset any UI states that might be lingering
+        if (_isLocked || _isInIntermediateState || _isMovingToFullScreen) {
+          setState(() {
+            _isLocked = false;
+            _isInIntermediateState = false;
+            _isMovingToFullScreen = false;
+          });
+          _controller.reset();
+          _removeOverlay();
+        }
+        
+        // Now delegate to the initiator's long press handler
+        _initiator.onLongPressStart(details);
+      },
+      onLongPressEnd: _initiator.onLongPressEnd,
+      onLongPressMoveUpdate: _initiator.onLongPressMoveUpdate,
+      child: Hero(
+        tag: 'friend-card-${widget.friend['id']}-fullscreen',
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.65,
+          height: MediaQuery.of(context).size.height * 0.4,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 15,
+                spreadRadius: 0,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: FriendCardUI.buildCardContent(
+              friend: widget.friend,
+              showStatus: widget.showStatus,
+              isFullScreen: false
+            ),
+          ),
+        ),
+      ),
+    );
   }
 } 

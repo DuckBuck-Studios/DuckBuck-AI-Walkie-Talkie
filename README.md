@@ -188,3 +188,46 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - The Agora team for their excellent RTC engine
 - The Flutter community for their support and resources
 - Firebase for providing a robust backend infrastructure
+
+## Using the Friend Card for Calls
+
+The Friend Card component has been modularized to better handle both initiating and receiving calls.
+
+### Initiating a Call
+
+To initiate a call to a friend, use the static method:
+
+```dart
+// friend is a Map containing 'id', 'displayName' or 'name', and 'photoURL'
+FriendCard.initiateCall(context, friend);
+```
+
+This will show a friend card that can be long-pressed to start a call. The call will send an FCM notification to the friend and show the connecting animation.
+
+### Receiving a Call
+
+When an FCM notification is received for an incoming call, pass the call data to the static method:
+
+```dart
+// In your FCM message handler
+void handleFCMMessage(Map<String, dynamic> message) {
+  final callData = message['data'];
+  if (callData != null && callData['type'] == 'call') {
+    FriendCard.handleIncomingCall(context, callData);
+  }
+}
+```
+
+This will find the appropriate friend card and show the incoming call UI.
+
+### How It Works
+
+The Friend Card uses three modular components:
+
+1. `FriendCardInitiator` - Handles the initiator side of calls
+2. `FriendCardReceiver` - Handles the receiver side of calls
+3. `FriendCardUI` - Shared UI components for both sides
+
+When a user long-presses a friend card, it triggers the call animation and sends an FCM notification. When the other user receives the notification, they see the incoming call screen which directly goes to full screen mode.
+
+Both sides have controls for microphone, video, speaker, and ending the call, with permission checks for sensitive functionality.
