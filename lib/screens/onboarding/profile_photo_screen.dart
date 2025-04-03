@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:duckbuck/widgets/cool_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lottie/lottie.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 import '../../providers/auth_provider.dart' as auth;
-import '../../widgets/animated_background.dart';
+import '../../screens/Home/home_screen.dart';
 import 'profile_photo_preview_screen.dart';
+import '../../widgets/animated_background.dart';
 
 class ProfilePhotoScreen extends StatefulWidget {
   const ProfilePhotoScreen({super.key});
@@ -15,6 +17,8 @@ class ProfilePhotoScreen extends StatefulWidget {
 }
 
 class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +42,7 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async => false, // Prevent going back
+      onWillPop: () async => !_isLoading, // Prevent going back during loading
       child: Scaffold(
         body: DuckBuckAnimatedBackground(
           child: SafeArea(
@@ -50,7 +54,7 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
                 children: [
                   const Spacer(flex: 2),
                   
-                  // Camera icon
+                  // User profile icon
                   Container(
                     width: MediaQuery.of(context).size.width * 0.3,
                     height: MediaQuery.of(context).size.width * 0.3,
@@ -59,7 +63,7 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.camera_alt,
+                      Icons.add_a_photo,
                       size: 60,
                       color: Color(0xFFD4A76A),
                     ),
@@ -76,7 +80,7 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
                   
                   // Title and subtitle
                   Text(
-                    "Set your profile photo",
+                    "Add a profile photo",
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -88,7 +92,7 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
                   SizedBox(height: MediaQuery.of(context).size.height * 0.01),
                   
                   Text(
-                    "Add a photo to help others recognize you",
+                    "Help people recognize you",
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey.shade600,
@@ -100,42 +104,50 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
                     delay: const Duration(milliseconds: 200),
                   ),
                   
-                  const Spacer(flex: 4),
+                  const Spacer(flex: 2),
                   
-                  // Choose profile picture button - move to bottom of screen
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 30.0, 
-                        right: 30.0, 
-                        bottom: 30.0
-                      ),
-                      child: DuckBuckButton(
-                        text: 'Choose profile picture',
-                        onTap: _showImageSourceBottomSheet,
-                        color: const Color(0xFFD4A76A),
-                        borderColor: const Color(0xFFB38B4D),
-                        textColor: Colors.white,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                  // Photo source options with Lottie animations
+                  _isLoading 
+                  ? Center(
+                      child: Container(
+                        height: 100,
+                        width: 100,
+                        alignment: Alignment.center,
+                        child: Lottie.asset(
+                          'assets/animations/loading1.json',
+                          width: 100,
+                          height: 100,
+                          repeat: true,
+                          animate: true,
                         ),
-                        height: 55,
-                        width: double.infinity,
                       ),
-                    ),
-                  )
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildLottiePhotoOption(
+                          context,
+                          animationPath: 'assets/animations/camera.json',
+                          label: 'Camera',
+                          onTap: () => _getImage(ImageSource.camera),
+                        ),
+                        SizedBox(width: MediaQuery.of(context).size.width * 0.06),
+                        _buildLottiePhotoOption(
+                          context,
+                          animationPath: 'assets/animations/gallery.json',
+                          label: 'Gallery',
+                          onTap: () => _getImage(ImageSource.gallery),
+                        ),
+                      ],
+                    )
                   .animate()
                   .fadeIn(
                     duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 400),
-                  ),
+                    delay: const Duration(milliseconds: 300),
+                  )
+                  .slideY(begin: 0.2, end: 0),
+                  
+                  const Spacer(flex: 3),
                 ],
               ),
             ),
@@ -145,110 +157,49 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
     );
   }
 
-  Future<void> _pickAndCropImage(ImageSource source) async {
-    final ImagePicker picker = ImagePicker();
-    
-    try {
-      // Pick an image
-      final XFile? pickedImage = await picker.pickImage(
-        source: source,
-        imageQuality: 80,
-      );
-      
-      if (pickedImage == null) {
-        return;
-      }
-      
-      // Navigate to preview screen
-      if (mounted) {
-        // Navigate to the preview screen with just a pushReplacement
-        // The preview screen will handle completing onboarding and navigating to home
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ProfilePhotoPreviewScreen(
-              imagePath: pickedImage.path,
+  Widget _buildLottiePhotoOption(
+    BuildContext context, {
+    required String animationPath,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: _isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.4,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade200.withOpacity(0.5),
+              blurRadius: 10,
+              spreadRadius: 1,
             ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        );
-      }
-    } catch (e) {
-      _showErrorSnackBar('Unable to access image. Please try again.');
-      print('Profile photo error: $e');
-    }
-  }
-
-  void _showImageSourceBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
+          ],
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Title
-            const Text(
-              'Choose an option',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
+            SizedBox(
+              height: 120,
+              width: 120,
+              child: Lottie.asset(
+                animationPath,
+                repeat: true,
+                animate: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: const TextStyle(
                 fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF8B4513),
               ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Camera option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD4A76A).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.camera_alt,
-                  color: Color(0xFFD4A76A),
-                ),
-              ),
-              title: const Text('Take a photo'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickAndCropImage(ImageSource.camera);
-              },
-            ),
-            
-            // Gallery option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD4A76A).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.photo_library,
-                  color: Color(0xFFD4A76A),
-                ),
-              ),
-              title: const Text('Choose from gallery'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickAndCropImage(ImageSource.gallery);
-              },
             ),
           ],
         ),
@@ -256,15 +207,46 @@ class _ProfilePhotoScreenState extends State<ProfilePhotoScreen> {
     );
   }
 
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
+  Future<void> _getImage(ImageSource source) async {
+    if (_isLoading) return;
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      setState(() => _isLoading = true);
+      
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+
+      if (image != null && mounted) {
+        // Navigate to preview screen
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfilePhotoPreviewScreen(
+              imagePath: image.path,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

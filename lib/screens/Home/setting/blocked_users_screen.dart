@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 import '../../../providers/friend_provider.dart';
 import '../../../widgets/animated_background.dart';
 
@@ -25,6 +27,11 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadBlockedUsers();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
   }
 
   Future<void> _loadBlockedUsers() async {
@@ -128,22 +135,42 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     final shouldUnblock = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Unblock User'),
-        content: Text('Are you sure you want to unblock $displayName?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: const Color(0xFFF5E8C7),
+        title: const Text(
+          'Unblock User',
+          style: TextStyle(color: Color(0xFF8B4513), fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to unblock $displayName?',
+          style: const TextStyle(color: Color(0xFF8B4513)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4A76A),
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Unblock'),
           ),
         ],
+      ).animate().fadeIn(duration: 300.ms).scale(
+        begin: const Offset(0.9, 0.9),
+        end: const Offset(1.0, 1.0),
+        curve: Curves.easeOutBack,
       ),
     ) ?? false;
 
@@ -272,21 +299,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
               // Content
               Expanded(
                 child: _isLoading 
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'Loading blocked users...',
-                            style: TextStyle(color: Color(0xFF8B4513)),
-                          ),
-                        ],
-                      ),
-                    )
+                  ? _buildLoadingView()
                   : _errorMessage != null
                       ? _buildErrorView()
                       : _blockedUsers.isEmpty
@@ -314,22 +327,16 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         bottom: 16
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFD4A76A).withOpacity(0.1),
+        color: const Color(0xFFF5E8C7), // Using warmGheeColor from AnimatedBackground
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(20),
           bottomRight: Radius.circular(20),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        // Remove the black shadow/filter
       ),
       child: Row(
         children: [
-          // Back button - make tap target larger on small screens
+          // Standard back button for all platforms
           SizedBox(
             width: isSmallScreen ? 44 : 48,
             height: isSmallScreen ? 44 : 48,
@@ -338,7 +345,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
               iconSize: isSmallScreen ? 20 : 24,
               padding: EdgeInsets.zero,
               onPressed: () => Navigator.pop(context),
-              color: const Color(0xFFD4A76A),
+              color: const Color(0xFF8B4513), // Updated to match theme
             ),
           ),
           Expanded(
@@ -348,7 +355,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
               style: TextStyle(
                 fontSize: isSmallScreen ? 20 : 22,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFFD4A76A),
+                color: const Color(0xFF8B4513), // Updated to match theme
               ),
             ),
           ),
@@ -356,9 +363,46 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           SizedBox(width: isSmallScreen ? 44 : 48),
         ],
       ),
-    ).animate()
-      .fadeIn()
-      .slideY(begin: -0.2, end: 0, curve: Curves.easeOutQuad);
+    ).animate(autoPlay: true)
+      .fadeIn(duration: 300.ms)
+      .slideY(begin: -0.2, end: 0, curve: Curves.easeOutQuad, duration: 300.ms);
+  }
+
+  Widget _buildLoadingView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            height: 150,
+            width: 150,
+            child: Lottie.asset(
+              'assets/animations/loading1.json',
+              animate: true,
+              repeat: true,
+            ),
+          ).animate(autoPlay: true)
+            .fadeIn(duration: 400.ms)
+            .scale(
+              begin: const Offset(0.8, 0.8),
+              end: const Offset(1.0, 1.0),
+              curve: Curves.easeOutBack,
+              duration: 600.ms,
+            ),
+          const SizedBox(height: 16),
+          const Text(
+            'Loading blocked users...',
+            style: TextStyle(
+              color: Color(0xFF8B4513),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 200.ms)
+            .slideY(begin: 0.2, end: 0, duration: 400.ms),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -366,65 +410,70 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.block,
-            size: 72,
-            color: Color(0xFFD4A76A),
-          ).animate()
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6C38D).withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.block,
+              size: 60,
+              color: Color(0xFFD4A76A),
+            ),
+          ).animate(autoPlay: true)
             .fadeIn()
-            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
-          const SizedBox(height: 16),
+            .scale(
+              begin: const Offset(0.8, 0.8),
+              end: const Offset(1.0, 1.0),
+              curve: Curves.easeOutBack,
+              duration: 600.ms,
+            ),
+          const SizedBox(height: 24),
           const Text(
             'No Blocked Users',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Color(0xFF8B4513),
             ),
-          ).animate()
+          ).animate(autoPlay: true)
             .fadeIn(delay: 200.ms)
             .slideY(begin: 0.2, end: 0),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const Text(
-            'You haven\'t blocked any users yet',
+            'You haven\'t blocked any users',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.grey,
+              color: Color(0xFF8B4513),
+              fontWeight: FontWeight.w400,
             ),
-          ).animate()
+          ).animate(autoPlay: true)
             .fadeIn(delay: 300.ms)
             .slideY(begin: 0.2, end: 0),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _loadBlockedUsers,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD4A76A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ).animate()
-                .fadeIn(delay: 400.ms)
-                .slideY(begin: 0.2, end: 0),
-              const SizedBox(width: 16),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Back'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade400,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ).animate()
-                .fadeIn(delay: 500.ms)
-                .slideY(begin: 0.2, end: 0),
-            ],
-          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _loadBlockedUsers,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4A76A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 400.ms)
+            .slideY(begin: 0.2, end: 0)
+            .shimmer(
+              duration: 1.seconds,
+              delay: 600.ms,
+              color: Colors.white.withOpacity(0.5),
+            ),
         ],
       ),
     );
@@ -435,21 +484,48 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: Colors.red,
-            size: 64,
-          ).animate().fadeIn(),
-          const SizedBox(height: 16),
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFEEEE),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.2),
+                  blurRadius: 15,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
+            ),
+          ).animate(autoPlay: true)
+            .fadeIn()
+            .scale(
+              begin: const Offset(0.8, 0.8),
+              end: const Offset(1.0, 1.0),
+              curve: Curves.easeOutBack,
+            ),
+          const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
               _errorMessage ?? 'An error occurred',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red, fontSize: 16),
+              style: const TextStyle(
+                color: Color(0xFF8B4513),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ).animate().fadeIn(delay: 200.ms),
-          const SizedBox(height: 24),
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 200.ms)
+            .slideY(begin: 0.2, end: 0),
+          const SizedBox(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -461,8 +537,19 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                   backgroundColor: const Color(0xFFD4A76A),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
                 ),
-              ).animate().fadeIn(delay: 400.ms),
+              ).animate(autoPlay: true)
+                .fadeIn(delay: 400.ms)
+                .slideY(begin: 0.2, end: 0)
+                .shimmer(
+                  duration: 1.seconds,
+                  delay: 600.ms,
+                  color: Colors.white.withOpacity(0.5),
+                ),
               const SizedBox(width: 16),
               OutlinedButton.icon(
                 onPressed: () => Navigator.pop(context),
@@ -472,8 +559,13 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                   foregroundColor: const Color(0xFF8B4513),
                   side: const BorderSide(color: Color(0xFFD4A76A)),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-              ).animate().fadeIn(delay: 500.ms),
+              ).animate(autoPlay: true)
+                .fadeIn(delay: 500.ms)
+                .slideY(begin: 0.2, end: 0),
             ],
           ),
         ],
@@ -501,12 +593,13 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFFF5E8C7),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: const Color(0xFFD4A76A).withOpacity(0.15),
                   blurRadius: 8,
+                  spreadRadius: 1,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -518,65 +611,154 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                 child: Column(
                   children: [
                     ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: const Color(0xFFD4A76A).withOpacity(0.2),
-                        backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
-                        child: photoURL == null 
-                            ? Text(
-                                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                                style: const TextStyle(color: Color(0xFF8B4513)),
-                              ) 
-                            : null,
+                      contentPadding: const EdgeInsets.all(12),
+                      leading: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFD4A76A),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD4A76A).withOpacity(0.2),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(30),
+                          child: photoURL != null 
+                              ? Image.network(
+                                  photoURL,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: const Color(0xFFE6C38D).withOpacity(0.5),
+                                    child: Center(
+                                      child: Text(
+                                        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                                        style: const TextStyle(
+                                          color: Color(0xFF8B4513),
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                                  child: Center(
+                                    child: Text(
+                                      displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                                      style: const TextStyle(
+                                        color: Color(0xFF8B4513),
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
                       ),
                       title: Text(
                         displayName,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                           color: Color(0xFF8B4513),
                         ),
                       ),
-                      subtitle: Text(
-                        'Blocked on $blockDate',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.block,
-                        color: Colors.red,
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              'Reason: $blockReason',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_today,
+                                size: 14,
+                                color: Color(0xFF8B4513),
                               ),
-                            ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Blocked on $blockDate',
+                                style: TextStyle(
+                                  color: const Color(0xFF8B4513).withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 14,
+                                color: Color(0xFF8B4513),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Reason: $blockReason',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: const Color(0xFF8B4513).withOpacity(0.7),
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
+                      trailing: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.block,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Color(0xFFE6C38D),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton.icon(
+                          ElevatedButton.icon(
                             onPressed: () => _unblockUser(userId, displayName),
-                            icon: const Icon(Icons.person_remove, size: 18),
+                            icon: const Icon(Icons.person_remove_alt_1, size: 18),
                             label: const Text('Unblock User'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFFD4A76A),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD4A76A),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             ),
-                          ),
+                          ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                            .shimmer(
+                              duration: 2.seconds,
+                              color: Colors.white.withOpacity(0.2),
+                            ),
                         ],
                       ),
                     ),
@@ -584,9 +766,15 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                 ),
               ),
             ),
-          ).animate()
+          ).animate(autoPlay: true)
             .fadeIn(delay: Duration(milliseconds: 100 * index))
-            .slideY(begin: 0.2, end: 0, delay: Duration(milliseconds: 100 * index));
+            .slideY(
+              begin: 0.2,
+              end: 0,
+              delay: Duration(milliseconds: 100 * index),
+              duration: 600.ms,
+              curve: Curves.easeOutQuint,
+            );
         },
       ),
     );

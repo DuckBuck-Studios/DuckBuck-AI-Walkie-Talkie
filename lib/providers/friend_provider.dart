@@ -1,21 +1,31 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../services/friend_service.dart'; 
+import '../services/friend_service.dart';  
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FriendProvider with ChangeNotifier {
-  final FriendService _friendService = FriendService();
+  final FriendService _friendService;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  FriendProvider(this._friendService);
+  
+  // Friends lists
   List<Map<String, dynamic>> _friends = [];
   List<Map<String, dynamic>> _incomingRequests = [];
   List<Map<String, dynamic>> _outgoingRequests = [];
   List<Map<String, dynamic>> _blockedUsers = [];
   
+  // For controlling subscriptions
   StreamSubscription? _friendsSubscription;
   StreamSubscription? _incomingRequestsSubscription;
   StreamSubscription? _outgoingRequestsSubscription;
   StreamSubscription? _blockedUsersSubscription;
-  Map<String, StreamSubscription> _friendStreamSubscriptions = {};
+  Map<String, Stream<Map<String, dynamic>?>> _friendStreams = {};
+  Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStreamSubscriptions = {};
+  Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStatusSubscriptions = {};
+  bool _isInitialized = false;
+  bool _isLoading = false;
+  String? _searchUserError;
   
   // Loading states for better UI feedback
   bool _isInitializing = false;
@@ -34,16 +44,16 @@ class FriendProvider with ChangeNotifier {
     try {
       _isInitializing = true;
       _lastError = null;
-      notifyListeners();
+      _safeNotifyListeners();
       
       final success = await _setupSubscriptions();
       _isInitializing = false;
-      notifyListeners();
+      _safeNotifyListeners();
       return success;
     } catch (e) {
       _isInitializing = false;
       _lastError = "Failed to initialize: $e";
-      notifyListeners();
+      _safeNotifyListeners();
       return false;
     }
   }
@@ -57,48 +67,131 @@ class FriendProvider with ChangeNotifier {
       _friendsSubscription = _friendService.getFriendsStream().listen((friends) {
         _friends = friends;
         _setupFriendStreams(friends);
-        notifyListeners();
+        _setupFriendStatusStreams(friends);
+        _safeNotifyListeners();
       }, onError: (error) {
         print("Error in friends stream: $error");
         _lastError = "Error loading friends: $error";
-        notifyListeners();
+        _safeNotifyListeners();
       });
 
       // Setup incoming requests stream
       _incomingRequestsSubscription = _friendService.getIncomingRequestsStream().listen((requests) {
         _incomingRequests = requests;
-        notifyListeners();
+        _safeNotifyListeners();
       }, onError: (error) {
         print("Error in incoming requests stream: $error");
         _lastError = "Error loading friend requests: $error";
-        notifyListeners();
+        _safeNotifyListeners();
       });
 
       // Setup outgoing requests stream
       _outgoingRequestsSubscription = _friendService.getOutgoingRequestsStream().listen((requests) {
         _outgoingRequests = requests;
-        notifyListeners();
+        _safeNotifyListeners();
       }, onError: (error) {
         print("Error in outgoing requests stream: $error");
         _lastError = "Error loading outgoing requests: $error";
-        notifyListeners();
+        _safeNotifyListeners();
       });
       
       // Setup blocked users stream
       _blockedUsersSubscription = _friendService.getBlockedUsersStream().listen((users) {
         _blockedUsers = users;
-        notifyListeners();
+        _safeNotifyListeners();
       }, onError: (error) {
         print("Error in blocked users stream: $error");
         _lastError = "Error loading blocked users: $error";
-        notifyListeners();
+        _safeNotifyListeners();
       });
       
       return true;
     } catch (e) {
       _lastError = "Failed to set up subscriptions: $e";
-      notifyListeners();
+      _safeNotifyListeners();
       return false;
+    }
+  }
+
+  // Setup individual friend status streams
+  void _setupFriendStatusStreams(List<Map<String, dynamic>> friends) {
+    print("FriendProvider: Setting up status streams for ${friends.length} friends");
+    
+    // Cancel old status subscriptions
+    for (var subscription in _friendStatusSubscriptions.values) {
+      subscription.cancel();
+    }
+    _friendStatusSubscriptions.clear();
+
+    // Setup new status subscriptions
+    for (var friend in friends) {
+      final friendId = friend['id'];
+      if (friendId != null) {
+        print("FriendProvider: Setting up status stream for friend: $friendId");
+        
+        // Get user status stream
+        _friendStatusSubscriptions[friendId] = _friendService.getFriendStatusStream(friendId).listen(
+          (statusData) async {
+            if (statusData != null) {
+              print("FriendProvider: Received status update for friend $friendId: ${statusData['animation']}");
+              
+              // Also get the friend's privacy settings
+              final privacySettings = await _getUserPrivacySettings(friendId);
+              
+              final index = _friends.indexWhere((f) => f['id'] == friendId);
+              if (index != -1) {
+                _friends[index] = {
+                  ..._friends[index],
+                  'isOnline': statusData['isOnline'] ?? false,
+                  'statusAnimation': statusData['animation'],
+                  'lastSeen': statusData['lastSeen'],
+                  'privacySettings': privacySettings,
+                };
+                _safeNotifyListeners();
+              }
+            }
+          },
+          onError: (error) {
+            print("FriendProvider: Error in friend status stream for $friendId: $error");
+          },
+        );
+      }
+    }
+  }
+
+  // Helper method to get user privacy settings
+  Future<Map<String, dynamic>> _getUserPrivacySettings(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (snapshot.exists && snapshot.data() != null) {
+        final userData = snapshot.data()!;
+        final metadata = userData['metadata'] as Map<String, dynamic>? ?? {};
+        
+        return {
+          'showOnlineStatus': metadata['showOnlineStatus'] ?? true,
+          'showLastSeen': metadata['showLastSeen'] ?? true,
+          'showSocialLinks': metadata['showSocialLinks'] ?? true,
+        };
+      }
+      
+      // Default settings if we can't retrieve them
+      return {
+        'showOnlineStatus': true,
+        'showLastSeen': true,
+        'showSocialLinks': true,
+      };
+    } catch (e) {
+      print("FriendProvider: Error getting privacy settings for $userId: $e");
+      // Default settings on error
+      return {
+        'showOnlineStatus': true,
+        'showLastSeen': true,
+        'showSocialLinks': true,
+      };
     }
   }
 
@@ -118,6 +211,19 @@ class FriendProvider with ChangeNotifier {
       if (friendId != null) {
         print("FriendProvider: Setting up stream for friend: $friendId");
         
+        // Get friend's privacy settings
+        _getUserPrivacySettings(friendId).then((privacySettings) {
+          // Update the friend with privacy settings
+          final index = _friends.indexWhere((f) => f['id'] == friendId);
+          if (index != -1) {
+            _friends[index] = {
+              ..._friends[index],
+              'privacySettings': privacySettings,
+            };
+            _safeNotifyListeners();
+          }
+        });
+        
         // Setup friend data stream
         _friendStreamSubscriptions[friendId] = _friendService.getFriendStream(friendId).listen(
           (updatedFriend) {
@@ -129,7 +235,7 @@ class FriendProvider with ChangeNotifier {
                   ..._friends[index],
                   ...updatedFriend,
                 };
-                notifyListeners();
+                _safeNotifyListeners();
               }
             }
           },
@@ -254,12 +360,23 @@ class FriendProvider with ChangeNotifier {
   // Accept a friend request with enhanced feedback
   Future<Map<String, dynamic>> acceptFriendRequest(String senderId) async {
     try {
-      final result = await _friendService.acceptFriendRequest(senderId);
-      if (result) {
+      // First check if we already have this friend to prevent duplicates
+      if (_friends.any((friend) => friend['id'] == senderId)) {
         return {
           'success': true,
-          'message': 'Friend request accepted',
-          'friendId': senderId
+          'message': 'Already friends with this user'
+        };
+      }
+      
+      final result = await _friendService.acceptFriendRequest(senderId);
+      
+      if (result) {
+        // Force immediate refresh of friends lists to ensure UI updates
+        await _refreshFriends();
+        
+        return {
+          'success': true,
+          'message': 'Friend request accepted successfully'
         };
       } else {
         return {
@@ -270,8 +387,7 @@ class FriendProvider with ChangeNotifier {
     } catch (e) {
       return {
         'success': false,
-        'error': 'An error occurred while accepting the request',
-        'exception': e.toString()
+        'error': 'Error accepting friend request: $e'
       };
     }
   }
@@ -465,7 +581,7 @@ class FriendProvider with ChangeNotifier {
       
       if (result['success'] == true) {
         // Notify listeners to refresh the UI
-        notifyListeners();
+        _safeNotifyListeners();
       }
       
       return result;
@@ -496,6 +612,44 @@ class FriendProvider with ChangeNotifier {
       await subscription.cancel();
     }
     _friendStreamSubscriptions.clear();
+
+    for (var subscription in _friendStatusSubscriptions.values) {
+      await subscription.cancel();
+    }
+    _friendStatusSubscriptions.clear();
+  }
+
+  // Add a method to force refresh friends data
+  Future<void> _refreshFriends() async {
+    try {
+      print("FriendProvider: Manually refreshing friends data");
+      // Get updated friends list directly from the service
+      final updatedFriends = await _friendService.getFriends();
+      
+      // Update the internal list
+      _friends = updatedFriends;
+      
+      // Refresh friend streams for the updated list
+      _setupFriendStreams(updatedFriends);
+      _setupFriendStatusStreams(updatedFriends);
+      
+      // Notify listeners to update UI
+      _safeNotifyListeners();
+      
+      print("FriendProvider: Friends data refreshed, found ${updatedFriends.length} friends");
+    } catch (e) {
+      print("FriendProvider: Error refreshing friends data: $e");
+    }
+  }
+
+  // Safe method to call notifyListeners that won't throw if being disposed
+  void _safeNotifyListeners() {
+    try {
+      notifyListeners();
+    } catch (e) {
+      print("FriendProvider: Error in notifyListeners: $e");
+      // This usually happens when the widget is being disposed
+    }
   }
 
   // Dispose provider
@@ -503,5 +657,50 @@ class FriendProvider with ChangeNotifier {
   void dispose() {
     _clearSubscriptions();
     super.dispose();
+  }
+
+  // Force refresh all friends data - including direct database check
+  Future<void> forceRefreshFriends() async {
+    try {
+      print("FriendProvider: FORCE REFRESHING friends data from database");
+      
+      // First, manually check the friends collection directly
+      final friendDocs = await _friendService.debugCheckFriendsCollection();
+      print("FriendProvider: Raw friends in database: ${friendDocs.length}");
+      
+      // Get updated friends through the regular method
+      final updatedFriends = await _friendService.getFriends();
+      print("FriendProvider: Updated friends count: ${updatedFriends.length}");
+      
+      // Update the internal list with basic data
+      _friends = updatedFriends;
+      
+      // For each friend, get their privacy settings
+      for (int i = 0; i < _friends.length; i++) {
+        final friendId = _friends[i]['id'];
+        if (friendId != null) {
+          try {
+            final privacySettings = await _getUserPrivacySettings(friendId);
+            _friends[i] = {
+              ..._friends[i],
+              'privacySettings': privacySettings,
+            };
+          } catch (e) {
+            print("FriendProvider: Error getting privacy settings for $friendId during refresh: $e");
+          }
+        }
+      }
+      
+      // Refresh friend streams for the updated list
+      _setupFriendStreams(updatedFriends);
+      _setupFriendStatusStreams(updatedFriends);
+      
+      // Notify listeners to update UI
+      _safeNotifyListeners();
+      
+      print("FriendProvider: Force refresh completed, found ${updatedFriends.length} friends");
+    } catch (e) {
+      print("FriendProvider: Error during force refresh: $e");
+    }
   }
 } 

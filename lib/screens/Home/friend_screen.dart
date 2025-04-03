@@ -4,13 +4,15 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io' show Platform;
 import '../../providers/friend_provider.dart';
 import '../../widgets/cool_button.dart';
 import '../../widgets/animated_background.dart';
 import '../../widgets/add_friend_popup.dart';
 
 class FriendScreen extends StatefulWidget {
-  const FriendScreen({Key? key}) : super(key: key);
+  const FriendScreen({super.key});
 
   @override
   State<FriendScreen> createState() => _FriendScreenState();
@@ -21,18 +23,88 @@ class _FriendScreenState extends State<FriendScreen> {
   String _searchQuery = '';
   bool _showSearchBar = false;
   bool _isLoading = true;
+  
+  // Updated color palette to match AddFriendPopup
+  final Color _backgroundColor = const Color(0xFFE3B77D); // Lighter warm tone
+  final Color _accentColor = const Color(0xFFB8782E);     // Golden amber accent
+  final Color _textColor = const Color(0xFF4A3520);       // Warm brown text
+  final Color _secondaryBgColor = const Color(0xFFF0DDB3); // Light cream secondary
+  final Color _cardBgColor = const Color(0xFFEAD2A7);     // Slightly darker cream
 
   @override
   void initState() {
     super.initState();
-    _initializeProvider();
+    // Delay initialization until after the current build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeProvider();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
   }
 
   Future<void> _initializeProvider() async {
+    if (!mounted) return;
+    
+    setState(() => _isLoading = true);
+    
     final friendProvider = Provider.of<FriendProvider>(context, listen: false);
     await friendProvider.initialize();
+    
     if (mounted) {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (!mounted) return;
+    
+    // Add haptic feedback when pull-to-refresh is triggered
+    HapticFeedback.mediumImpact();
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      // Force refresh friends data
+      await friendProvider.forceRefreshFriends();
+      
+      if (mounted) {
+        // Show a subtle indicator that refresh was successful
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Friend list refreshed'),
+            backgroundColor: _accentColor,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error refreshing friends data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(10),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -42,26 +114,26 @@ class _FriendScreenState extends State<FriendScreen> {
     super.dispose();
   }
 
-  // Enhanced card ui styling
+  // Enhanced card ui styling with updated colors
   BoxDecoration _getCardDecoration({bool isRequest = false}) {
     return BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: isRequest 
-            ? [const Color(0xFF472222), const Color(0xFF2C1810)]
-            : [const Color(0xFF3C1F1F), const Color(0xFF2C1810)],
+            ? [_cardBgColor, _backgroundColor]
+            : [_backgroundColor.withOpacity(0.9), _cardBgColor],
       ),
       borderRadius: BorderRadius.circular(16),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.2),
+          color: Colors.black.withOpacity(0.1),
           blurRadius: 8,
           offset: const Offset(0, 4),
         ),
       ],
       border: Border.all(
-        color: const Color(0xFFD4A76A).withOpacity(0.3),
+        color: _accentColor.withOpacity(0.3),
         width: 1,
       ),
     );
@@ -82,7 +154,7 @@ class _FriendScreenState extends State<FriendScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3C1F1F).withOpacity(0.9),
+                      color: _backgroundColor.withOpacity(0.9),
                       borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(30),
                       ),
@@ -93,6 +165,10 @@ class _FriendScreenState extends State<FriendScreen> {
                           offset: const Offset(0, 5),
                         ),
                       ],
+                      border: Border.all(
+                        color: _accentColor.withOpacity(0.3),
+                        width: 1,
+                      ),
                     ),
                     child: Column(
                       children: [
@@ -102,34 +178,45 @@ class _FriendScreenState extends State<FriendScreen> {
                           height: 4,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
+                            color: _accentColor.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Friends',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                            // Standard back button with title
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.arrow_back_ios,
+                                    color: _textColor,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                Text(
+                                  'Friends',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: _textColor,
+                                  ),
+                                ),
+                              ],
                             ),
                             IconButton(
                               icon: Icon(
                                 _showSearchBar ? Icons.close : Icons.search,
-                                color: Colors.white,
+                                color: _textColor,
                               ),
                               onPressed: () {
-                                setState(() {
-                                  if (_showSearchBar) {
-                                    _searchQuery = '';
-                                    _searchController.clear();
-                                  }
-                                  _showSearchBar = !_showSearchBar;
-                                });
+                                setState(() => _showSearchBar = !_showSearchBar);
+                                if (!_showSearchBar) {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                }
                               },
                             ),
                           ],
@@ -145,14 +232,14 @@ class _FriendScreenState extends State<FriendScreen> {
                                 TextField(
                                   controller: _searchController,
                                   onChanged: (value) => setState(() => _searchQuery = value),
-                                  style: const TextStyle(color: Colors.white),
+                                  style: TextStyle(color: _textColor),
                                   decoration: InputDecoration(
                                     hintText: 'Search friends...',
-                                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-                                    prefixIcon: const Icon(Icons.search, color: Colors.white),
+                                    hintStyle: TextStyle(color: _textColor.withOpacity(0.7)),
+                                    prefixIcon: Icon(Icons.search, color: _accentColor),
                                     suffixIcon: _searchQuery.isNotEmpty 
                                       ? IconButton(
-                                          icon: const Icon(Icons.close, color: Colors.white),
+                                          icon: Icon(Icons.close, color: _accentColor),
                                           onPressed: () {
                                             setState(() {
                                               _searchQuery = '';
@@ -162,10 +249,24 @@ class _FriendScreenState extends State<FriendScreen> {
                                         ) 
                                       : null,
                                     filled: true,
-                                    fillColor: Colors.white.withOpacity(0.1),
+                                    fillColor: _secondaryBgColor.withOpacity(0.7),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide.none,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: _accentColor.withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: _accentColor,
+                                        width: 1.5,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -191,23 +292,22 @@ class _FriendScreenState extends State<FriendScreen> {
                           child: DuckBuckButton(
                             text: 'Add Friend',
                             onTap: _showAddFriendOptions,
-                            color: const Color(0xFF2C1810),
-                            borderColor: const Color(0xFFD4A76A),
-                            icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
+                            color: _secondaryBgColor,
+                            borderColor: _accentColor,
+                            icon: Icon(Icons.person_add, color: _textColor, size: 20),
+                            textStyle: TextStyle(
+                              color: _textColor,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ).animate()
-                          .fadeIn(duration: 400.ms)
-                          .slideY(
-                            begin: -0.2,
-                            end: 0,
-                            duration: 400.ms,
-                            curve: Curves.easeOutCubic,
-                          ),
+                        ),
                       ],
                     ),
-                  ),
+                  ).animate(autoPlay: true)
+                    .fadeIn(duration: 400.ms, curve: Curves.easeOut)
+                    .slideY(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
 
-                  // Friends list
+                  // Friends list with RefreshIndicator for pull-to-refresh
                   Expanded(
                     child: _isLoading
                         ? const Center(
@@ -228,108 +328,144 @@ class _FriendScreenState extends State<FriendScreen> {
 
                               final hasPendingRequests = incomingRequests.isNotEmpty || outgoingRequests.isNotEmpty;
 
-                              return ListView(
-                                padding: const EdgeInsets.only(
-                                  left: 16, 
-                                  right: 16, 
-                                  bottom: 100
+                              return RefreshIndicator(
+                                onRefresh: _refreshData,
+                                color: _accentColor,
+                                backgroundColor: _secondaryBgColor,
+                                displacement: 50.0,
+                                edgeOffset: 20.0,
+                                strokeWidth: 3.0,
+                                child: ListView(
+                                  padding: const EdgeInsets.only(
+                                    left: 16, 
+                                    right: 16, 
+                                    bottom: 100
+                                  ),
+                                  children: [
+                                    // Pending Requests Section
+                                    if (hasPendingRequests) ...[
+                                      Text(
+                                        'Pending Requests',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: _textColor,
+                                        ),
+                                      ).animate(autoPlay: true)
+                                        .fadeIn(duration: 300.ms, delay: 200.ms)
+                                        .slideX(begin: -0.1, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+                                      const SizedBox(height: 8),
+                                      
+                                      // Incoming Requests
+                                      if (incomingRequests.isNotEmpty) ...[
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          child: Text(
+                                            'Incoming',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: _textColor.withOpacity(0.7),
+                                            ),
+                                          ),
+                                        ).animate(autoPlay: true)
+                                          .fadeIn(duration: 300.ms, delay: 300.ms),
+                                        ...List.generate(incomingRequests.length, (index) {
+                                          return _buildRequestCard(
+                                            context,
+                                            incomingRequests[index],
+                                            isIncoming: true,
+                                          ).animate(autoPlay: true)
+                                            .fadeIn(
+                                              duration: 300.ms, 
+                                              delay: Duration(milliseconds: 400 + (index * 100)),
+                                            )
+                                            .slideY(
+                                              begin: 0.2,
+                                              end: 0,
+                                              delay: Duration(milliseconds: 400 + (index * 100)),
+                                              duration: 400.ms,
+                                              curve: Curves.easeOutQuad,
+                                            );
+                                        }),
+                                      ],
+
+                                      // Outgoing Requests
+                                      if (outgoingRequests.isNotEmpty) ...[
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          child: Text(
+                                            'Outgoing',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: _textColor.withOpacity(0.7),
+                                            ),
+                                          ),
+                                        ).animate(autoPlay: true)
+                                          .fadeIn(duration: 300.ms, delay: 500.ms),
+                                        ...List.generate(outgoingRequests.length, (index) {
+                                          return _buildRequestCard(
+                                            context,
+                                            outgoingRequests[index],
+                                            isIncoming: false,
+                                          ).animate(autoPlay: true)
+                                            .fadeIn(
+                                              duration: 300.ms, 
+                                              delay: Duration(milliseconds: 600 + (index * 100)),
+                                            )
+                                            .slideY(
+                                              begin: 0.2,
+                                              end: 0,
+                                              delay: Duration(milliseconds: 600 + (index * 100)),
+                                              duration: 400.ms,
+                                              curve: Curves.easeOutQuad,
+                                            );
+                                        }),
+                                      ],
+                                      const SizedBox(height: 24),
+                                    ],
+
+                                    // Friends Section
+                                    if (!hasPendingRequests || filteredFriends.isNotEmpty) ...[
+                                      Text(
+                                        'Friends',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: _textColor,
+                                        ),
+                                      ).animate(autoPlay: true)
+                                        .fadeIn(duration: 300.ms, delay: 700.ms)
+                                        .slideX(begin: -0.1, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+                                      const SizedBox(height: 8),
+                                      if (filteredFriends.isNotEmpty) 
+                                        ...List.generate(filteredFriends.length, (index) {
+                                          return _buildFriendCard(
+                                            context,
+                                            filteredFriends[index],
+                                          ).animate(autoPlay: true)
+                                            .fadeIn(
+                                              duration: 300.ms, 
+                                              delay: Duration(milliseconds: 800 + (index * 100)),
+                                            )
+                                            .slideY(
+                                              begin: 0.2,
+                                              end: 0,
+                                              delay: Duration(milliseconds: 800 + (index * 100)),
+                                              duration: 400.ms,
+                                              curve: Curves.easeOutQuad,
+                                            );
+                                        })
+                                      else if (!hasPendingRequests)
+                                        _buildEmptyState(),
+                                    ],
+                                  ],
                                 ),
-                                children: [
-                                  // Pending Requests Section
-                                  if (hasPendingRequests) ...[
-                                    const Text(
-                                      'Pending Requests',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ).animate()
-                                      .fadeIn(duration: 400.ms)
-                                      .slideX(begin: -0.1, end: 0, duration: 400.ms),
-                                    const SizedBox(height: 8),
-                                    
-                                    // Incoming Requests
-                                    if (incomingRequests.isNotEmpty) ...[
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(vertical: 8),
-                                        child: Text(
-                                          'Incoming',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ),
-                                      ...incomingRequests.map((request) => _buildRequestCard(
-                                        context,
-                                        request,
-                                        isIncoming: true,
-                                      ).animate().slideX(
-                                        begin: -1,
-                                        end: 0,
-                                        duration: 400.ms,
-                                        curve: Curves.easeOutBack,
-                                      )),
-                                    ],
-
-                                    // Outgoing Requests
-                                    if (outgoingRequests.isNotEmpty) ...[
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(vertical: 8),
-                                        child: Text(
-                                          'Outgoing',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ),
-                                      ...outgoingRequests.map((request) => _buildRequestCard(
-                                        context,
-                                        request,
-                                        isIncoming: false,
-                                      ).animate().slideX(
-                                        begin: 1,
-                                        end: 0,
-                                        duration: 400.ms,
-                                        curve: Curves.easeOutBack,
-                                      )),
-                                    ],
-                                    const SizedBox(height: 24),
-                                  ],
-
-                                  // Friends Section
-                                  if (!hasPendingRequests || filteredFriends.isNotEmpty) ...[
-                                    const Text(
-                                      'Friends',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ).animate()
-                                      .fadeIn(duration: 400.ms)
-                                      .slideX(begin: -0.1, end: 0, duration: 400.ms),
-                                    const SizedBox(height: 8),
-                                    if (filteredFriends.isNotEmpty) 
-                                      ...filteredFriends.map((friend) => _buildFriendCard(
-                                        context,
-                                        friend,
-                                      ).animate().slideX(
-                                        begin: 1,
-                                        end: 0,
-                                        duration: 400.ms,
-                                        curve: Curves.easeOutBack,
-                                      ))
-                                    else if (!hasPendingRequests)
-                                      _buildEmptyState(),
-                                  ],
-                                ],
                               );
                             },
                           ),
-                  ),
+                  ).animate(autoPlay: true)
+                    .fadeIn(duration: 400.ms, delay: 200.ms)
+                    .scale(begin: const Offset(0.98, 0.98), end: const Offset(1.0, 1.0), duration: 500.ms),
                 ],
               ),
             ],
@@ -350,27 +486,27 @@ class _FriendScreenState extends State<FriendScreen> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: _secondaryBgColor.withOpacity(0.5),
               shape: BoxShape.circle,
               border: Border.all(
-                color: const Color(0xFFD4A76A).withOpacity(0.3),
+                color: _accentColor.withOpacity(0.4),
                 width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFD4A76A).withOpacity(0.1),
+                  color: _accentColor.withOpacity(0.1),
                   blurRadius: 15,
                   spreadRadius: 5,
                 ),
               ],
             ),
-            child: const Icon(
+            child: Icon(
               Icons.people_outline,
               size: 60,
-              color: Colors.white70,
+              color: _accentColor,
             ),
-          ).animate()
-            .fadeIn(duration: 600.ms)
+          ).animate(autoPlay: true)
+            .fadeIn(duration: 600.ms, delay: 300.ms)
             .scale(
               begin: const Offset(0.6, 0.6),
               end: const Offset(1.0, 1.0),
@@ -378,40 +514,44 @@ class _FriendScreenState extends State<FriendScreen> {
               curve: Curves.elasticOut,
             ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'No friends yet',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: _textColor,
             ),
-          ).animate()
-            .fadeIn(delay: 300.ms, duration: 500.ms)
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 600.ms, duration: 500.ms)
             .slideY(begin: 0.2, end: 0, duration: 500.ms),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Add friends to see them here',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.white70,
+              color: _textColor.withOpacity(0.7),
             ),
-          ).animate()
-            .fadeIn(delay: 500.ms, duration: 500.ms),
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 800.ms, duration: 500.ms),
           const SizedBox(height: 32),
           // Animated add friend button
           DuckBuckButton(
             text: 'Add Friend',
             onTap: _showAddFriendOptions,
-            color: const Color(0xFF2C1810),
-            borderColor: const Color(0xFFD4A76A),
+            color: _secondaryBgColor,
+            borderColor: _accentColor,
             width: 200,
-            icon: const Icon(Icons.person_add, color: Colors.white, size: 20),
-          ).animate()
-            .fadeIn(delay: 700.ms, duration: 500.ms)
+            icon: Icon(Icons.person_add, color: _textColor, size: 20),
+            textStyle: TextStyle(
+              color: _textColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ).animate(autoPlay: true)
+            .fadeIn(delay: 1000.ms, duration: 500.ms)
             .shimmer(
               duration: 1500.ms,
               delay: 1500.ms,
-              color: Colors.white.withOpacity(0.2),
+              color: _accentColor.withOpacity(0.3),
             ),
         ],
       ),
@@ -468,10 +608,10 @@ class _FriendScreenState extends State<FriendScreen> {
             height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFD4A76A), width: 2),
+              border: Border.all(color: _accentColor, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFD4A76A).withOpacity(0.3),
+                  color: _accentColor.withOpacity(0.3),
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
@@ -482,40 +622,40 @@ class _FriendScreenState extends State<FriendScreen> {
                   ? CachedNetworkImage(
                       imageUrl: request['photoURL'],
                       fit: BoxFit.cover,
-                      placeholder: (context, url) => const Center(
+                      placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFFD4A76A),
+                          color: _accentColor,
                           strokeWidth: 2,
                         ),
                       ),
-                      errorWidget: (context, url, error) => const Icon(
+                      errorWidget: (context, url, error) => Icon(
                         Icons.person,
-                        color: Colors.white,
+                        color: _accentColor,
                         size: 24,
                       ),
                     )
-                  : const Icon(
+                  : Icon(
                       Icons.person,
-                      color: Colors.white,
+                      color: _accentColor,
                       size: 24,
                     ),
             ),
           ),
           title: Text(
             request['displayName'] ?? 'Unknown User',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: _textColor,
               fontWeight: FontWeight.bold,
             ),
           ),
           subtitle: Text(
             isIncoming ? 'Sent you a friend request' : 'Friend request sent',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: _textColor.withOpacity(0.7),
             ),
           ),
           trailing: !isIncoming ? IconButton(
-            icon: const Icon(Icons.close, color: Colors.white70),
+            icon: Icon(Icons.close, color: _textColor.withOpacity(0.7)),
             onPressed: () {
               HapticFeedback.mediumImpact();
               _cancelFriendRequest(request['id']);
@@ -539,7 +679,7 @@ class _FriendScreenState extends State<FriendScreen> {
                 HapticFeedback.mediumImpact();
                 _showFriendOptions(context, friend);
               },
-              backgroundColor: const Color(0xFFD4A76A),
+              backgroundColor: _accentColor,
               foregroundColor: Colors.white,
               icon: Icons.more_vert,
               borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
@@ -556,10 +696,10 @@ class _FriendScreenState extends State<FriendScreen> {
                 height: 50,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFD4A76A), width: 2),
+                  border: Border.all(color: _accentColor, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFFD4A76A).withOpacity(0.3),
+                      color: _accentColor.withOpacity(0.3),
                       blurRadius: 8,
                       spreadRadius: 1,
                     ),
@@ -570,21 +710,21 @@ class _FriendScreenState extends State<FriendScreen> {
                       ? CachedNetworkImage(
                           imageUrl: friend['photoURL'],
                           fit: BoxFit.cover,
-                          placeholder: (context, url) => const Center(
+                          placeholder: (context, url) => Center(
                             child: CircularProgressIndicator(
-                              color: Color(0xFFD4A76A),
+                              color: _accentColor,
                               strokeWidth: 2,
                             ),
                           ),
-                          errorWidget: (context, url, error) => const Icon(
+                          errorWidget: (context, url, error) => Icon(
                             Icons.person,
-                            color: Colors.white,
+                            color: _accentColor,
                             size: 24,
                           ),
                         )
-                      : const Icon(
+                      : Icon(
                           Icons.person,
-                          color: Colors.white,
+                          color: _accentColor,
                           size: 24,
                         ),
                 ),
@@ -599,7 +739,7 @@ class _FriendScreenState extends State<FriendScreen> {
                     decoration: BoxDecoration(
                       color: Colors.green,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: _secondaryBgColor, width: 2),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.green.withOpacity(0.5),
@@ -614,8 +754,8 @@ class _FriendScreenState extends State<FriendScreen> {
           ),
           title: Text(
             friend['displayName'] ?? 'Unknown User',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: _textColor,
               fontWeight: FontWeight.bold,
               fontSize: 16,
             ),
@@ -625,7 +765,7 @@ class _FriendScreenState extends State<FriendScreen> {
             style: TextStyle(
               color: friend['isOnline'] == true 
                 ? Colors.green.withOpacity(0.9) 
-                : Colors.white.withOpacity(0.7),
+                : _textColor.withOpacity(0.7),
             ),
           ),
           onTap: () {
@@ -635,11 +775,11 @@ class _FriendScreenState extends State<FriendScreen> {
         ),
       ),
     ).animate()
-      .fadeIn(duration: 400.ms)
+      .fadeIn(duration: Platform.isIOS ? 150.ms : 300.ms)
       .slideX(
         begin: 0.05,
         end: 0,
-        duration: 400.ms,
+        duration: Platform.isIOS ? 200.ms : 400.ms,
         curve: Curves.easeOut,
       );
   }
@@ -691,21 +831,21 @@ class _FriendScreenState extends State<FriendScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF3C1F1F), Color(0xFF2C1810)],
+            colors: [_backgroundColor, _cardBgColor],
           ),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 10,
               spreadRadius: 2,
             ),
           ],
           border: Border.all(
-            color: const Color(0xFFD4A76A).withOpacity(0.3),
+            color: _accentColor.withOpacity(0.3),
             width: 1,
           ),
         ),
@@ -718,7 +858,7 @@ class _FriendScreenState extends State<FriendScreen> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
+                color: _accentColor.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -733,28 +873,28 @@ class _FriendScreenState extends State<FriendScreen> {
                     height: 50,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD4A76A), width: 2),
+                      border: Border.all(color: _accentColor, width: 2),
                     ),
                     child: ClipOval(
                       child: friend['photoURL'] != null
                           ? CachedNetworkImage(
                               imageUrl: friend['photoURL'],
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => const Center(
+                              placeholder: (context, url) => Center(
                                 child: CircularProgressIndicator(
-                                  color: Color(0xFFD4A76A),
+                                  color: _accentColor,
                                   strokeWidth: 2,
                                 ),
                               ),
-                              errorWidget: (context, url, error) => const Icon(
+                              errorWidget: (context, url, error) => Icon(
                                 Icons.person,
-                                color: Colors.white,
+                                color: _accentColor,
                                 size: 24,
                               ),
                             )
-                          : const Icon(
+                          : Icon(
                               Icons.person,
-                              color: Colors.white,
+                              color: _accentColor,
                               size: 24,
                             ),
                     ),
@@ -766,10 +906,10 @@ class _FriendScreenState extends State<FriendScreen> {
                       children: [
                         Text(
                           friend['displayName'] ?? 'Unknown User',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: _textColor,
                           ),
                         ),
                         Text(
@@ -777,7 +917,7 @@ class _FriendScreenState extends State<FriendScreen> {
                           style: TextStyle(
                             color: friend['isOnline'] == true 
                               ? Colors.green.withOpacity(0.9) 
-                              : Colors.white.withOpacity(0.7),
+                              : _textColor.withOpacity(0.7),
                           ),
                         ),
                       ],
@@ -787,7 +927,7 @@ class _FriendScreenState extends State<FriendScreen> {
               ),
             ),
             
-            const Divider(color: Colors.white12, height: 20),
+            Divider(color: _accentColor.withOpacity(0.2), height: 20),
             
             // Options
             _buildOptionTile(
@@ -855,12 +995,12 @@ class _FriendScreenState extends State<FriendScreen> {
         ),
         child: Icon(icon, color: iconColor),
       ),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.white70),
+      title: Text(title, style: TextStyle(color: _textColor)),
+      trailing: Icon(Icons.chevron_right, color: _textColor.withOpacity(0.7)),
       onTap: onTap,
     ).animate()
-      .fadeIn(duration: 300.ms)
-      .slideX(begin: 0.05, end: 0, duration: 300.ms);
+      .fadeIn(duration: Platform.isIOS ? 150.ms : 300.ms)
+      .slideX(begin: 0.05, end: 0, duration: Platform.isIOS ? 200.ms : 400.ms);
   }
 
   void _showConfirmationDialog({
@@ -874,21 +1014,21 @@ class _FriendScreenState extends State<FriendScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF3C1F1F),
+        backgroundColor: _backgroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            color: const Color(0xFFD4A76A).withOpacity(0.3),
+            color: _accentColor.withOpacity(0.3),
             width: 1,
           ),
         ),
         title: Text(
           title,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: _textColor, fontWeight: FontWeight.bold),
         ),
         content: Text(
           content,
-          style: TextStyle(color: Colors.white.withOpacity(0.9)),
+          style: TextStyle(color: _textColor.withOpacity(0.9)),
         ),
         actions: [
           TextButton(
@@ -896,9 +1036,9 @@ class _FriendScreenState extends State<FriendScreen> {
               HapticFeedback.selectionClick();
               Navigator.pop(context);
             },
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: _textColor.withOpacity(0.7)),
             ),
           ),
           TextButton(
@@ -927,11 +1067,11 @@ class _FriendScreenState extends State<FriendScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Dialog(
-          backgroundColor: const Color(0xFF3C1F1F),
+          backgroundColor: _backgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(
-              color: const Color(0xFFD4A76A).withOpacity(0.3),
+              color: _accentColor.withOpacity(0.3),
               width: 1,
             ),
           ),
@@ -956,23 +1096,23 @@ class _FriendScreenState extends State<FriendScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Report User',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: _textColor,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Please provide details about why you are reporting this user. Reporting will also block this user. This information will be reviewed by our moderation team.',
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: _textColor.withOpacity(0.7),
                     fontSize: 14,
                   ),
                 ),
@@ -980,23 +1120,23 @@ class _FriendScreenState extends State<FriendScreen> {
                 // Report reason selection
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF5C2F2F).withOpacity(0.5),
+                    color: _secondaryBgColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: focusNode.hasFocus 
-                          ? const Color(0xFFD4A76A) 
-                          : Colors.transparent,
-                      width: 1,
+                          ? _accentColor 
+                          : _accentColor.withOpacity(0.3),
+                      width: focusNode.hasFocus ? 1.5 : 1,
                     ),
                   ),
                   child: TextField(
                     controller: reasonController,
                     focusNode: focusNode,
                     maxLines: 4,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _textColor),
                     decoration: InputDecoration(
                       hintText: 'Enter reason for reporting',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      hintStyle: TextStyle(color: _textColor.withOpacity(0.5)),
                       contentPadding: const EdgeInsets.all(16),
                       border: InputBorder.none,
                     ),
@@ -1019,8 +1159,8 @@ class _FriendScreenState extends State<FriendScreen> {
                         'Cancel',
                         style: TextStyle(
                           color: isSubmitting 
-                              ? Colors.white30 
-                              : Colors.white70,
+                              ? _textColor.withOpacity(0.3)
+                              : _textColor.withOpacity(0.7),
                         ),
                       ),
                     ),
@@ -1120,10 +1260,14 @@ class _FriendScreenState extends State<FriendScreen> {
                               }
                             },
                       color: isSubmitting || reasonController.text.trim().isEmpty
-                          ? const Color(0xFF5C2F2F).withOpacity(0.5)
-                          : const Color(0xFF5C2F2F),
-                      borderColor: const Color(0xFFD4A76A),
+                          ? _accentColor.withOpacity(0.3)
+                          : _secondaryBgColor,
+                      borderColor: _accentColor,
                       width: 150,
+                      textStyle: TextStyle(
+                        color: _textColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -1149,38 +1293,65 @@ class _FriendScreenState extends State<FriendScreen> {
   }
 
   Future<bool> _acceptFriendRequest(String userId) async {
-    final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-    final result = await friendProvider.acceptFriendRequest(userId);
-    final success = result['success'] == true;
-    
-    if (success) {
-      HapticFeedback.mediumImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Friend request accepted'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+    try {
+      if (!mounted) return false;
+      
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      final result = await friendProvider.acceptFriendRequest(userId);
+      final success = result['success'] == true;
+      
+      if (success) {
+        HapticFeedback.mediumImpact();
+        
+        // Refresh data after a small delay to ensure Firestore has updated
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) await _refreshData();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Friend request accepted'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              margin: const EdgeInsets.all(10),
+            ),
+          );
+        }
+      } else if (mounted) {
+        HapticFeedback.vibrate();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Failed to accept friend request'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(10),
           ),
-          margin: const EdgeInsets.all(10),
-        ),
-      );
-    } else {
-      HapticFeedback.vibrate();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['error'] ?? 'Failed to accept friend request'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+        );
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Error accepting friend request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            margin: const EdgeInsets.all(10),
           ),
-          margin: const EdgeInsets.all(10),
-        ),
-      );
+        );
+      }
+      return false;
     }
-    return success;
   }
 
   Future<bool> _declineFriendRequest(String userId) async {

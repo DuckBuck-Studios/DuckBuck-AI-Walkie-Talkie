@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 import '../../widgets/animated_background.dart';
+import 'friend_card.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/friend_provider.dart';
-import '../../providers/call_provider.dart';
-import '../../services/agora_service.dart';
+import '../../providers/friend_provider.dart'; 
 import '../../widgets/status_animation_popup.dart';
 import 'profile_screen.dart';
 import 'friend_screen.dart';
-import 'widgets/friends_list.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,14 +21,30 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  final AgoraService _agoraService = AgoraService();
-  bool _initializingAgora = false;
+  String? _selectedFriendId;
+  late PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     // Register observer for app lifecycle changes
     WidgetsBinding.instance.addObserver(this);
+    
+    // Initialize the page controller with viewportFraction to show exactly one card
+    _pageController = PageController(
+      viewportFraction: 1.0,
+      initialPage: 0,
+    );
+    
+    // Add listener to track current page for animations
+    _pageController.addListener(() {
+      if (_pageController.page != null) {
+        setState(() {
+          _currentPage = _pageController.page!.round();
+        });
+      }
+    });
     
     // Initialize the user provider
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -50,73 +65,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       // Start monitoring friend statuses
       _startFriendStatusMonitoring(friendProvider);
-
-      // Initialize Agora engine and check permissions
-      await _initializeAgoraAndPermissions();
     });
   }
   
   @override
   void dispose() {
+    // Dispose page controller
+    _pageController.dispose();
+    
     // Unregister observer
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  // Initialize Agora engine and check permissions
-  Future<void> _initializeAgoraAndPermissions() async {
-    // Avoid multiple initializations
-    if (_initializingAgora) return;
-    
-    setState(() {
-      _initializingAgora = true;
-    });
-    
-    print("HomeScreen: Initializing Agora engine");
-    
-    // Initialize Agora engine
-    final initialized = await _agoraService.initializeEngine();
-    if (initialized) {
-      print("HomeScreen: Agora engine initialized successfully");
-      
-      // Request permissions for future use (but don't block on them)
-      _requestPermissions();
-    } else {
-      print("HomeScreen: Failed to initialize Agora engine");
-      // Show error message to user
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to initialize video call service'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-    
-    setState(() {
-      _initializingAgora = false;
-    });
-  }
-  
-  // Request necessary permissions
-  Future<void> _requestPermissions() async {
-    print("HomeScreen: Checking call permissions");
-    
-    // Check microphone permission
-    final micStatus = await Permission.microphone.status;
-    if (micStatus != PermissionStatus.granted) {
-      print("HomeScreen: Microphone permission not granted: $micStatus");
-    }
-    
-    // Check camera permission
-    final camStatus = await Permission.camera.status;
-    if (camStatus != PermissionStatus.granted) {
-      print("HomeScreen: Camera permission not granted: $camStatus");
-    }
-    
-    // We don't automatically request permissions here, as it's better UX
-    // to request them when actually needed (i.e., when user tries to unmute or enable video)
   }
 
   @override
@@ -129,9 +88,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // App came to foreground - set user as online
         print("HomeScreen: App resumed, setting user online");
         userProvider.setOnlineStatus(true);
-        
-        // Re-initialize Agora engine if needed
-        _initializeAgoraAndPermissions();
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
@@ -322,12 +278,128 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 
-                // Friends section with PageView
+                // Friends List
                 Expanded(
                   child: Consumer<FriendProvider>(
                     builder: (context, friendProvider, child) {
                       final friends = friendProvider.friends;
-                      return FriendsList(friends: friends);
+                      
+                      if (friends.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.people_outline,
+                                size: 64,
+                                color: Colors.brown.shade300,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No friends yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.brown.shade300,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Add friends to start chatting!',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ).animate()
+                          .fadeIn(duration: 300.ms)
+                          .scale(
+                            begin: const Offset(0.8, 0.8),
+                            end: const Offset(1.0, 1.0),
+                            duration: 300.ms,
+                            curve: Curves.easeOutCubic,
+                          );
+                      }
+
+                      return PageView.builder(
+                        itemCount: friends.length,
+                        controller: _pageController,
+                        pageSnapping: true,
+                        padEnds: false,
+                        clipBehavior: Clip.none,
+                        physics: const PageScrollPhysics(),
+                        onPageChanged: (index) {
+                          setState(() {
+                            _selectedFriendId = friends[index]['id'];
+                            _currentPage = index;
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          // Calculate animation values based on page position
+                          double page = _pageController.hasClients 
+                              ? _pageController.page ?? index.toDouble()
+                              : index.toDouble();
+                          
+                          // Calculate how far this page is from being fully visible
+                          double pageDifference = (page - index).abs();
+                          
+                          // Animation calculations
+                          double rotationValue = pageDifference * 0.5; // max rotation of 0.5 radians
+                          double scaleValue = 1.0 - (pageDifference * 0.15); // scale between 0.85 and 1.0
+                          double opacityValue = 1.0 - (pageDifference * 0.5); // opacity between 0.5 and 1.0
+                          opacityValue = opacityValue.clamp(0.5, 1.0);
+                          
+                          return AnimatedBuilder(
+                            animation: _pageController,
+                            builder: (context, child) {
+                              // Debug the friend data
+                              print("HomeScreen: Friend data for ${friends[index]['displayName']} - " +
+                                    "isOnline: ${friends[index]['isOnline']}, " +
+                                    "statusAnimation: ${friends[index]['statusAnimation']}, " +
+                                    "privacySettings: ${friends[index]['privacySettings']}");
+                              
+                              return Transform(
+                                alignment: Alignment.center,
+                                transform: Matrix4.identity()
+                                  ..setEntry(3, 2, 0.001) // perspective
+                                  ..scale(scaleValue, scaleValue)
+                                  ..rotateY(page > index ? rotationValue : -rotationValue),
+                                child: Opacity(
+                                  opacity: opacityValue,
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(vertical: 20),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                    child: FriendCard(
+                                      friend: friends[index],
+                                      isSelected: friends[index]['id'] == _selectedFriendId,
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedFriendId = friends[index]['id'];
+                                        });
+                                        
+                                        // Animate to the selected page
+                                        _pageController.animateToPage(
+                                          index,
+                                          duration: const Duration(milliseconds: 400),
+                                          curve: Curves.easeOutCubic,
+                                        );
+                                      },
+                                    ).animate()
+                                      .fadeIn(duration: 300.ms)
+                                      .scale(
+                                        begin: const Offset(0.95, 0.95),
+                                        end: const Offset(1.0, 1.0),
+                                        duration: 400.ms, 
+                                        curve: Curves.easeOutCubic
+                                      ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
                     },
                   ),
                 ),
@@ -341,15 +413,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _navigateToProfile() {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const ProfileScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
+      MaterialPageRoute(
+        builder: (context) => const ProfileScreen(),
       ),
     );
   }
@@ -357,15 +422,89 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _navigateToFriendScreen() {
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const FriendScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => 
+          const FriendScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
+          // Create a smooth sliding animation from right to left
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.easeOutQuint;
+          
+          var tween = Tween(begin: begin, end: end)
+            .chain(CurveTween(curve: curve));
+            
+          var offsetAnimation = animation.drive(tween);
+          
+          // Add a fade animation
+          var fadeAnimation = Tween<double>(
+            begin: 0.0,
+            end: 1.0,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
+            ),
+          );
+          
+          // Combine slide and fade animations
+          return SlideTransition(
+            position: offsetAnimation,
+            child: FadeTransition(
+              opacity: fadeAnimation,
+              child: child,
+            ),
           );
         },
-        transitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: const Duration(milliseconds: 500),
+        reverseTransitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
+
+  // Helper method to handle friend tap
+  void _handleFriendTap(Map<String, dynamic> friend) {
+    setState(() {
+      _selectedFriendId = friend['id'];
+    });
+    
+    // Find the index of the tapped friend
+    final index = _pageController.hasClients 
+        ? Provider.of<FriendProvider>(context, listen: false)
+            .friends.indexWhere((f) => f['id'] == friend['id'])
+        : -1;
+    
+    // If found, animate to that page
+    if (index >= 0) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+    
+    // TODO: Handle friend selection (e.g., start chat)
+  }
+}
+
+// Add this class at the bottom of the file
+class CustomScrollPhysics extends ScrollPhysics {
+  const CustomScrollPhysics({ScrollPhysics? parent}) : super(parent: parent);
+
+  @override
+  CustomScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return CustomScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    // Makes the scrolling more resistant for better control
+    return offset * 0.85;
+  }
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+        mass: 80,
+        stiffness: 100,
+        damping: 1.0,
+      );
 }

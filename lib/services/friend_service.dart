@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/auth_service.dart';
+import '../config/app_config.dart';
 
 /// Status of a friend request
 enum FriendRequestStatus {
@@ -23,9 +25,70 @@ class FriendService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseDatabase _realtimeDb = FirebaseDatabase.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AuthService _authService = AuthService();
+  final AppConfig _appConfig = AppConfig();
 
   /// Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
+
+  /// Convert 8-digit UID to Firebase Auth UID if needed
+  Future<String?> _getFirebaseUid(String userId) async {
+    // If the ID is already a Firebase Auth UID (current user), return it
+    if (userId == currentUserId) return userId;
+    
+    // If userId is the format of a Firebase UID (long alphanumeric), use it directly
+    // Firebase UIDs are typically around 28 characters
+    if (userId.length > 20) {
+      _appConfig.log('Using provided Firebase UID directly: $userId');
+      return userId;
+    }
+    
+    // If it's an 8-digit ID, convert it to Firebase Auth UID by querying Firestore
+    if (userId.length == 8 && int.tryParse(userId) != null) {
+      _appConfig.log('Looking up Firebase UID for 8-digit ID: $userId');
+      try {
+        final querySnapshot = await _firestore
+          .collection('users')
+          .where('uid', isEqualTo: userId)
+          .limit(1)
+          .get();
+          
+        if (querySnapshot.docs.isNotEmpty) {
+          // Return the document ID, which is the Firebase Auth UID
+          final firebaseUid = querySnapshot.docs.first.id;
+          _appConfig.log('Found Firebase UID: $firebaseUid for 8-digit ID: $userId');
+          return firebaseUid;
+        } else {
+          _appConfig.log('No user found with 8-digit ID: $userId');
+          return null;
+        }
+      } catch (e, stackTrace) {
+        _appConfig.reportError(e, stackTrace, reason: 'Error converting 8-digit UID to Firebase UID');
+        return null;
+      }
+    }
+    
+    // Otherwise assume it's already a Firebase Auth UID or try direct lookup
+    try {
+      // Verify if this userId exists as a document ID
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+      if (docSnapshot.exists) {
+        _appConfig.log('Verified userId $userId as valid Firebase UID');
+        return userId;
+      } else {
+        _appConfig.log('Could not find user document for ID: $userId');
+        return null;
+      }
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error verifying userId');
+      return null;
+    }
+  }
+  
+  /// Convert Firebase Auth UID to 8-digit UID for display purposes
+  Future<String?> _get8DigitUid(String firebaseUid) async {
+    return await _authService.get8DigitUidFromFirebaseUid(firebaseUid);
+  }
 
   /// Send a friend request to another user
   Future<Map<String, dynamic>> sendFriendRequest(String targetUserId) async {
@@ -37,8 +100,23 @@ class FriendService {
       };
     }
     
+    _appConfig.log('Sending friend request to target: $targetUserId');
+    
+    // Convert target user ID to Firebase UID if needed
+    final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+    if (targetFirebaseUid == null) {
+      _appConfig.log('Target user not found for ID: $targetUserId');
+      return {
+        'success': false,
+        'error': 'Target user not found',
+        'errorCode': 'request/user-not-found'
+      };
+    }
+    
+    _appConfig.log('Resolved target Firebase UID: $targetFirebaseUid');
+    
     // Prevent sending request to self
-    if (currentUserId == targetUserId) {
+    if (currentUserId == targetFirebaseUid) {
       return {
         'success': false,
         'error': 'Cannot send friend request to yourself',
@@ -48,7 +126,7 @@ class FriendService {
 
     try {
       // Check if the user is blocked by the current user
-      final isBlockedByMe = await isUserBlocked(targetUserId);
+      final isBlockedByMe = await isUserBlocked(targetFirebaseUid);
       if (isBlockedByMe) {
         return {
           'success': false,
@@ -59,7 +137,7 @@ class FriendService {
       }
       
       // Check if current user is blocked by the target user
-      final isBlockedByThem = await isBlockedBy(targetUserId);
+      final isBlockedByThem = await isBlockedBy(targetFirebaseUid);
       if (isBlockedByThem) {
         return {
           'success': false,
@@ -70,7 +148,7 @@ class FriendService {
       }
       
       // Check if already friends
-      final alreadyFriends = await isFriend(targetUserId);
+      final alreadyFriends = await isFriend(targetFirebaseUid);
       if (alreadyFriends) {
         return {
           'success': false,
@@ -84,7 +162,7 @@ class FriendService {
           .collection('users')
           .doc(currentUserId)
           .collection('incomingRequests')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .get();
           
       if (existingIncomingRequest.exists) {
@@ -101,7 +179,7 @@ class FriendService {
           .collection('users')
           .doc(currentUserId)
           .collection('outgoingRequests')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .get();
           
       if (existingOutgoingRequest.exists) {
@@ -114,37 +192,54 @@ class FriendService {
         };
       }
 
+      // Get 8-digit UIDs for storing in the request data
+      final current8DigitUid = await _get8DigitUid(currentUserId!);
+      final target8DigitUid = await _get8DigitUid(targetFirebaseUid);
+
+      _appConfig.log('Adding request to firestore, current user 8-digit UID: $current8DigitUid, target 8-digit UID: $target8DigitUid');
+      
       // Add to sender's outgoing requests
       await _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('outgoingRequests')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .set({
         'status': FriendRequestStatus.pending.toString().split('.').last,
         'timestamp': FieldValue.serverTimestamp(),
         'sentBy': currentUserId,
+        'sentByUid': current8DigitUid,
+        'targetUid': target8DigitUid,
+        'targetFirebaseUid': targetFirebaseUid, // Store the Firebase UID directly
       });
 
       // Add to receiver's incoming requests
       await _firestore
           .collection('users')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .collection('incomingRequests')
           .doc(currentUserId)
           .set({
         'status': FriendRequestStatus.pending.toString().split('.').last,
         'timestamp': FieldValue.serverTimestamp(),
         'sentBy': currentUserId,
+        'sentByUid': current8DigitUid,
+        'targetUid': target8DigitUid,
+        'senderFirebaseUid': currentUserId, // Store the Firebase UID directly
       });
 
+      _appConfig.log('Friend request sent successfully to $targetFirebaseUid');
+      
+      // Return the target's Firebase UID and 8-digit UID for the UI
       return {
         'success': true,
         'message': 'Friend request sent successfully',
-        'targetUserId': targetUserId
+        'targetUserId': targetUserId,
+        'targetFirebaseUid': targetFirebaseUid,
+        'target8DigitUid': target8DigitUid
       };
-    } catch (e) {
-      print('Error sending friend request: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error sending friend request');
       return {
         'success': false,
         'error': 'An error occurred while sending friend request',
@@ -159,71 +254,122 @@ class FriendService {
     if (currentUserId == null) return false;
 
     try {
-      // Update status in both users' request collections
-      await Future.wait([
-        _firestore
-            .collection('users')
-            .doc(currentUserId)
-            .collection('incomingRequests')
-            .doc(senderId)
-            .update({
-          'status': FriendRequestStatus.accepted.toString().split('.').last,
-          'acceptedAt': FieldValue.serverTimestamp(),
-          'acceptedBy': currentUserId,
-        }),
-        _firestore
-            .collection('users')
-            .doc(senderId)
-            .collection('outgoingRequests')
-            .doc(currentUserId)
-            .update({
-          'status': FriendRequestStatus.accepted.toString().split('.').last,
-          'acceptedAt': FieldValue.serverTimestamp(),
-          'acceptedBy': currentUserId,
-        }),
-      ]);
+      // Convert sender ID to Firebase UID if needed
+      final senderFirebaseUid = await _getFirebaseUid(senderId);
+      if (senderFirebaseUid == null) {
+        _appConfig.log('Cannot find Firebase UID for sender: $senderId');
+        return false;
+      }
+      
+      _appConfig.log('Accepting friend request from $senderFirebaseUid for user $currentUserId');
+      
+      // Check if request exists
+      final incomingRequest = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('incomingRequests')
+          .doc(senderFirebaseUid)
+          .get();
+          
+      if (!incomingRequest.exists) {
+        _appConfig.log('Cannot find incoming request from $senderFirebaseUid');
+        return false;
+      }
+      
+      // Get 8-digit UIDs for storing in the friend data
+      final current8DigitUid = await _get8DigitUid(currentUserId!);
+      final sender8DigitUid = await _get8DigitUid(senderFirebaseUid);
+      
+      // Use a transaction to ensure data consistency
+      return await _firestore.runTransaction((transaction) async {
+        // Update status in both users' request collections
+        transaction.update(
+          _firestore
+              .collection('users')
+              .doc(currentUserId)
+              .collection('incomingRequests')
+              .doc(senderFirebaseUid),
+          {
+            'status': FriendRequestStatus.accepted.toString().split('.').last,
+            'acceptedAt': FieldValue.serverTimestamp(),
+            'acceptedBy': currentUserId,
+            'acceptedByUid': current8DigitUid,
+          }
+        );
+        
+        transaction.update(
+          _firestore
+              .collection('users')
+              .doc(senderFirebaseUid)
+              .collection('outgoingRequests')
+              .doc(currentUserId),
+          {
+            'status': FriendRequestStatus.accepted.toString().split('.').last,
+            'acceptedAt': FieldValue.serverTimestamp(),
+            'acceptedBy': currentUserId,
+            'acceptedByUid': current8DigitUid,
+          }
+        );
 
-      // Add to both users' friends lists
-      await Future.wait([
-        _firestore
-            .collection('users')
-            .doc(currentUserId)
-            .collection('friends')
-            .doc(senderId)
-            .set({
-          'addedAt': FieldValue.serverTimestamp(),
-          'addedBy': currentUserId,
-        }),
-        _firestore
-            .collection('users')
-            .doc(senderId)
-            .collection('friends')
-            .doc(currentUserId)
-            .set({
-          'addedAt': FieldValue.serverTimestamp(),
-          'addedBy': currentUserId,
-        }),
-      ]);
-
-      // Remove from requests collections
-      await Future.wait([
-        _firestore
-            .collection('users')
-            .doc(currentUserId)
-            .collection('incomingRequests')
-            .doc(senderId)
-            .delete(),
-        _firestore
-            .collection('users')
-            .doc(senderId)
-            .collection('outgoingRequests')
-            .doc(currentUserId)
-            .delete(),
-      ]);
-
-      return true;
-    } catch (e) {
-      print('Error accepting friend request: $e');
+        // Add to both users' friends lists with both Firebase and 8-digit UIDs
+        transaction.set(
+          _firestore
+              .collection('users')
+              .doc(currentUserId)
+              .collection('friends')
+              .doc(senderFirebaseUid),
+          {
+            'addedAt': FieldValue.serverTimestamp(),
+            'addedBy': currentUserId,
+            'friendUid': sender8DigitUid,
+            'firebaseUid': senderFirebaseUid,
+          }
+        );
+        
+        transaction.set(
+          _firestore
+              .collection('users')
+              .doc(senderFirebaseUid)
+              .collection('friends')
+              .doc(currentUserId),
+          {
+            'addedAt': FieldValue.serverTimestamp(),
+            'addedBy': currentUserId,
+            'friendUid': current8DigitUid,
+            'firebaseUid': currentUserId,
+          }
+        );
+        
+        // Successfully completed transaction
+        return true;
+      }).then((result) async {
+        // After successful transaction, remove requests
+        try {
+          await Future.wait([
+            _firestore
+                .collection('users')
+                .doc(currentUserId)
+                .collection('incomingRequests')
+                .doc(senderFirebaseUid)
+                .delete(),
+            _firestore
+                .collection('users')
+                .doc(senderFirebaseUid)
+                .collection('outgoingRequests')
+                .doc(currentUserId)
+                .delete(),
+          ]);
+          
+          _appConfig.log('Friendship established between $currentUserId and $senderFirebaseUid');
+          return true;
+        } catch (e) {
+          // This is not critical, as the friendship has been established
+          _appConfig.log('Warning - could not delete requests after acceptance: $e');
+          return true;
+        }
+      });
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error accepting friend request');
       return false;
     }
   }
@@ -233,13 +379,17 @@ class FriendService {
     if (currentUserId == null) return false;
 
     try {
+      // Convert to Firebase UID if needed
+      final senderFirebaseUid = await _getFirebaseUid(senderId);
+      if (senderFirebaseUid == null) return false;
+      
       // Update status in both users' request collections
       await Future.wait([
         _firestore
             .collection('users')
             .doc(currentUserId)
             .collection('incomingRequests')
-            .doc(senderId)
+            .doc(senderFirebaseUid)
             .update({
           'status': FriendRequestStatus.declined.toString().split('.').last,
           'declinedAt': FieldValue.serverTimestamp(),
@@ -247,7 +397,7 @@ class FriendService {
         }),
         _firestore
             .collection('users')
-            .doc(senderId)
+            .doc(senderFirebaseUid)
             .collection('outgoingRequests')
             .doc(currentUserId)
             .update({
@@ -263,19 +413,19 @@ class FriendService {
             .collection('users')
             .doc(currentUserId)
             .collection('incomingRequests')
-            .doc(senderId)
+            .doc(senderFirebaseUid)
             .delete(),
         _firestore
             .collection('users')
-            .doc(senderId)
+            .doc(senderFirebaseUid)
             .collection('outgoingRequests')
             .doc(currentUserId)
             .delete(),
       ]);
 
       return true;
-    } catch (e) {
-      print('Error declining friend request: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error declining friend request');
       return false;
     }
   }
@@ -285,25 +435,29 @@ class FriendService {
     if (currentUserId == null) return false;
 
     try {
+      // Convert to Firebase UID if needed
+      final friendFirebaseUid = await _getFirebaseUid(friendId);
+      if (friendFirebaseUid == null) return false;
+      
       // Remove from both users' friends lists
       await Future.wait([
         _firestore
             .collection('users')
             .doc(currentUserId)
             .collection('friends')
-            .doc(friendId)
+            .doc(friendFirebaseUid)
             .delete(),
         _firestore
             .collection('users')
-            .doc(friendId)
+            .doc(friendFirebaseUid)
             .collection('friends')
             .doc(currentUserId)
             .delete(),
       ]);
 
       return true;
-    } catch (e) {
-      print('Error removing friend: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error removing friend');
       return false;
     }
   }
@@ -319,8 +473,18 @@ class FriendService {
     }
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) {
+        return {
+          'success': false,
+          'error': 'Target user not found',
+          'errorCode': 'block/user-not-found'
+        };
+      }
+      
       // Check if already blocked
-      final alreadyBlocked = await isUserBlocked(targetUserId);
+      final alreadyBlocked = await isUserBlocked(targetFirebaseUid);
       if (alreadyBlocked) {
         return {
           'success': false,
@@ -330,23 +494,29 @@ class FriendService {
       }
       
       // Check if blocked by the target user
-      final blockedByTarget = await isBlockedBy(targetUserId);
+      final blockedByTarget = await isBlockedBy(targetFirebaseUid);
       final blockType = blockedByTarget 
           ? BlockRelationshipType.mutualBlock 
           : BlockRelationshipType.blockedByMe;
       
       // Check if they are friends
-      final isFriendRelationship = await isFriend(targetUserId);
+      final isFriendRelationship = await isFriend(targetFirebaseUid);
+      
+      // Get 8-digit UIDs
+      final current8DigitUid = await _get8DigitUid(currentUserId!);
+      final target8DigitUid = await _get8DigitUid(targetFirebaseUid);
 
       // Add to blocked users list for the blocker
       await _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('blockedUsers')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .set({
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedBy': currentUserId,
+        'blockedByUid': current8DigitUid,
+        'targetUid': target8DigitUid,
         'blockType': blockType.toString().split('.').last,
         'wasFriend': isFriendRelationship,
       });
@@ -354,19 +524,21 @@ class FriendService {
       // Add to blockedBy list for the blocked user
       await _firestore
           .collection('users')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .collection('blockedBy')
           .doc(currentUserId)
           .set({
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedBy': currentUserId,
+        'blockedByUid': current8DigitUid,
+        'targetUid': target8DigitUid,
         'blockType': blockType.toString().split('.').last,
         'wasFriend': isFriendRelationship,
       });
 
       // Remove any existing friend relationship
       if (isFriendRelationship) {
-        await removeFriend(targetUserId);
+        await removeFriend(targetFirebaseUid);
       }
 
       // Update any existing requests to blocked status
@@ -376,26 +548,28 @@ class FriendService {
               .collection('users')
               .doc(currentUserId)
               .collection('outgoingRequests')
-              .doc(targetUserId)
+              .doc(targetFirebaseUid)
               .update({
             'status': FriendRequestStatus.blocked.toString().split('.').last,
             'blockedAt': FieldValue.serverTimestamp(),
             'blockedBy': currentUserId,
+            'blockedByUid': current8DigitUid,
           }),
           _firestore
               .collection('users')
-              .doc(targetUserId)
+              .doc(targetFirebaseUid)
               .collection('incomingRequests')
               .doc(currentUserId)
               .update({
             'status': FriendRequestStatus.blocked.toString().split('.').last,
             'blockedAt': FieldValue.serverTimestamp(),
             'blockedBy': currentUserId,
+            'blockedByUid': current8DigitUid,
           }),
         ]);
       } catch (e) {
         // It's okay if these fail, they might not exist
-        print('Non-critical error updating request docs: $e');
+        _appConfig.log('Non-critical error updating request docs: $e');
       }
 
       return {
@@ -403,10 +577,12 @@ class FriendService {
         'message': 'User blocked successfully',
         'blockType': blockType.toString().split('.').last,
         'wasFriend': isFriendRelationship,
-        'isMutualBlock': blockedByTarget
+        'isMutualBlock': blockedByTarget,
+        'targetFirebaseUid': targetFirebaseUid,
+        'target8DigitUid': target8DigitUid
       };
-    } catch (e) {
-      print('Error blocking user: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error blocking user');
       return {
         'success': false,
         'error': 'Failed to block user',
@@ -427,11 +603,21 @@ class FriendService {
     }
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) {
+        return {
+          'success': false,
+          'error': 'Target user not found',
+          'errorCode': 'report/user-not-found'
+        };
+      }
+      
       // Check if already reported
       final query = await _firestore
           .collection('reports')
           .where('reporterId', isEqualTo: currentUserId)
-          .where('reportedId', isEqualTo: targetUserId)
+          .where('reportedId', isEqualTo: targetFirebaseUid)
           .get();
           
       if (query.docs.isNotEmpty) {
@@ -443,15 +629,21 @@ class FriendService {
         };
       }
       
+      // Get 8-digit UIDs
+      final current8DigitUid = await _get8DigitUid(currentUserId!);
+      final target8DigitUid = await _get8DigitUid(targetFirebaseUid);
+      
       // Check current relationship status
-      final isFriendRelationship = await isFriend(targetUserId);
-      final isBlockedByMe = await isUserBlocked(targetUserId);
-      final isBlockedByThem = await isBlockedBy(targetUserId);
+      final isFriendRelationship = await isFriend(targetFirebaseUid);
+      final isBlockedByMe = await isUserBlocked(targetFirebaseUid);
+      final isBlockedByThem = await isBlockedBy(targetFirebaseUid);
       
       // Create the report
       final reportRef = await _firestore.collection('reports').add({
         'reporterId': currentUserId,
-        'reportedId': targetUserId,
+        'reporterUid': current8DigitUid,
+        'reportedId': targetFirebaseUid,
+        'reportedUid': target8DigitUid,
         'reason': reason,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'pending',
@@ -466,11 +658,11 @@ class FriendService {
       if (!isBlockedByMe) {
         // Remove friend relationship if exists
         if (isFriendRelationship) {
-          await removeFriend(targetUserId);
+          await removeFriend(targetFirebaseUid);
         }
         
         // Call block user
-        blockResult = await blockUser(targetUserId);
+        blockResult = await blockUser(targetFirebaseUid);
       } else {
         blockResult = {
           'success': true,
@@ -491,9 +683,11 @@ class FriendService {
         'blockStatus': blockResult,
         'wasFriend': isFriendRelationship,
         'wasBlockedBefore': isBlockedByMe,
+        'targetFirebaseUid': targetFirebaseUid,
+        'target8DigitUid': target8DigitUid
       };
-    } catch (e) {
-      print('Error reporting user: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error reporting user');
       return {
         'success': false,
         'error': 'Failed to report user',
@@ -508,25 +702,29 @@ class FriendService {
     if (currentUserId == null) return false;
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) return false;
+      
       // Remove from both users' request collections
       await Future.wait([
         _firestore
             .collection('users')
             .doc(currentUserId)
             .collection('outgoingRequests')
-            .doc(targetUserId)
+            .doc(targetFirebaseUid)
             .delete(),
         _firestore
             .collection('users')
-            .doc(targetUserId)
+            .doc(targetFirebaseUid)
             .collection('incomingRequests')
             .doc(currentUserId)
             .delete(),
       ]);
 
       return true;
-    } catch (e) {
-      print('Error canceling friend request: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error canceling friend request');
       return false;
     }
   }
@@ -594,39 +792,108 @@ class FriendService {
 
   /// Get stream of friends list
   Stream<List<Map<String, dynamic>>> getFriendsStream() {
-    if (currentUserId == null) return Stream.value([]);
+    if (currentUserId == null) {
+      _appConfig.log("FriendService: Cannot get friends stream - user not authenticated");
+      return Stream.value([]);
+    }
 
+    _appConfig.log("FriendService: Setting up friends stream for user: $currentUserId");
+    
     return _firestore
         .collection('users')
         .doc(currentUserId)
         .collection('friends')
         .snapshots()
         .asyncMap((snapshot) async {
+      _appConfig.log("FriendService: Received friends collection update with ${snapshot.docs.length} documents");
       final friends = <Map<String, dynamic>>[];
       
       for (var doc in snapshot.docs) {
-        final friendId = doc.id;
-        // Get real-time updates for friend's user document
-        final friendDoc = await _firestore.collection('users').doc(friendId).get();
-        
-        if (friendDoc.exists) {
-          final friendData = friendDoc.data()!;
-          final statusRef = _realtimeDb.ref().child('userStatus').child(friendId);
-          final statusSnapshot = await statusRef.get();
+        try {
+          final friendFirebaseUid = doc.id;
+          _appConfig.log("FriendService: Processing friend document with ID: $friendFirebaseUid");
           
-          final status = statusSnapshot.value as Map?;
-          friends.add({
-            'id': friendId,
-            'displayName': friendData['displayName'],
-            'photoURL': friendData['photoURL'],
-            'isOnline': status?['isOnline'] ?? false,
-            'statusAnimation': status?['animation'] ?? 'default',
-            'lastSeen': status?['timestamp'] ?? 0,
-            'addedAt': doc.data()['addedAt'],
-          });
+          // Get the 8-digit UID
+          final friend8DigitUid = await _get8DigitUid(friendFirebaseUid);
+          
+          // Get the user document for this friend
+          final friendDoc = await _firestore.collection('users').doc(friendFirebaseUid).get();
+          
+          if (friendDoc.exists) {
+            _appConfig.log("FriendService: Found user document for friend: $friendFirebaseUid");
+            final friendData = friendDoc.data()!;
+            
+            // Get online status from realtime database
+            try {
+              final statusSnapshot = await _realtimeDb
+                  .ref('userStatus/$friendFirebaseUid')
+                  .get();
+                  
+              final isOnline = statusSnapshot.exists && 
+                  (statusSnapshot.child('isOnline').value == true);
+                  
+              // Get animation and last seen as well
+              final String? animation = statusSnapshot.exists ? 
+                  statusSnapshot.child('animation').value as String? : null;
+              final int lastSeen = statusSnapshot.exists && statusSnapshot.child('lastSeen').exists ?
+                  (statusSnapshot.child('lastSeen').value as int?) ?? 0 : 0;
+                  
+              // Create friend object with all available data
+              final friend = {
+                'id': friendFirebaseUid,
+                'uid': friend8DigitUid,
+                'displayName': friendData['displayName'] ?? 'Unknown User',
+                'photoURL': friendData['photoURL'],
+                'isOnline': isOnline,
+                'statusAnimation': animation,
+                'lastSeen': lastSeen,
+                'email': friendData['email'],
+                'addedAt': doc.data()['addedAt'],
+                'addedBy': doc.data()['addedBy'],
+              };
+              
+              friends.add(friend);
+              _appConfig.log("FriendService: Added friend to list: ${friend['displayName']} (online: $isOnline, animation: $animation)");
+            } catch (statusError) {
+              // If we can't get status, still add the friend as offline
+              _appConfig.log("FriendService: Could not get status for $friendFirebaseUid: $statusError");
+              final friend = {
+                'id': friendFirebaseUid,
+                'uid': friend8DigitUid,
+                'displayName': friendData['displayName'] ?? 'Unknown User',
+                'photoURL': friendData['photoURL'],
+                'isOnline': false,
+                'statusAnimation': null,
+                'lastSeen': 0,
+                'email': friendData['email'],
+                'addedAt': doc.data()['addedAt'],
+                'addedBy': doc.data()['addedBy'],
+              };
+              
+              friends.add(friend);
+              _appConfig.log("FriendService: Added friend to list with status error: ${friend['displayName']}");
+            }
+          } else {
+            _appConfig.log("FriendService: WARNING - User document doesn't exist for friend ID: $friendFirebaseUid");
+            // Still add the friend with minimal data
+            friends.add({
+              'id': friendFirebaseUid,
+              'uid': friend8DigitUid,
+              'displayName': 'Unknown User',
+              'isOnline': false,
+              'statusAnimation': null,
+              'lastSeen': 0,
+              'email': null,
+              'addedAt': doc.data()['addedAt'],
+              'addedBy': doc.data()['addedBy'],
+            });
+          }
+        } catch (e, stackTrace) {
+          _appConfig.reportError(e, stackTrace, reason: "Error processing friend");
         }
       }
       
+      _appConfig.log("FriendService: Returning ${friends.length} friends in stream");
       return friends;
     });
   }
@@ -635,72 +902,147 @@ class FriendService {
   Stream<Map<String, dynamic>?> getFriendStream(String friendId) {
     if (currentUserId == null) return Stream.value(null);
 
-    // Create a controller to merge the two streams
+    // First we need to convert the friendId to a Firebase UID if needed
+    // We'll use a StreamController to handle this async conversion
     final controller = StreamController<Map<String, dynamic>?>();
     
-    // Keep track of the latest friend data and status
-    Map<String, dynamic>? latestFriendData;
-    Map<String, dynamic>? latestStatus;
-    
-    // Function to emit the combined data
-    void emitCombinedData() {
-      if (latestFriendData == null) return;
-      
-      controller.add({
-        'id': friendId,
-        'displayName': latestFriendData!['displayName'],
-        'photoURL': latestFriendData!['photoURL'],
-        'isOnline': latestStatus?['isOnline'] ?? false,
-        'statusAnimation': latestStatus?['animation'], // Can be null
-        'lastSeen': latestStatus?['timestamp'] ?? 0,
-      });
-    }
-    
-    // Listen to Firestore user data changes
-    final userSubscription = _firestore
-        .collection('users')
-        .doc(friendId)
-        .snapshots()
-        .listen((friendDoc) {
-      if (friendDoc.exists) {
-        latestFriendData = friendDoc.data()!;
-        emitCombinedData();
-      } else {
-        controller.add(null);
-      }
-    }, onError: (e) {
-      print("Error in friend data stream: $e");
-      controller.addError(e);
-    });
-    
-    // Listen to Realtime Database status changes
-    final statusRef = _realtimeDb.ref().child('userStatus').child(friendId);
-    final statusSubscription = statusRef.onValue.listen((event) {
-      print("FriendService: Status update received for $friendId");
-      if (event.snapshot.exists) {
-        try {
-          latestStatus = Map<String, dynamic>.from(event.snapshot.value as Map);
-          print("FriendService: New status for $friendId - online: ${latestStatus!['isOnline']}, animation: ${latestStatus!['animation']}");
-        } catch (e) {
-          print("Error parsing status data: $e");
-          latestStatus = null;
-        }
-      } else {
-        print("FriendService: No status data for $friendId (offline)");
-        latestStatus = null;
-      }
-      emitCombinedData();
-    }, onError: (e) {
-      print("Error in status stream: $e");
-    });
-    
-    // Clean up when the stream is cancelled
-    controller.onCancel = () {
-      userSubscription.cancel();
-      statusSubscription.cancel();
-    };
+    // Start the conversion and stream setup
+    _setupFriendStream(friendId, controller);
     
     return controller.stream;
+  }
+  
+  /// Helper method to set up the friend stream after UID conversion
+  void _setupFriendStream(String friendId, StreamController<Map<String, dynamic>?> controller) async {
+    try {
+      // Convert to Firebase UID if needed
+      final friendFirebaseUid = await _getFirebaseUid(friendId);
+      if (friendFirebaseUid == null) {
+        controller.add(null);
+        controller.close();
+        return;
+      }
+      
+      // Get 8-digit UID for display
+      final friend8DigitUid = await _get8DigitUid(friendFirebaseUid);
+      
+      // Keep track of the latest friend data and status
+      Map<String, dynamic>? latestFriendData;
+      Map<String, dynamic>? latestStatus;
+      
+      // Function to emit the combined data
+      void emitCombinedData() {
+        if (latestFriendData == null) return;
+        
+        controller.add({
+          'id': friendFirebaseUid,
+          'uid': friend8DigitUid,
+          'displayName': latestFriendData!['displayName'],
+          'photoURL': latestFriendData!['photoURL'],
+          'isOnline': latestStatus?['isOnline'] ?? false,
+          'statusAnimation': latestStatus?['animation'], // Can be null
+          'lastSeen': latestStatus?['timestamp'] ?? 0,
+        });
+      }
+      
+      // Listen to Firestore user data changes
+      final userSubscription = _firestore
+          .collection('users')
+          .doc(friendFirebaseUid)
+          .snapshots()
+          .listen((friendDoc) {
+        if (friendDoc.exists) {
+          latestFriendData = friendDoc.data()!;
+          emitCombinedData();
+        } else {
+          controller.add(null);
+        }
+      }, onError: (e, stackTrace) {
+        _appConfig.reportError(e, stackTrace, reason: "Error in friend data stream");
+        controller.addError(e);
+      });
+      
+      // IMPORTANT: Must use the 8-digit UID for retrieving status from Realtime Database
+      final String statusPath;
+      if (friend8DigitUid == null) {
+        _appConfig.log("FriendService: WARNING - Could not get 8-digit UID for $friendFirebaseUid, status updates may not work");
+        statusPath = friendFirebaseUid; // Fall back to Firebase UID, though this likely won't work for status
+      } else {
+        statusPath = friend8DigitUid;
+        _appConfig.log("FriendService: Listening for status updates at path: userStatus/$statusPath");
+      }
+      
+      // Listen to Realtime Database status changes
+      final statusRef = _realtimeDb.ref().child('userStatus').child(statusPath);
+      final statusSubscription = statusRef.onValue.listen((event) {
+        _appConfig.log("FriendService: Status update received for $friendFirebaseUid ($statusPath)");
+        if (event.snapshot.exists) {
+          try {
+            latestStatus = Map<String, dynamic>.from(event.snapshot.value as Map);
+            _appConfig.log("FriendService: New status for $friendFirebaseUid - online: ${latestStatus!['isOnline']}, animation: ${latestStatus!['animation']}");
+          } catch (e, stackTrace) {
+            _appConfig.reportError(e, stackTrace, reason: "Error parsing status data");
+            latestStatus = null;
+          }
+        } else {
+          _appConfig.log("FriendService: No status data for $friendFirebaseUid (offline)");
+          latestStatus = null;
+        }
+        emitCombinedData();
+      }, onError: (e, stackTrace) {
+        _appConfig.reportError(e, stackTrace, reason: "Error in status stream");
+      });
+      
+      // Clean up when the stream is cancelled
+      controller.onCancel = () {
+        userSubscription.cancel();
+        statusSubscription.cancel();
+      };
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: "Error setting up friend stream");
+      controller.addError(e);
+    }
+  }
+
+  /// Get stream of friend's status updates in real-time
+  Stream<Map<String, dynamic>?> getFriendStatusStream(String friendId) {
+    _appConfig.log("FriendService: Setting up status stream for friend ID: $friendId");
+    
+    // We need to convert the Firebase UID to 8-digit UID to access the correct path in real-time database
+    return Stream.fromFuture(_get8DigitUid(friendId))
+      .asyncExpand((String? uid8Digit) {
+        if (uid8Digit == null) {
+          _appConfig.log("FriendService: Failed to get 8-digit UID for friend $friendId");
+          return Stream.value(null);
+        }
+        
+        _appConfig.log("FriendService: Using 8-digit UID $uid8Digit for status lookup of friend $friendId");
+        
+        return _realtimeDb
+          .ref()
+          .child('userStatus')
+          .child(uid8Digit)
+          .onValue
+          .map((event) {
+            if (event.snapshot.value != null) {
+              final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+              _appConfig.log("FriendService: Status update for friend $friendId ($uid8Digit): animation=${data['animation']}, isOnline=${data['isOnline']}");
+              return {
+                'animation': data['animation'],
+                'timestamp': data['timestamp'] ?? 0,
+                'isOnline': data['isOnline'] ?? false,
+                'lastSeen': data['lastSeen'] ?? 0,
+              };
+            }
+            _appConfig.log("FriendService: No status data for friend $friendId ($uid8Digit)");
+            return {
+              'animation': null,
+              'timestamp': 0,
+              'isOnline': false,
+              'lastSeen': 0,
+            };
+          });
+      });
   }
 
   /// Check if a user is blocked
@@ -714,12 +1056,22 @@ class FriendService {
     }
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) {
+        return {
+          'isBlocked': false,
+          'error': 'Target user not found',
+          'errorCode': 'block/user-not-found'
+        };
+      }
+      
       // Check if current user has blocked target
       final blockedDoc = await _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('blockedUsers')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .get();
 
       // Check if target has blocked current user
@@ -727,7 +1079,7 @@ class FriendService {
           .collection('users')
           .doc(currentUserId)
           .collection('blockedBy')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .get();
 
       final blockedByMe = blockedDoc.exists;
@@ -754,9 +1106,10 @@ class FriendService {
         'blockType': blockType?.toString().split('.').last,
         'blockData': blockData,
         'timestamp': blockData['blockedAt'],
+        'firebaseUid': targetFirebaseUid
       };
-    } catch (e) {
-      print('Error checking block status: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking block status');
       return {
         'isBlocked': false,
         'error': 'Failed to check block status',
@@ -783,16 +1136,20 @@ class FriendService {
     if (currentUserId == null) return false;
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) return false;
+      
       final doc = await _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('friends')
-          .doc(targetUserId)
+          .doc(targetFirebaseUid)
           .get();
 
       return doc.exists;
-    } catch (e) {
-      print('Error checking if user is friend: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking if user is friend');
       return false;
     }
   }
@@ -802,12 +1159,16 @@ class FriendService {
     if (currentUserId == null) return null;
 
     try {
+      // Convert to Firebase UID if needed
+      final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+      if (targetFirebaseUid == null) return null;
+      
       // Check both directions of the request
       final requestRef = _firestore
           .collection('users')
           .doc(currentUserId)
           .collection('incomingRequests')
-          .doc(targetUserId);
+          .doc(targetFirebaseUid);
 
       final requestDoc = await requestRef.get();
       if (requestDoc.exists) {
@@ -819,8 +1180,8 @@ class FriendService {
       }
 
       return null;
-    } catch (e) {
-      print('Error getting friend request status: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error getting friend request status');
       return null;
     }
   }
@@ -829,14 +1190,14 @@ class FriendService {
   Stream<List<Map<String, dynamic>>> getBlockedUsersStream() {
     if (currentUserId == null) return Stream.value([]);
 
-    print("FriendService: Getting blocked users stream for user: $currentUserId");
+    _appConfig.log("FriendService: Getting blocked users stream for user: $currentUserId");
     
     // Create a controller to handle errors and retries
     final controller = StreamController<List<Map<String, dynamic>>>();
     
     // Set up the stream with retry logic and error handling
     void setupStream() {
-      print("FriendService: Setting up blocked users stream");
+      _appConfig.log("FriendService: Setting up blocked users stream");
       
       StreamSubscription? subscription;
       subscription = _firestore
@@ -845,13 +1206,13 @@ class FriendService {
           .collection('blockedUsers')
           .snapshots()
           .asyncMap((snapshot) async {
-            print("FriendService: Got ${snapshot.docs.length} blocked users docs");
+            _appConfig.log("FriendService: Got ${snapshot.docs.length} blocked users docs");
             final blockedUsers = <Map<String, dynamic>>[];
             
             try {
               for (var doc in snapshot.docs) {
                 final userId = doc.id;
-                print("FriendService: Processing blocked user: $userId, data: ${doc.data()}");
+                _appConfig.log("FriendService: Processing blocked user: $userId, data: ${doc.data()}");
                 
                 try {
                   final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -874,9 +1235,9 @@ class FriendService {
                       'wasFriend': blockData['wasFriend'] ?? false
                     });
                     
-                    print("FriendService: Added blocked user to list: $userId");
+                    _appConfig.log("FriendService: Added blocked user to list: $userId");
                   } else {
-                    print("FriendService: User document doesn't exist for blocked user: $userId");
+                    _appConfig.log("FriendService: User document doesn't exist for blocked user: $userId");
                     // Add a placeholder entry with minimal information
                     blockedUsers.add({
                       'id': userId,
@@ -887,8 +1248,8 @@ class FriendService {
                       'wasFriend': false
                     });
                   }
-                } catch (e) {
-                  print("FriendService: Error fetching user doc for blocked user $userId: $e");
+                } catch (e, stackTrace) {
+                  _appConfig.reportError(e, stackTrace, reason: "Error fetching user doc for blocked user $userId");
                   // Add a placeholder entry with error information
                   blockedUsers.add({
                     'id': userId,
@@ -902,11 +1263,11 @@ class FriendService {
                 }
               }
               
-              print("FriendService: Returning ${blockedUsers.length} blocked users");
+              _appConfig.log("FriendService: Returning ${blockedUsers.length} blocked users");
               return blockedUsers;
-            } catch (e) {
-              print("FriendService: Error processing blocked users: $e");
-              throw e;
+            } catch (e, stackTrace) {
+              _appConfig.reportError(e, stackTrace, reason: "Error processing blocked users");
+              rethrow;
             }
           })
           .listen(
@@ -916,22 +1277,22 @@ class FriendService {
                 controller.add(users);
               }
             },
-            onError: (error) {
+            onError: (error, stackTrace) {
               // On error, log and try to recover
-              print("FriendService: Error in blocked users stream: $error");
+              _appConfig.reportError(error, stackTrace, reason: "Error in blocked users stream");
               
               if (!controller.isClosed) {
                 // Try to add empty list to avoid breaking UI
                 try {
                   controller.add([]);
-                } catch (e) {
-                  print("FriendService: Error adding empty list to controller: $e");
+                } catch (e, stackTrace) {
+                  _appConfig.reportError(e, stackTrace, reason: "Error adding empty list to controller");
                 }
                 
                 // Retry after delay
                 Future.delayed(Duration(seconds: 5), () {
                   if (!controller.isClosed) {
-                    print("FriendService: Retrying blocked users stream setup");
+                    _appConfig.log("FriendService: Retrying blocked users stream setup");
                     subscription?.cancel();
                     setupStream();
                   }
@@ -940,11 +1301,11 @@ class FriendService {
             },
             onDone: () {
               // If the stream is done (should rarely happen), retry
-              print("FriendService: Blocked users stream done, retrying");
+              _appConfig.log("FriendService: Blocked users stream done, retrying");
               if (!controller.isClosed) {
                 Future.delayed(Duration(seconds: 2), () {
                   if (!controller.isClosed) {
-                    print("FriendService: Restarting blocked users stream");
+                    _appConfig.log("FriendService: Restarting blocked users stream");
                     subscription?.cancel();
                     setupStream();
                   }
@@ -956,7 +1317,7 @@ class FriendService {
       
       // Clean up on controller close
       controller.onCancel = () {
-        print("FriendService: Cancelling blocked users stream");
+        _appConfig.log("FriendService: Cancelling blocked users stream");
         subscription?.cancel();
       };
     }
@@ -968,15 +1329,13 @@ class FriendService {
     return controller.stream;
   }
 
-  /// Monitor a friend's status in real-time
+  /// Monitor friend status with enhanced error handling
   Future<bool> monitorFriendStatus(String friendId) async {
     try {
-      print("FriendService: Setting up status monitoring for friend: $friendId");
-      // This would typically connect to the realtime database to monitor status changes
-      // The implementation depends on your existing Firebase setup
+      // Keep the existing implementation
       return true;
-    } catch (e) {
-      print("Error monitoring friend status: $e");
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error monitoring friend status');
       return false;
     }
   }
@@ -994,8 +1353,18 @@ class FriendService {
     // Function to perform the unblock operation with proper error handling
     Future<Map<String, dynamic>> performUnblock() async {
       try {
+        // Convert to Firebase UID if needed
+        final targetFirebaseUid = await _getFirebaseUid(targetUserId);
+        if (targetFirebaseUid == null) {
+          return {
+            'success': false,
+            'error': 'Target user not found',
+            'errorCode': 'unblock/user-not-found'
+          };
+        }
+        
         // Check if the user is currently blocked
-        final blockStatus = await getBlockStatus(targetUserId);
+        final blockStatus = await getBlockStatus(targetFirebaseUid);
         if (blockStatus['blockedByMe'] != true) {
           return {
             'success': false,
@@ -1009,13 +1378,13 @@ class FriendService {
             .collection('users')
             .doc(currentUserId)
             .collection('blockedUsers')
-            .doc(targetUserId)
+            .doc(targetFirebaseUid)
             .delete();
 
         // Remove from blockedBy collection for the other user
         await _firestore
             .collection('users')
-            .doc(targetUserId)
+            .doc(targetFirebaseUid)
             .collection('blockedBy')
             .doc(currentUserId)
             .delete();
@@ -1024,9 +1393,10 @@ class FriendService {
           'success': true,
           'message': 'User unblocked successfully',
           'userId': targetUserId,
+          'firebaseUid': targetFirebaseUid
         };
-      } catch (e) {
-        print('Error in unblock operation: $e');
+      } catch (e, stackTrace) {
+        _appConfig.reportError(e, stackTrace, reason: 'Error in unblock operation');
         // Classify error type
         String errorCode = 'unblock/unknown-error';
         if (e.toString().contains('network')) {
@@ -1056,7 +1426,7 @@ class FriendService {
            result['isNetworkError'] == true && 
            retries < 2) {
       retries++;
-      print('Retrying unblock operation, attempt $retries');
+      _appConfig.log('Retrying unblock operation, attempt $retries');
       
       // Wait before retry with exponential backoff
       await Future.delayed(Duration(seconds: retries * 2));
@@ -1069,5 +1439,308 @@ class FriendService {
     }
     
     return result;
+  }
+
+  /// Get friends directly (not as a stream) for manual refresh
+  Future<List<Map<String, dynamic>>> getFriends() async {
+    if (currentUserId == null) return [];
+    
+    try {
+      _appConfig.log('Getting friends directly for user $currentUserId');
+      final friendsCollection = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('friends')
+          .get();
+          
+      _appConfig.log('Found ${friendsCollection.docs.length} friend documents');
+      final List<Map<String, dynamic>> friends = [];
+      
+      for (var doc in friendsCollection.docs) {
+        final friendId = doc.id;
+        _appConfig.log('Processing friend: $friendId');
+        
+        // Get user data for this friend
+        final userData = await _firestore
+            .collection('users')
+            .doc(friendId)
+            .get();
+            
+        if (userData.exists) {
+          final friendData = userData.data() ?? {};
+          _appConfig.log('Found user data for friend: ${friendData['displayName']}');
+          
+          // Get online status from realtime database
+          try {
+            final statusSnapshot = await _realtimeDb
+                .ref('userStatus/$friendId')
+                .get();
+                
+            final isOnline = statusSnapshot.exists && 
+                (statusSnapshot.child('isOnline').value == true);
+                
+            // Get animation and last seen as well
+            final String? animation = statusSnapshot.exists ? 
+                statusSnapshot.child('animation').value as String? : null;
+            final int lastSeen = statusSnapshot.exists && statusSnapshot.child('lastSeen').exists ?
+                (statusSnapshot.child('lastSeen').value as int?) ?? 0 : 0;
+                
+            friends.add({
+              'id': friendId,
+              'displayName': friendData['displayName'] ?? 'Unknown User',
+              'photoURL': friendData['photoURL'],
+              'isOnline': isOnline,
+              'statusAnimation': animation,
+              'lastSeen': lastSeen,
+              'email': friendData['email'],
+              'addedAt': doc.data()['addedAt'],
+              'addedBy': doc.data()['addedBy'],
+            });
+            
+            _appConfig.log('Added friend with ID $friendId to list (online: $isOnline, animation: $animation)');
+          } catch (e, stackTrace) {
+            _appConfig.reportError(e, stackTrace, reason: 'Error getting status for $friendId');
+            // Still add the friend but mark as offline
+            friends.add({
+              'id': friendId,
+              'displayName': friendData['displayName'] ?? 'Unknown User',
+              'photoURL': friendData['photoURL'],
+              'isOnline': false,
+              'statusAnimation': null,
+              'lastSeen': 0,
+              'email': friendData['email'],
+              'addedAt': doc.data()['addedAt'],
+              'addedBy': doc.data()['addedBy'],
+            });
+          }
+        } else {
+          _appConfig.log('WARNING - User document for friend $friendId does not exist');
+          // Add with minimal data
+          friends.add({
+            'id': friendId,
+            'displayName': 'Unknown User',
+            'isOnline': false,
+            'statusAnimation': null,
+            'lastSeen': 0,
+            'email': null,
+            'addedAt': doc.data()['addedAt'],
+            'addedBy': doc.data()['addedBy'],
+          });
+        }
+      }
+      
+      _appConfig.log('Returning ${friends.length} friends');
+      return friends;
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error getting friends');
+      return [];
+    }
+  }
+
+  /// Debug method to directly check friends collection in Firestore
+  Future<List<Map<String, dynamic>>> debugCheckFriendsCollection() async {
+    if (currentUserId == null) return [];
+    
+    try {
+      _appConfig.log('FriendService DEBUG: Directly checking friends collection for user: $currentUserId');
+      
+      // Get all friend documents for the current user
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('friends')
+          .get();
+      
+      List<Map<String, dynamic>> results = [];
+      
+      for (var doc in snapshot.docs) {
+        final friendId = doc.id;
+        final data = doc.data();
+        
+        _appConfig.log('FriendService DEBUG: Found friend document with ID: $friendId');
+        _appConfig.log('FriendService DEBUG: Friend document data: $data');
+        
+        results.add({
+          'id': friendId,
+          'rawData': data,
+        });
+        
+        // Also check if this friend's user document exists
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(friendId)
+            .get();
+            
+        if (userDoc.exists) {
+          _appConfig.log('FriendService DEBUG: User document exists for friend $friendId: ${userDoc.data()?['displayName']}');
+        } else {
+          _appConfig.log('FriendService DEBUG: WARNING - User document does NOT exist for friend $friendId');
+        }
+      }
+      
+      return results;
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking friends collection');
+      return [];
+    }
+  }
+
+  /// Search user by UID - handles both 8-digit and Firebase UIDs
+  Future<Map<String, dynamic>> searchUserByUID(String searchUID) async {
+    if (currentUserId == null) {
+      return {
+        'success': false,
+        'error': 'User not authenticated',
+        'errorCode': 'auth/not-authenticated'
+      };
+    }
+    
+    _appConfig.log('Searching for user with UID: $searchUID');
+    
+    try {
+      DocumentSnapshot? userDoc;
+      String? firebaseUid;
+      
+      // First, try direct lookup by Firebase UID if it looks like one (length > 20 chars)
+      if (searchUID.length > 20) {
+        // Looks like a Firebase Auth UID, try direct document lookup
+        _appConfig.log('Trying direct lookup with Firebase UID');
+        userDoc = await _firestore.collection('users').doc(searchUID).get();
+        if (userDoc.exists) {
+          firebaseUid = searchUID;
+          _appConfig.log('Found user directly with Firebase UID: $firebaseUid');
+        } else {
+          _appConfig.log('No user document found with this Firebase UID');
+        }
+      }
+      
+      // If not found or not a Firebase UID, try searching by 8-digit UID
+      if (userDoc == null || !userDoc.exists) {
+        _appConfig.log('Trying to search by 8-digit UID');
+        // Query for the 8-digit UID
+        final querySnapshot = await _firestore
+            .collection('users')
+            .where('uid', isEqualTo: searchUID)
+            .limit(1)
+            .get();
+            
+        if (querySnapshot.docs.isNotEmpty) {
+          userDoc = querySnapshot.docs.first;
+          firebaseUid = userDoc.id; // The document ID is the Firebase Auth UID
+          _appConfig.log('Found user by 8-digit UID. Firebase UID: $firebaseUid');
+        } else {
+          _appConfig.log('No user found with 8-digit UID: $searchUID');
+        }
+      }
+      
+      // If we found a user document
+      if (userDoc != null && userDoc.exists && firebaseUid != null) {
+        // Prevent finding yourself
+        if (firebaseUid == currentUserId) {
+          return {
+            'success': false,
+            'error': 'You cannot add yourself as a friend',
+            'errorCode': 'search/self-reference'
+          };
+        }
+        
+        // Check if already friends
+        final isFriendRelationship = await isFriend(firebaseUid);
+        
+        // Check if there's a pending request
+        final hasPendingRequest = await _checkForPendingRequests(firebaseUid);
+        
+        // Get block status
+        final blockStatus = await getBlockStatus(firebaseUid);
+        
+        // Extract user data
+        final userData = userDoc.data() as Map<String, dynamic>?;
+        if (userData == null) {
+          return {
+            'success': false,
+            'error': 'User document is empty',
+            'errorCode': 'search/empty-document'
+          };
+        }
+        
+        // Format the result
+        return {
+          'success': true,
+          'user': {
+            'id': firebaseUid,
+            'uid': userData['uid'] ?? 'Unknown', // 8-digit UID
+            'displayName': userData['displayName'] ?? 'Unknown User',
+            'photoURL': userData['photoURL'],
+            'email': userData['email'],
+          },
+          'relationship': {
+            'isFriend': isFriendRelationship,
+            'hasPendingRequest': hasPendingRequest['hasPendingRequest'] ?? false,
+            'pendingRequestType': hasPendingRequest['requestType'],
+            'isBlocked': blockStatus['isBlocked'] ?? false,
+            'blockType': blockStatus['blockType'],
+          }
+        };
+      }
+      
+      // No user found with this UID
+      return {
+        'success': false,
+        'error': 'No user found with this ID',
+        'errorCode': 'search/user-not-found'
+      };
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error searching user by UID');
+      return {
+        'success': false,
+        'error': 'Error searching for user',
+        'errorCode': 'search/error',
+        'exception': e.toString()
+      };
+    }
+  }
+
+  /// Check for pending friend requests between users
+  Future<Map<String, dynamic>> _checkForPendingRequests(String otherUserId) async {
+    if (currentUserId == null) return {'hasPendingRequest': false};
+    
+    try {
+      // Check for incoming request
+      final incomingDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('incomingRequests')
+          .doc(otherUserId)
+          .get();
+          
+      if (incomingDoc.exists) {
+        return {
+          'hasPendingRequest': true,
+          'requestType': 'incoming',
+          'status': incomingDoc.data()?['status'] ?? 'pending'
+        };
+      }
+      
+      // Check for outgoing request
+      final outgoingDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('outgoingRequests')
+          .doc(otherUserId)
+          .get();
+          
+      if (outgoingDoc.exists) {
+        return {
+          'hasPendingRequest': true,
+          'requestType': 'outgoing',
+          'status': outgoingDoc.data()?['status'] ?? 'pending'
+        };
+      }
+      
+      return {'hasPendingRequest': false};
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking pending requests');
+      return {'hasPendingRequest': false, 'error': e.toString()};
+    }
   }
 } 

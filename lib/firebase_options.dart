@@ -94,4 +94,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'duckbuck-a2943.firebasestorage.app',
     measurementId: 'G-Q44RKB8K6F',
   );
+
 }

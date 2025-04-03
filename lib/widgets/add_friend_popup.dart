@@ -4,12 +4,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart'; 
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../providers/friend_provider.dart';
 import '../services/friend_service.dart';
 import 'cool_button.dart';
 
 class AddFriendPopup extends StatefulWidget {
-  const AddFriendPopup({Key? key}) : super(key: key);
+  const AddFriendPopup({super.key});
 
   @override
   State<AddFriendPopup> createState() => _AddFriendPopupState();
@@ -17,37 +20,12 @@ class AddFriendPopup extends StatefulWidget {
 
 class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProviderStateMixin {
   bool _showScanner = false;
-  late TabController _tabController;
-  final PageController _pageController = PageController();
   
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        _pageController.animateToPage(
-          _tabController.index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
-    // Auto-open scanner when tab is switched to scan QR
-    _tabController.addListener(() {
-      if (_tabController.index == 0) {
-        setState(() => _showScanner = true);
-      }
-    });
-  }
+  // Update colors to better match the animated background
+  final Color _backgroundColor = const Color(0xFFE3B77D); // Lighter warm tone
+  final Color _accentColor = const Color(0xFFB8782E);   // Golden amber accent
+  final Color _textColor = const Color(0xFF4A3520);     // Warm brown text 
   
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _pageController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -55,19 +33,21 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
       insetPadding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         width: MediaQuery.of(context).size.width,
-        height: _showScanner 
-            ? MediaQuery.of(context).size.height * 0.8
-            : MediaQuery.of(context).size.height * 0.5,
+        height: MediaQuery.of(context).size.height * 0.6,
         decoration: BoxDecoration(
-          color: const Color(0xFF3C1F1F),
+          color: _backgroundColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
-              spreadRadius: 5,
+              spreadRadius: 2,
             ),
           ],
+          border: Border.all(
+            color: _accentColor.withOpacity(0.4),
+            width: 1.5,
+          ),
         ),
         child: Column(
           children: [
@@ -79,10 +59,10 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
                 children: [
                   Text(
                     _showScanner ? 'Scan QR Code' : 'Add Friend',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: _textColor,
                     ),
                   ).animate()
                     .fadeIn(duration: 300.ms)
@@ -91,10 +71,10 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
                     icon: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: _accentColor.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.close, color: Colors.white),
+                      child: Icon(_showScanner ? Icons.arrow_back : Icons.close, color: _accentColor),
                     ),
                     onPressed: () {
                       if (_showScanner) {
@@ -108,171 +88,12 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
               ),
             ),
 
-            if (_showScanner)
-              // QR Scanner View
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Stack(
-                      children: [
-                        MobileScanner(
-                          controller: MobileScannerController(),
-                          onDetect: (capture) {
-                            final List<Barcode> barcodes = capture.barcodes;
-                            if (barcodes.isNotEmpty) {
-                              final String? code = barcodes.first.rawValue;
-                              if (code != null) {
-                                setState(() => _showScanner = false);
-                                _processScannedCode(code);
-                              }
-                            }
-                          },
-                        ),
-                        // Scanner overlay
-                        Center(
-                          child: Container(
-                            width: 200,
-                            height: 200,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFD4A76A),
-                                width: 2,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ).animate(
-                            onPlay: (controller) => controller.repeat(),
-                          ).shimmer(
-                            duration: 1500.ms,
-                            color: Colors.white.withOpacity(0.5),
-                          ),
-                        ),
-                        // Scanner message
-                        Positioned(
-                          bottom: 30,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3C1F1F).withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color: const Color(0xFFD4A76A).withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Text(
-                                'Scan your friend\'s QR code',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-            else
-              // Main Content
-              Expanded(
-                child: Column(
-                  children: [
-                    // Tab Bar
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: TabBar(
-                          controller: _tabController,
-                          indicator: BoxDecoration(
-                            borderRadius: BorderRadius.circular(25),
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFFD4A76A),
-                                Color(0xFFB38B5D),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          labelColor: Colors.white,
-                          unselectedLabelColor: Colors.white.withOpacity(0.5),
-                          labelStyle: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          unselectedLabelStyle: const TextStyle(
-                            fontSize: 16,
-                          ),
-                          tabs: [
-                            Tab(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.qr_code_scanner,
-                                    size: 20,
-                                    color: _tabController.index == 0 
-                                        ? Colors.white 
-                                        : Colors.white.withOpacity(0.5),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text('Scan QR'),
-                                ],
-                              ),
-                            ),
-                            Tab(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.person_search,
-                                    size: 20,
-                                    color: _tabController.index == 1 
-                                        ? Colors.white 
-                                        : Colors.white.withOpacity(0.5),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text('Search ID'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    // Page View
-                    Expanded(
-                      child: PageView(
-                        controller: _pageController,
-                        onPageChanged: (index) {
-                          _tabController.animateTo(index);
-                        },
-                        children: [
-                          // Scan QR Content
-                          _buildScanQRContent(),
-                          
-                          // Search ID Content
-                          const SearchUserView(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            // Main content - Show either QR scanner or Add Friend content
+            Expanded(
+              child: _showScanner
+                  ? _buildScannerContent()
+                  : _buildScanQRContent(),
+            ),
           ],
         ),
       ),
@@ -286,136 +107,239 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
       );
   }
 
-  Widget _buildScanQRContent() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // QR Code Icon
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: const Color(0xFFD4A76A).withOpacity(0.5),
-                  width: 2,
-                ),
+  Widget _buildScannerContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                children: [
+                  // QR Scanner
+                  MobileScanner(
+                    controller: MobileScannerController(),
+                    onDetect: (capture) {
+                      final List<Barcode> barcodes = capture.barcodes;
+                      if (barcodes.isNotEmpty) {
+                        final String? code = barcodes.first.rawValue;
+                        if (code != null) {
+                          setState(() => _showScanner = false);
+                          _processScannedCode(code);
+                        }
+                      }
+                    },
+                  ),
+                  
+                  // Scanner overlay
+                  Center(
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: _accentColor,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ).animate(
+                      onPlay: (controller) => controller.repeat(),
+                    ).shimmer(
+                      duration: 1500.ms,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                  
+                  // Instructions text
+                  Positioned(
+                    bottom: 20,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Scan your friend\'s QR code',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.qr_code_scanner,
-                size: 60,
-                color: Color(0xFFD4A76A),
-              ),
-            ).animate()
-              .fadeIn(duration: 600.ms)
-              .scale(
-                begin: const Offset(0.8, 0.8),
-                end: const Offset(1.0, 1.0),
-                duration: 600.ms,
-                curve: Curves.elasticOut,
-              ),
-              
-            const SizedBox(height: 24),
-            
-            const Text(
-              'Scan your friend\'s QR code to add them',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ).animate()
-              .fadeIn(delay: 200.ms, duration: 400.ms),
-            
-            const SizedBox(height: 36),
-            
-            // Open Scanner Button
-            DuckBuckButton(
-              text: 'Open Scanner',
-              onTap: () => setState(() => _showScanner = true),
-              color: const Color(0xFF2C1810),
-              borderColor: const Color(0xFFD4A76A),
-              width: 200,
-              icon: const Icon(Icons.camera_alt, color: Colors.white),
-            ).animate()
-              .fadeIn(delay: 400.ms, duration: 400.ms)
-              .slideY(delay: 400.ms, begin: 0.2, end: 0, duration: 400.ms),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _processScannedCode(String code) {
-    showDialog(
-      context: context,
-      builder: (context) => SearchUserPopup(initialSearchId: code),
-    );
+  // Method to show the QR scanner
+  void _showQRScanner() {
+    setState(() => _showScanner = true);
   }
-}
 
-// Search User View inside TabView
-class SearchUserView extends StatelessWidget {
-  const SearchUserView({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final TextEditingController searchController = TextEditingController();
-    
-    return Padding(
-      padding: const EdgeInsets.all(24),
+  Widget _buildScanQRContent() {
+    return Container(
+      padding: const EdgeInsets.all(20),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // User ID Input
-          TextField(
-            controller: searchController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Enter User ID',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.1),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              prefixIcon: const Icon(
-                Icons.person_search,
-                color: Color(0xFFD4A76A),
-              ),
+          // QR Code Illustration
+          Container(
+            height: 180,
+            width: 180,
+            margin: const EdgeInsets.only(bottom: 20),
+            child: Lottie.asset(
+              'assets/animations/qr-code-scan.json',
+              fit: BoxFit.contain,
+              repeat: true,
+              animate: true,
             ),
-          ).animate()
-            .fadeIn(duration: 400.ms)
-            .slideX(begin: -0.1, end: 0, duration: 400.ms),
-            
-          const SizedBox(height: 36),
+          ),
           
-          // Search Button
+          Text(
+            'Scan QR Code',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: _textColor,
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          Text(
+            'Open the scanner to scan your friend\'s QR code',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: _textColor.withOpacity(0.7),
+            ),
+          ),
+          
+          const SizedBox(height: 30),
+          
+          // Open Scanner Button
           DuckBuckButton(
-            text: 'Search User',
-            onTap: () {
-              final userId = searchController.text.trim();
-              if (userId.isNotEmpty) {
-                Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (context) => SearchUserPopup(initialSearchId: userId),
-                );
-              }
-            },
+            text: 'Open Scanner',
+            onTap: _showQRScanner,
             color: const Color(0xFF2C1810),
             borderColor: const Color(0xFFD4A76A),
-            width: 200,
-            icon: const Icon(Icons.search, color: Colors.white),
-          ).animate()
-            .fadeIn(delay: 200.ms, duration: 400.ms)
-            .slideY(delay: 200.ms, begin: 0.2, end: 0, duration: 400.ms),
+            height: 65,
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+            depth: 10,
+            borderWidth: 1.5,
+          ).animate().fadeIn(duration: 300.ms, delay: 100.ms).slideY(begin: 0.2, end: 0),
         ],
+      ),
+    );
+  }
+
+  void _processScannedCode(String encryptedCode) {
+    try {
+      // Try to decrypt the QR code
+      final String? userId = _decryptQrData(encryptedCode);
+      
+      if (userId == null) {
+        _showErrorMessage("Invalid QR code. Please try again.");
+        return;
+      }
+      
+      // Get current user ID to prevent self-scanning
+      final friendService = FriendService();
+      final currentUserId = friendService.currentUserId;
+      
+      // Don't allow scanning yourself
+      if (userId == currentUserId) {
+        _showErrorMessage("You cannot add yourself as a friend");
+        return;
+      }
+      
+      // Show the search user popup with the scanned code
+      showDialog(
+        context: context,
+        builder: (context) => SearchUserPopup(initialSearchId: userId),
+      ).then((result) {
+        // Pass the result back to the original caller
+        if (result != null) {
+          Navigator.pop(context, result);
+        }
+      });
+    } catch (e) {
+      _showErrorMessage("Error processing QR code: ${e.toString()}");
+    }
+  }
+  
+  // Decrypt the QR code data
+  String? _decryptQrData(String encryptedData) {
+    try {
+      // Decode base64
+      final bytes = base64Decode(encryptedData);
+      final decodedString = utf8.decode(bytes);
+      
+      // Check for our app prefix
+      if (!decodedString.startsWith("DBK:")) {
+        return null; // Not our QR code
+      }
+      
+      // Remove prefix
+      final dataWithoutPrefix = decodedString.substring(4);
+      
+      // Split into parts
+      final parts = dataWithoutPrefix.split(":");
+      if (parts.length != 3) {
+        return null; // Invalid format
+      }
+      
+      final userId = parts[0];
+      final timestamp = parts[1];
+      final providedSignature = parts[2];
+      
+      // Verify signature
+      final dataToVerify = "$userId:$timestamp";
+      final key = 'DuckBuckSecretKey';
+      final hmacSha256 = Hmac(sha256, utf8.encode(key));
+      final digest = hmacSha256.convert(utf8.encode(dataToVerify));
+      final computedSignature = digest.toString().substring(0, 8);
+      
+      // Check if signatures match
+      if (providedSignature != computedSignature) {
+        return null; // Invalid signature
+      }
+      
+      return userId;
+    } catch (e) {
+      print("Error decrypting QR data: $e");
+      return null;
+    }
+  }
+  
+  void _showErrorMessage(String message) {
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: const EdgeInsets.all(10),
       ),
     );
   }
@@ -434,38 +358,34 @@ class SearchUserPopup extends StatefulWidget {
   State<SearchUserPopup> createState() => _SearchUserPopupState();
 }
 
-class _SearchUserPopupState extends State<SearchUserPopup> {
-  final TextEditingController _searchController = TextEditingController();
+class _SearchUserPopupState extends State<SearchUserPopup> with SingleTickerProviderStateMixin {
   Map<String, dynamic>? _foundUser;
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _isSendingRequest = false;
   FriendRequestStatus? _requestStatus;
+  
+  // Update colors to better match the animated background
+  final Color _backgroundColor = const Color(0xFFE3B77D); // Lighter warm tone
+  final Color _accentColor = const Color(0xFFB8782E);   // Golden amber accent
+  final Color _textColor = const Color(0xFF4A3520);     // Warm brown text
+  final Color _secondaryBgColor = const Color(0xFFF0DDB3); // Light cream secondary
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialSearchId != null && widget.initialSearchId!.isNotEmpty) {
-      _searchController.text = widget.initialSearchId!;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _searchUser(widget.initialSearchId!);
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchUser(widget.initialSearchId ?? '');
+    });
   }
 
   Future<void> _searchUser(String uid) async {
-    if (uid.isEmpty) return;
+    if (uid.isEmpty) {
+      setState(() => _isLoading = false);
+      _showErrorMessage('Invalid QR code');
+      return;
+    }
 
-    setState(() {
-      _isLoading = true;
-      _foundUser = null;
-      _requestStatus = null;
-    });
+    setState(() => _isLoading = true);
 
     try {
       // Get current user ID to prevent self-search
@@ -476,21 +396,8 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
       // Don't allow searching for yourself
       if (uid == currentUserId) {
         HapticFeedback.vibrate();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('You cannot add yourself as a friend'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            margin: const EdgeInsets.all(10),
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-          _foundUser = null;
-        });
+        setState(() => _isLoading = false);
+        _showErrorMessage('You cannot add yourself as a friend');
         return;
       }
       
@@ -505,24 +412,8 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
           .get();
           
       if (!userDoc.exists) {
-        setState(() {
-          _isLoading = false;
-          _foundUser = null;
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('User not found'),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              margin: const EdgeInsets.all(10),
-            ),
-          );
-        }
+        setState(() => _isLoading = false);
+        _showErrorMessage('User not found');
         return;
       }
       
@@ -535,35 +426,18 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
           _foundUser = userData;
           _isLoading = false;
           _requestStatus = FriendRequestStatus.blocked;
-          
-          // Store who blocked whom for display purposes
           _foundUser!['blockedBy'] = isUserBlocked ? 'me' : 'them';
         });
         
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(isUserBlocked 
-                ? 'You have blocked this user' 
-                : 'You are blocked by this user'),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              margin: const EdgeInsets.all(10),
-            ),
-          );
-        }
+        _showErrorMessage(isUserBlocked 
+          ? 'You have blocked this user' 
+          : 'You are blocked by this user');
         return;
       }
 
       // If not blocked, check other relationship statuses
-      // Check friend request status and friend status
       final requestStatus = await friendProvider.getFriendRequestStatus(uid);
       final isFriend = await friendProvider.isFriend(uid);
-      
-      // Check for pending outgoing requests
       final hasPendingOutgoing = friendProvider.outgoingRequests.any((req) => req['id'] == uid);
 
       setState(() {
@@ -573,27 +447,40 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         if (isFriend) {
           _requestStatus = FriendRequestStatus.accepted;
         } else if (hasPendingOutgoing) {
-          // Handle outgoing pending request case
           _requestStatus = FriendRequestStatus.pending;
         } else if (requestStatus != null) {
           _requestStatus = requestStatus;
         }
       });
+      
+      // Give haptic feedback on successful user find
+      HapticFeedback.mediumImpact();
+      
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error searching user: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        );
-      }
+      _showErrorMessage('Error finding user: ${e.toString()}');
     }
+  }
+  
+  void _showErrorMessage(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+    
+    // Auto-dismiss the dialog after error
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) Navigator.pop(context);
+    });
   }
 
   Future<void> _sendFriendRequest() async {
@@ -617,21 +504,9 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         });
         
         // Show appropriate message
-        if (mounted) {
-          HapticFeedback.vibrate();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(isUserBlocked 
-                ? 'You cannot send a request to a blocked user' 
-                : 'You cannot send a request to this user'),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          );
-        }
+        _showErrorMessage(isUserBlocked 
+          ? 'You cannot send a request to a blocked user' 
+          : 'You cannot send a request to this user');
         return;
       }
       
@@ -642,6 +517,11 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
       if (mounted) {
         if (result['success'] == true) {
           HapticFeedback.mediumImpact();
+          
+          // Show a success animation
+          setState(() => _requestStatus = FriendRequestStatus.pending);
+          
+          // Show success snackbar
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['message'] ?? 'Friend request sent successfully'),
@@ -650,14 +530,16 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
+              margin: const EdgeInsets.all(16),
             ),
           );
-          setState(() {
-            _requestStatus = FriendRequestStatus.pending;
-          });
           
-          // Return success result to the original caller
-          Navigator.pop(context, result);
+          // Auto-dismiss the popup after a short delay
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (mounted) {
+            // Return success result to the original caller and close dialog
+            Navigator.pop(context, result);
+          }
         } else {
           HapticFeedback.vibrate();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -668,28 +550,16 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
+              margin: const EdgeInsets.all(16),
             ),
           );
+          setState(() => _isSendingRequest = false);
         }
       }
     } catch (e) {
       HapticFeedback.vibrate();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSendingRequest = false);
-      }
+      _showErrorMessage('Error: ${e.toString()}');
+      setState(() => _isSendingRequest = false);
     }
   }
 
@@ -700,103 +570,60 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         width: MediaQuery.of(context).size.width,
-        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF3C1F1F),
+          color: _backgroundColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.2),
               blurRadius: 20,
-              spreadRadius: 5,
+              spreadRadius: 2,
             ),
           ],
+          border: Border.all(
+            color: _accentColor.withOpacity(0.4),
+            width: 1.5,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with back button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Search User',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ).animate()
-                  .fadeIn(duration: 300.ms)
-                  .slideX(begin: -0.1, end: 0, duration: 300.ms),
-                IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      shape: BoxShape.circle,
+            // Header with close button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _isLoading ? 'Finding User' : (_foundUser != null ? 'User Found' : 'No User Found'),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: _textColor,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white),
+                  ).animate()
+                    .fadeIn(duration: 300.ms)
+                    .slideX(begin: -0.1, end: 0, duration: 300.ms),
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: _accentColor.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close, color: _accentColor),
+                    ),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
-            // Search Field - only show if no user found yet
-            if (_foundUser == null || _isLoading)
-              TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Enter user ID',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.1),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.person_search,
-                    color: Color(0xFFD4A76A),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search, color: Colors.white),
-                    onPressed: () => _searchUser(_searchController.text.trim()),
-                  ),
-                ),
-              ).animate()
-                .fadeIn(duration: 400.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-
-            const SizedBox(height: 20),
-
-            // Loading Indicator
+            // Loading Indicator or User Card
             if (_isLoading)
-              const Center(
-                child: SizedBox(
-                  height: 200,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        color: Color(0xFFD4A76A),
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Searching...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
+              _buildLoadingIndicator()
             else if (_foundUser != null)
               _buildUserCard()
                 .animate()
@@ -815,6 +642,43 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         curve: Curves.easeOutBack,
       );
   }
+  
+  Widget _buildLoadingIndicator() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Lottie.asset(
+            'assets/animations/loading1.json',
+            width: 120,
+            height: 120,
+            repeat: true,
+            animate: true,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Finding user...',
+            style: TextStyle(
+              color: _textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please wait while we process the QR code',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textColor.withOpacity(0.7),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
 
   Widget _buildUserCard() {
     // Determine blocked status
@@ -824,196 +688,197 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         ? _foundUser!['blockedBy'] 
         : '';
     
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2C1810).withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFD4A76A).withOpacity(0.3),
-          width: 1,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Column(
         children: [
-          // User info section
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                // Profile Photo
-                Hero(
-                  tag: 'user-photo-${_foundUser!['id']}',
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFD4A76A),
-                        width: 2,
-                      ),
-                      image: _foundUser!['photoURL'] != null
-                          ? DecorationImage(
-                              image: NetworkImage(_foundUser!['photoURL']),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                      color: _foundUser!['photoURL'] == null
-                          ? const Color(0xFFD4A76A).withOpacity(0.3)
-                          : null,
-                    ),
-                    child: _foundUser!['photoURL'] == null
-                        ? const Icon(Icons.person, size: 40, color: Colors.white)
-                        : null,
-                  ),
-                ),
-                
-                const SizedBox(width: 20),
-                
-                // User Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _foundUser!['displayName'] ?? 'Unknown User',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Remove UID display - show username or email instead
-                      Text(
-                        _foundUser!['username'] ?? _foundUser!['email'] ?? 'User',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.7),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Request Status
-                      if (_requestStatus != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(_requestStatus!),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            _getStatusText(_requestStatus!, blockType),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+          // User profile with animated background
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _secondaryBgColor,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 1,
                 ),
               ],
             ),
-          ),
-          
-          // Divider
-          Divider(color: Colors.white.withOpacity(0.1), height: 1),
-          
-          // Action Buttons - Now stacked vertically
-          Padding(
-            padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // Status Info Text for blocked users or friend status
-                if (isBlocked)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.red.withOpacity(0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.block,
-                          color: Colors.red,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            blockType == 'me'
-                                ? 'You have blocked this user'
-                                : 'You are blocked by this user',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
+                // Profile image with status indicator
+                Center(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Animated glow effect
+                      Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              _accentColor.withOpacity(0.7),
+                              _accentColor.withOpacity(0.0),
+                            ],
+                            stops: const [0.5, 1.0],
                           ),
                         ),
-                      ],
-                    ),
-                  )
-                else if (_requestStatus != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(_requestStatus!).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _getStatusColor(_requestStatus!).withOpacity(0.3),
-                        width: 1,
+                      ).animate(
+                        onPlay: (controller) => controller.repeat(reverse: true),
+                      ).scale(
+                        begin: const Offset(0.95, 0.95),
+                        end: const Offset(1.05, 1.05),
+                        duration: 2000.ms,
                       ),
-                    ),
+                      
+                      // Profile photo
+                      Hero(
+                        tag: 'user-photo-${_foundUser!['id']}',
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _accentColor,
+                              width: 3,
+                            ),
+                            image: _foundUser!['photoURL'] != null
+                                ? DecorationImage(
+                                    image: NetworkImage(_foundUser!['photoURL']),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            color: _foundUser!['photoURL'] == null
+                                ? _accentColor.withOpacity(0.2)
+                                : null,
+                          ),
+                          child: _foundUser!['photoURL'] == null
+                              ? Icon(Icons.person, size: 50, color: _accentColor)
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // User name and info
+                Text(
+                  _foundUser!['displayName'] ?? 'Unknown User',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: _textColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                if (_foundUser!['username'] != null || _foundUser!['email'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      _getActionText(_requestStatus!, blockType),
+                      _foundUser!['username'] ?? _foundUser!['email'] ?? 'User',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 16,
+                        color: _textColor.withOpacity(0.7),
+                        fontStyle: FontStyle.italic,
                       ),
                       textAlign: TextAlign.center,
                     ),
                   ),
+                  
+                const SizedBox(height: 16),
                 
-                // Send Request Button - only show if no status/relationship exists
-                if (_requestStatus == null)
-                  DuckBuckButton(
-                    text: _isSendingRequest ? 'Sending...' : 'Send Friend Request',
-                    onTap: _isSendingRequest 
-                      ? () {} // Empty function when loading
-                      : () { _sendFriendRequest(); },
-                    color: const Color(0xFF2C1810),
-                    borderColor: const Color(0xFFD4A76A),
-                    isLoading: _isSendingRequest,
-                    width: double.infinity,
+                // Status indicator
+                if (_requestStatus != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(_requestStatus!).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _getStatusColor(_requestStatus!).withOpacity(0.5),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _getStatusIcon(_requestStatus!),
+                          color: _getStatusColor(_requestStatus!),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _getStatusText(_requestStatus!, blockType),
+                          style: TextStyle(
+                            color: _getStatusColor(_requestStatus!),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                
-                // Always include space between buttons if the send request button is shown
-                if (_requestStatus == null)
-                  const SizedBox(height: 12),
-                
-                // Close Button - always show at bottom
-                DuckBuckButton(
-                  text: 'Close',
-                  onTap: () => Navigator.pop(context),
-                  color: Colors.grey.withOpacity(0.3),
-                  borderColor: Colors.grey,
-                  width: double.infinity,
-                ),
               ],
             ),
           ),
+          
+          const SizedBox(height: 24),
+          
+          // Action section
+          if (_isSendingRequest)
+            Lottie.asset(
+              'assets/animations/loading1.json',
+              width: 80,
+              height: 80,
+              repeat: true,
+              animate: true,
+            )
+          else if (!isBlocked && _requestStatus == null)
+            // Send Friend Request button
+            DuckBuckButton(
+              text: 'Send Friend Request',
+              onTap: _sendFriendRequest,
+              color: const Color(0xFF2C1810),
+              borderColor: const Color(0xFFD4A76A),
+              height: 65,
+              textStyle: const TextStyle(
+                fontSize: 16, 
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              depth: 10,
+              borderWidth: 1.5,
+            ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0)
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+              decoration: BoxDecoration(
+                color: _getStatusColor(_requestStatus!).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _getStatusColor(_requestStatus!).withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                _getActionText(_requestStatus!, blockType),
+                style: TextStyle(
+                  color: _textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
         ],
       ),
     );
@@ -1031,13 +896,26 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
         return Colors.grey;
     }
   }
+  
+  IconData _getStatusIcon(FriendRequestStatus status) {
+    switch (status) {
+      case FriendRequestStatus.pending:
+        return Icons.hourglass_bottom;
+      case FriendRequestStatus.accepted:
+        return Icons.check_circle;
+      case FriendRequestStatus.declined:
+        return Icons.cancel;
+      case FriendRequestStatus.blocked:
+        return Icons.block;
+    }
+  }
 
   String _getStatusText(FriendRequestStatus status, [String blockType = '']) {
     switch (status) {
       case FriendRequestStatus.pending:
         return 'Request Pending';
       case FriendRequestStatus.accepted:
-        return 'Friends';
+        return 'Already Friends';
       case FriendRequestStatus.declined:
         return 'Request Declined';
       case FriendRequestStatus.blocked:
@@ -1048,15 +926,15 @@ class _SearchUserPopupState extends State<SearchUserPopup> {
   String _getActionText(FriendRequestStatus status, [String blockType = '']) {
     switch (status) {
       case FriendRequestStatus.pending:
-        return 'Friend request already sent';
+        return 'You already sent a friend request to this user. They need to accept it.';
       case FriendRequestStatus.accepted:
-        return 'You are already friends with this user';
+        return 'You are already friends with this user.';
       case FriendRequestStatus.declined:
-        return 'Your friend request was declined by this user';
+        return 'Your friend request was declined by this user.';
       case FriendRequestStatus.blocked:
         return blockType == 'me' 
-            ? 'You have blocked this user' 
-            : 'You cannot interact with this user because they have blocked you';
+            ? 'You have blocked this user. Unblock them from your settings to add them as a friend.' 
+            : 'You cannot interact with this user because they have blocked you.';
     }
   }
 } 

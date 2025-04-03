@@ -31,9 +31,10 @@
 			<string>duckbuck</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.2979a51233838-s63repuurh8rf12f4jkbleq7ipied51h</string>
+				<string>com.googleusercontent.apps.297951233838-s63repuurh8rf12f4jkbleq7ipied51h</string>
 			</array>
 		</dict>
+		<dict/>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
@@ -44,6 +45,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DuckBuck needs camera access to scan QR codes for adding friends.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DuckBuck needs microphone access for voice messages and calls with friends.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -7,6 +7,7 @@ import 'package:duckbuck/widgets/animated_background.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:shimmer/shimmer.dart';
+import 'dart:math' as math;
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({Key? key}) : super(key: key);
@@ -150,42 +151,62 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                   
                   // Bottom button
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: constraints.maxWidth * 0.08, 
-                      right: constraints.maxWidth * 0.08, 
-                      bottom: safePadding.bottom + (isSmallScreen ? 20.0 : 50.0),
+                  Container(
+                    margin: EdgeInsets.only(
+                      left: constraints.maxWidth * 0.06, 
+                      right: constraints.maxWidth * 0.06, 
+                      bottom: math.max(safePadding.bottom + 16.0, 24.0),
                       top: 10.0,
                     ),
-                    child: DuckBuckButton(
-                      text: "Let's Go",
-                      onTap: () {
-                        // Add haptic feedback
-                        HapticFeedback.mediumImpact();
-                        
-                        // Navigate to the next screen
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => const AuthScreen()),
+                    constraints: BoxConstraints(
+                      maxWidth: 500, // Prevent button from becoming too wide on large screens
+                      minHeight: 48, // Minimum touch target size
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, btnConstraints) {
+                        // Calculate appropriate button height based on screen size
+                        final buttonHeight = math.min(
+                          math.max(48.0, constraints.maxHeight * 0.07),
+                          65.0 // Maximum button height
                         );
-                      },
-                      color: const Color(0xFFD4A76A),
-                      borderColor: const Color(0xFFB38B4D),
-                      textColor: Colors.white,
-                      alignment: MainAxisAlignment.center,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 24, 
-                        vertical: isSmallScreen ? 12 : 15
-                      ),
-                      icon: const Icon(Icons.arrow_forward, color: Colors.white),
-                      textStyle: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: constraints.maxWidth * 0.045,
-                        letterSpacing: 0.5,
-                      ),
-                      height: isSmallScreen ? 48 : 55,
-                      width: double.infinity,
+                        
+                        // Calculate appropriate font size
+                        final fontSize = math.min(
+                          math.max(16.0, constraints.maxWidth * 0.04),
+                          22.0 // Maximum font size
+                        );
+
+                        return DuckBuckButton(
+                          text: "Let's Go",
+                          onTap: () {
+                            // Add haptic feedback
+                            HapticFeedback.mediumImpact();
+                            
+                            // Navigate to the next screen
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const AuthScreen()),
+                            );
+                          },
+                          color: const Color(0xFFD4A76A),
+                          borderColor: const Color(0xFFB38B4D),
+                          textColor: Colors.white,
+                          alignment: MainAxisAlignment.center,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: math.max(16.0, btnConstraints.maxWidth * 0.05),
+                            vertical: 0, // Height is controlled by container
+                          ),
+                          icon: const Icon(Icons.arrow_forward, color: Colors.white),
+                          textStyle: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: fontSize,
+                            letterSpacing: 0.5,
+                          ),
+                          height: buttonHeight,
+                          width: double.infinity,
+                        );
+                      }
                     ),
                   ),
                 ],

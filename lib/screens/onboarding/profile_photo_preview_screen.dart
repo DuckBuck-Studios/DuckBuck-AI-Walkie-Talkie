@@ -6,7 +6,8 @@ import '../../services/user_service.dart';
 import '../Home/home_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart' as auth;
-import 'package:lottie/lottie.dart';  // Add this import at the top
+import 'package:lottie/lottie.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 
 class ProfilePhotoPreviewScreen extends StatefulWidget {
   final String imagePath;
@@ -178,10 +179,10 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      // Use a more responsive layout approach without fixed positioning
       body: SafeArea(
         child: Stack(
           children: [
+            // Main content
             Column(
               children: [
                 // Image container (takes most of the screen)
@@ -208,45 +209,66 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Set button (on top)
-                      DuckBuckButton(
-                        text: 'Set',
-                        onTap: _isLoading ? () {} : _setProfilePhoto,
-                        color: const Color(0xFFD4A76A),
-                        borderColor: const Color(0xFFB38B4D),
-                        textColor: Colors.white,
-                        height: 55,
+                      Container(
                         width: double.infinity,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                        height: 65,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: NeoPopButton(
+                          color: const Color(0xFFD4A76A),
+                          onTapUp: _isLoading ? () {} : _setProfilePhoto,
+                          onTapDown: () {},
+                          border: Border.all(
+                            color: const Color(0xFFB38B4D),
+                            width: 1.5,
+                          ),
+                          depth: 10,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Set',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  letterSpacing: 0.5,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
                         ),
-                        isLoading: _isLoading,
                       ),
                       
-                      const SizedBox(height: 16),
-                      
                       // Cancel button (below)
-                      DuckBuckButton(
-                        text: 'Cancel',
-                        onTap: _isLoading ? () {} : () => Navigator.of(context).pop(),
-                        color: Colors.grey.shade800,
-                        borderColor: Colors.grey.shade600,
-                        textColor: Colors.white,
-                        height: 55,
+                      Container(
                         width: double.infinity,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                        height: 65,
+                        child: NeoPopButton(
+                          color: Colors.grey.shade800,
+                          onTapUp: _isLoading ? () {} : () => Navigator.of(context).pop(),
+                          onTapDown: () {},
+                          border: Border.all(
+                            color: Colors.grey.shade600,
+                            width: 1.5,
+                          ),
+                          depth: 10,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Cancel',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  letterSpacing: 0.5,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
                         ),
-                        isLoading: false,
                       ),
                     ],
                   )
@@ -260,39 +282,52 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
               ],
             ),
             
-            // Loading overlay
+            // Optimized Loading Overlay with loading1.json
             if (_isLoading)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.7),
-                  child: Center(
+              Container(
+                color: Colors.black.withOpacity(0.85),
+                child: Center(
+                  child: Container(
+                    width: 250,
+                    padding: const EdgeInsets.all(25),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFFD4A76A).withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: 200,
-                          height: 200,
+                        // Single loading1.json animation
+                        Container(
+                          height: 120,
+                          width: 120,
                           child: Lottie.asset(
-                            'assets/animations/loading.json',
+                            'assets/animations/loading1.json',
+                            repeat: true,
+                            animate: true,
                             fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
+                        // Progress message
                         Text(
                           _progressMessage,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.bold,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                   ),
-                )
-                .animate()
-                .fadeIn(duration: const Duration(milliseconds: 200)),
-              ),
+                ),
+              ).animate().fadeIn(duration: const Duration(milliseconds: 250)),
           ],
         ),
       ),

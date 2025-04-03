@@ -8,10 +8,9 @@ class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Get screen dimensions for responsive sizing
+  Widget build(BuildContext context) { 
     final Size screenSize = MediaQuery.of(context).size;
-    final double titleSize = screenSize.width * 0.15; // Responsive title size
+    final double titleSize = screenSize.width * 0.15; 
     final double particleSize = math.min(screenSize.width, screenSize.height) * 0.6;
     
     return DuckBuckAnimatedBackground(

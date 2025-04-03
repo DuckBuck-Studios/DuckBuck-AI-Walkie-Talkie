@@ -2,13 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:retry/retry.dart';
 import '../models/user_model.dart' as models;
 import 'dart:math';
 import 'dart:async'; 
+import '../config/app_config.dart';
 
 /// A service class that handles all authentication operations including:
 /// - Sign in with various providers (Google, Apple, Phone)
@@ -19,6 +19,7 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final AppConfig _appConfig = AppConfig();
   
   // Retry configuration
   final RetryOptions _retryOptions = const RetryOptions(
@@ -107,7 +108,7 @@ class AuthService {
             phoneNumber: phoneNumber,
             verificationCompleted: verificationCompleted,
             verificationFailed: (FirebaseAuthException e) {
-              debugPrint('Phone verification failed: ${e.code} - ${e.message}');
+              _appConfig.log('Phone verification failed: ${e.code} - ${e.message}');
               // Transform the error before passing it on
               final friendlyMessage = getFriendlyErrorMessage(e);
               verificationFailed(
@@ -123,10 +124,10 @@ class AuthService {
           );
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying phone verification due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying phone verification due to error: $e'),
       );
     } catch (e) {
-      debugPrint('Error starting phone verification after retries: $e');
+      _appConfig.log('Error starting phone verification after retries: $e');
       throw Exception(getFriendlyErrorMessage(e));
     }
   }
@@ -136,41 +137,79 @@ class AuthService {
   Future<models.UserModel?> getCurrentUserModel() async {
     if (_auth.currentUser == null) return null;
     
-    if (_cachedUserModel != null && 
-        _cachedUserModel!.uid == _auth.currentUser!.uid) {
+    if (_cachedUserModel != null) {
       return _cachedUserModel;
     }
     
-    return await getUserModel(_auth.currentUser!.uid);
+    // Get the user document using Firebase UID
+    final docSnapshot = await _firestore.collection('users').doc(_auth.currentUser!.uid).get();
+    
+    if (!docSnapshot.exists) {
+      _appConfig.log('No user document found');
+      return null;
+    }
+    
+    final userData = docSnapshot.data() as Map<String, dynamic>;
+    final userModel = models.UserModel.fromJson(userData);
+    
+    // Cache the user model
+    _cachedUserModel = userModel;
+    _setupCacheRefresh();
+    
+    return userModel;
+  }
+
+  /// Find or generate an 8-digit UID
+  Future<String> _getOrGenerate8DigitUid() async {
+    final random = Random();
+    return List.generate(8, (_) => random.nextInt(10)).join();
   }
 
   /// Get a user model by UID
   Future<models.UserModel?> getUserModel(String uid) async {
-    print('AuthService: Getting user model for UID: $uid');
+    _appConfig.log('Getting user model for UID: $uid');
     try {
-      print('AuthService: Fetching user document from Firestore');
-      final docSnapshot = await _firestore.collection('users').doc(uid).get();
-      
-      print('AuthService: Document exists: ${docSnapshot.exists}');
-      if (!docSnapshot.exists) {
-        print('AuthService: No user document found');
-        return null;
+      // First try with the exact ID (if it's the Firebase Auth ID)
+      if (uid == _auth.currentUser?.uid) {
+        final docSnapshot = await _firestore.collection('users').doc(uid).get();
+        if (docSnapshot.exists) {
+          final userData = docSnapshot.data() as Map<String, dynamic>;
+          _appConfig.log('User data found: ${userData['displayName']}');
+          final userModel = models.UserModel.fromJson(userData);
+          
+          // Cache the user model
+          _cachedUserModel = userModel;
+          _setupCacheRefresh();
+          
+          return userModel;
+        }
       }
       
-      final userData = docSnapshot.data() as Map<String, dynamic>;
-      print('AuthService: User data found: ${userData['displayName']}');
-      final userModel = models.UserModel.fromJson(userData);
+      // If not found and it could be an 8-digit ID, try to find it
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('uid', isEqualTo: uid)
+          .limit(1)
+          .get();
       
-      // Cache the user model if it's the current user
-      if (_auth.currentUser != null && uid == _auth.currentUser!.uid) {
-        print('AuthService: Caching user model for current user');
-        _cachedUserModel = userModel;
-        _setupCacheRefresh();
+      if (querySnapshot.docs.isNotEmpty) {
+        final userData = querySnapshot.docs.first.data();
+        _appConfig.log('User data found by 8-digit UID: ${userData['displayName']}');
+        final userModel = models.UserModel.fromJson(userData);
+        
+        // Only cache if this is the current user
+        if (querySnapshot.docs.first.id == _auth.currentUser?.uid) {
+          _cachedUserModel = userModel;
+          _setupCacheRefresh();
+        }
+        
+        return userModel;
       }
       
-      return userModel;
-    } catch (e) {
-      print('AuthService: Error getting user model for $uid: $e');
+      _appConfig.log('No user document found');
+      return null;
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error getting user model for $uid');
       return null;
     }
   }
@@ -192,7 +231,7 @@ class AuthService {
     if (_auth.currentUser == null) return null;
     
     _cachedUserModel = null; // Clear cache to force refresh
-    return await getUserModel(_auth.currentUser!.uid);
+    return await getCurrentUserModel();
   }
 
   /// Update the current user's profile
@@ -263,14 +302,13 @@ class AuthService {
           }
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying profile update due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying profile update due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error updating user profile: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error updating user profile');
       rethrow;
     }
   }
- 
 
   /// Sign in with Google
   /// Returns UserCredential on success
@@ -310,10 +348,10 @@ class AuthService {
           return userCredential;
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying Google sign-in due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying Google sign-in due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error signing in with Google after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error signing in with Google');
       throw Exception(getFriendlyErrorMessage(e));
     }
   }
@@ -352,16 +390,16 @@ class AuthService {
             );
           }
           
-          // Update user data in Firestore
-          await _updateUserData(userCredential.user, models.AuthProvider.apple);
+          // Check if user exists, create if not
+          await _checkAndCreateUser(userCredential.user, models.AuthProvider.apple);
           
           return userCredential;
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying Apple sign-in due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying Apple sign-in due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error signing in with Apple after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error signing in with Apple');
       throw Exception(getFriendlyErrorMessage(e));
     }
   }
@@ -394,17 +432,17 @@ class AuthService {
           return userCredential;
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying phone sign-in due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying phone sign-in due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error signing in with phone number after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error signing in with phone number');
       throw Exception(getFriendlyErrorMessage(e));
     }
   }
 
   /// Generate and save FCM token for push notifications
-  Future<void> _generateAndSaveFcmToken(String? uid) async {
-    if (uid == null) return;
+  Future<void> _generateAndSaveFcmToken(String? firebaseUid) async {
+    if (firebaseUid == null) return;
     
     try {
       await _retryOptions.retry(
@@ -415,37 +453,37 @@ class AuthService {
           
           if (token != null) {
             // Save the token to Firestore
-            await _firestore.collection('users').doc(uid).update({
+            await _firestore.collection('users').doc(firebaseUid).update({
               'fcmToken': token,
               'lastLoginAt': Timestamp.now(),
             });
             
-            debugPrint('FCM Token generated and saved: $token');
+            _appConfig.log('FCM Token generated and saved');
           }
         },
         retryIf: (e) => e is FirebaseException && _shouldRetryFirestore(e),
-        onRetry: (e) => debugPrint('Retrying FCM token save due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying FCM token save due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error generating FCM token after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error generating FCM token');
       // Don't rethrow - we don't want to fail sign-in if FCM fails
     }
   }
 
-  /// Check if user exists in Firestore
+  /// Check if user exists in Firestore by Firebase UID
   /// Returns true if user exists, false otherwise
-  Future<bool> userExists(String uid) async {
+  Future<bool> userExists(String firebaseUid) async {
     try {
       return await _retryOptions.retry(
         () async {
-          final userDoc = await _firestore.collection('users').doc(uid).get();
-          return userDoc.exists;
+          final docSnapshot = await _firestore.collection('users').doc(firebaseUid).get();
+          return docSnapshot.exists;
         },
         retryIf: (e) => e is FirebaseException && _shouldRetryFirestore(e),
-        onRetry: (e) => debugPrint('Retrying user exists check due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying user exists check due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error checking if user exists after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking if user exists');
       return false;
     }
   }
@@ -457,9 +495,13 @@ class AuthService {
     try {
       await _retryOptions.retry(
         () async {
-          final exists = await userExists(user.uid);
+          // Check if user already exists by Firebase UID
+          final docSnapshot = await _firestore.collection('users').doc(user.uid).get();
           
-          if (!exists) {
+          if (!docSnapshot.exists) {
+            // Generate a new 8-digit number for uid
+            final customUid = await _getOrGenerate8DigitUid();
+            
             // Generate a new room ID for the user
             final roomId = _generateRoomId();
             
@@ -469,9 +511,10 @@ class AuthService {
               'phoneNumber': user.phoneNumber,
             };
             
-            // Create a new user document with consistent field placement
+            // Create a new user document using Firebase UID as doc ID
+            // but include the 8-digit ID as the 'uid' field
             final newUser = models.UserModel(
-              uid: user.uid,
+              uid: customUid,  // Use 8-digit ID as the uid field
               displayName: user.displayName ?? 'User',
               photoURL: user.photoURL,
               providers: [provider],
@@ -481,20 +524,23 @@ class AuthService {
               roomId: roomId,
             );
             
+            // Store user data in Firestore
             await _firestore.collection('users').doc(user.uid).set(newUser.toJson());
+            _appConfig.log('Created new user with 8-digit UID: $customUid');
           } else {
-            // Only update login time and FCM token for existing users
+            // User exists, update last login time
             await _firestore.collection('users').doc(user.uid).update({
               'lastLoginAt': Timestamp.now(),
               'fcmToken': null, // Will be updated later
             });
+            _appConfig.log('Updated existing user login timestamp');
           }
         },
         retryIf: (e) => e is FirebaseException && _shouldRetryFirestore(e),
-        onRetry: (e) => debugPrint('Retrying user creation due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying user creation due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error checking/creating user after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error checking/creating user');
       // We might want to rethrow here depending on how critical this is
     }
   }
@@ -508,70 +554,11 @@ class AuthService {
           await _auth.signOut();
         },
         retryIf: (e) => _shouldRetry(e),
-        onRetry: (e) => debugPrint('Retrying sign out due to error: $e'),
+        onRetry: (e) => _appConfig.log('Retrying sign out due to error: $e'),
       );
-    } catch (e) {
-      debugPrint('Error signing out after retries: $e');
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error signing out');
       rethrow;
-    }
-  }
-
-  /// Update user data in Firestore
-  Future<void> _updateUserData(User? user, models.AuthProvider provider) async {
-    if (user == null) return;
-
-    try {
-      await _retryOptions.retry(
-        () async {
-          final userDoc = _firestore.collection('users').doc(user.uid);
-          final userSnapshot = await userDoc.get();
-          
-          if (userSnapshot.exists) {
-            // User exists, update the data
-            final existingUserData = userSnapshot.data() as Map<String, dynamic>;
-            final existingUser = models.UserModel.fromJson(existingUserData);
-            
-            // Add the new provider if it doesn't exist
-            if (!existingUser.hasProvider(provider)) {
-              final updatedUser = existingUser.addProvider(provider);
-              await userDoc.update(updatedUser.toJson());
-            } else {
-              // Just update the last login time
-              await userDoc.update({
-                'lastLoginAt': Timestamp.now(),
-                'fcmToken': null, // Clear FCM token on login, will be updated later
-              });
-            }
-          } else {
-            // New user, create a document with consistent field placement
-            final roomId = _generateRoomId();
-            
-            // Create metadata with all user information
-            final metadata = <String, dynamic>{
-              'email': user.email ?? '',
-              'phoneNumber': user.phoneNumber,
-            };
-            
-            final newUser = models.UserModel(
-              uid: user.uid,
-              displayName: user.displayName ?? 'User',
-              photoURL: user.photoURL,
-              providers: [provider],
-              createdAt: Timestamp.now(),
-              lastLoginAt: Timestamp.now(),
-              metadata: metadata,
-              roomId: roomId,
-            );
-            
-            await userDoc.set(newUser.toJson());
-          }
-        },
-        retryIf: (e) => e is FirebaseException && _shouldRetryFirestore(e),
-        onRetry: (e) => debugPrint('Retrying user data update due to error: $e'),
-      );
-    } catch (e) {
-      debugPrint('Error updating user data after retries: $e');
-      // We might want to rethrow here depending on how critical this is
     }
   }
   
@@ -623,7 +610,41 @@ class AuthService {
     _cacheRefreshTimer?.cancel();
     _cacheRefreshTimer = null;
     _cachedUserModel = null;
-  } 
+  }
+
+  /// Get Firebase Auth UID from 8-digit UID
+  Future<String?> getFirebaseUidFrom8DigitUid(String eightDigitUid) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('uid', isEqualTo: eightDigitUid)
+          .limit(1)
+          .get();
+      
+      if (querySnapshot.docs.isEmpty) return null;
+      
+      // The document ID is the Firebase Auth UID
+      return querySnapshot.docs.first.id;
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error getting Firebase UID from 8-digit UID');
+      return null;
+    }
+  }
+  
+  /// Get 8-digit UID from Firebase Auth UID
+  Future<String?> get8DigitUidFromFirebaseUid(String firebaseUid) async {
+    try {
+      final docSnapshot = await _firestore.collection('users').doc(firebaseUid).get();
+      
+      if (!docSnapshot.exists) return null;
+      
+      final userData = docSnapshot.data() as Map<String, dynamic>;
+      return userData['uid'] as String?;
+    } catch (e, stackTrace) {
+      _appConfig.reportError(e, stackTrace, reason: 'Error getting 8-digit UID from Firebase UID');
+      return null;
+    }
+  }
 }
 
 

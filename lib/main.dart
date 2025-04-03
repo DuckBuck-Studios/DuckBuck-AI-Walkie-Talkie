@@ -2,10 +2,8 @@ import 'package:duckbuck/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter_animate/flutter_animate.dart'; 
+import 'package:flutter/foundation.dart' show kDebugMode; 
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart'; 
 import 'providers/friend_provider.dart';
@@ -15,10 +13,10 @@ import 'screens/onboarding/dob_screen.dart';
 import 'screens/onboarding/gender_screen.dart';
 import 'screens/onboarding/profile_photo_screen.dart';
 import 'screens/Home/home_screen.dart';
-import 'screens/splash_screen.dart';
-import 'services/fcm_receiver_service.dart';
-import 'providers/call_provider.dart';
+import 'screens/splash_screen.dart';  
 import 'package:flutter/services.dart';
+import 'services/friend_service.dart';
+import 'config/app_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,13 +26,13 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
-  // Initialize Firebase App Check
-  await _initializeAppCheck();
-  
-  // Create call provider for initialization
-  final callProvider = CallProvider();
-  
-  // Set system UI overlay style
+  // Initialize app configuration
+  final appConfig = AppConfig();
+  await appConfig.initialize(
+    // Set to production for release builds
+    env: kDebugMode ? Environment.development : Environment.production,
+  );
+   
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -47,29 +45,11 @@ void main() async {
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => AuthProvider()),
-      ChangeNotifierProvider(create: (_) => FriendProvider()),
+      ChangeNotifierProvider(create: (_) => FriendProvider(FriendService())),
       ChangeNotifierProvider(create: (_) => UserProvider()),
-      ChangeNotifierProvider.value(value: callProvider),
     ],
     child: const MyApp(),
   ));
-}
-
-// Platform-specific App Check initialization
-Future<void> _initializeAppCheck() async {
-  if (Platform.isAndroid) {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.debug,
-    );
-  } else if (Platform.isIOS) {
-    await FirebaseAppCheck.instance.activate(
-      appleProvider: AppleProvider.debug,
-    );
-  }
-  
-  if (kDebugMode) {
-    print('Firebase App Check initialized');
-  }
 }
 
 /// Main app widget
@@ -80,26 +60,14 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  // FCM and Notification service initialization
-  final FCMReceiverService _fcmService = FCMReceiverService();
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver { 
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
-    // Initialize FCM after build is complete to have access to context
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializePushNotifications();
-    });
-  }
-
-  // Initialize push notifications
-  Future<void> _initializePushNotifications() async {
-    // Initialize FCM service with context
-    await _fcmService.initialize(context);
-  }
+     
+  } 
 
   @override
   void dispose() {
@@ -107,25 +75,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
   
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    
-    // Handle app lifecycle changes if needed
-  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FriendProvider()),
+        ChangeNotifierProvider(create: (_) => FriendProvider(FriendService())),
         ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: MaterialApp(
         title: 'DuckBuck',
-        debugShowCheckedModeBanner: false,
-        navigatorKey: FCMReceiverService.navigatorKey,
+        debugShowCheckedModeBanner: false, 
         theme: ThemeData(
           primarySwatch: Colors.brown,
           colorScheme: ColorScheme.fromSwatch(
@@ -151,6 +112,7 @@ class AuthenticationWrapper extends StatefulWidget {
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
   // Add a flag to track if we're still initializing
   bool _isInitializing = true;
+  final AppConfig _appConfig = AppConfig();
   
   @override
   void initState() {
@@ -175,6 +137,13 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
     return const SplashScreen();
   }
 
+  // Set user ID for crash reporting
+  Future<void> _setUserForCrashReporting(String? userId) async {
+    if (userId != null) {
+      await _appConfig.setUserIdentifier(userId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Always show splash screen during initialization
@@ -188,17 +157,18 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
         if (authProvider.status == AuthStatus.loading) {
           return _buildSplashScreen();
         }
-        
-        print('AuthWrapper: Current auth status: ${authProvider.status}');
-        print('AuthWrapper: Is authenticated: ${authProvider.isAuthenticated}');
-        print('AuthWrapper: Current user: ${authProvider.currentUser?.uid}');
 
         // If not authenticated, show welcome screen
         if (!authProvider.isAuthenticated) {
-          print('AuthWrapper: Not authenticated, showing welcome screen');
+          _appConfig.log('User not authenticated, showing welcome screen');
           return const WelcomeScreen().animate().fadeIn(
             duration: const Duration(milliseconds: 300),
           );
+        }
+
+        // Set user ID for crash reporting if authenticated
+        if (authProvider.currentUser?.uid != null) {
+          _setUserForCrashReporting(authProvider.currentUser?.uid);
         }
 
         // For authenticated users, check onboarding stage directly
@@ -212,11 +182,11 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
             
             // Get the current stage
             final currentStage = stageSnapshot.data ?? OnboardingStage.name;
-            print('AuthWrapper: Current onboarding stage: $currentStage');
+            _appConfig.log('Current onboarding stage: $currentStage');
             
             // If the user doesn't exist in the database (notStarted), show welcome screen
             if (currentStage == OnboardingStage.notStarted) {
-              print('AuthWrapper: User not in database, showing welcome screen');
+              _appConfig.log('User not in database, showing welcome screen');
               // Sign out the user first
               authProvider.signOut();
               return const WelcomeScreen().animate().fadeIn(

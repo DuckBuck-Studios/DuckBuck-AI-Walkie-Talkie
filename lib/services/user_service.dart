@@ -2,15 +2,18 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as path; 
 import '../models/user_model.dart'; 
 import 'package:firebase_database/firebase_database.dart' as database;
+import 'package:firebase_database/firebase_database.dart';
+import '../config/app_config.dart';
 
 class UserService {
   final _realtimeDb = database.FirebaseDatabase.instance;
   final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final Dio _dio = Dio();
+  final AppConfig _appConfig = AppConfig();
   
   // Cloudinary configuration - in production, these would be secured
   final String _cloudName = 'deycvanff';
@@ -19,30 +22,66 @@ class UserService {
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
   
+  // Report error to crashlytics if available
+  void _reportError(dynamic error, String method, {StackTrace? stackTrace}) {
+    _appConfig.reportError(error, stackTrace ?? StackTrace.current, reason: 'Error in UserService.$method');
+  }
+  
   // Get user by ID
   Future<UserModel?> getUserById(String userId) async {
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      if (doc.exists && doc.data() != null) {
-        return UserModel.fromJson(doc.data()!);
+      // First try with the Firebase Auth UID
+      if (userId == currentUserId) {
+        final doc = await _firestore.collection('users').doc(userId).get();
+        if (doc.exists && doc.data() != null) {
+          return UserModel.fromJson(doc.data()!);
+        }
       }
+      
+      // If that fails and it's not the current user's ID, try to find by uid field
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('uid', isEqualTo: userId)
+          .limit(1)
+          .get();
+      
+      if (querySnapshot.docs.isNotEmpty) {
+        return UserModel.fromJson(querySnapshot.docs.first.data());
+      }
+      
       return null;
-    } catch (e) {
-      print('Error getting user: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'getUserById', stackTrace: stackTrace);
       return null;
     }
   }
   
   // Stream user data by ID for real-time updates
   Stream<UserModel?> getUserStreamById(String userId) {
-    return _firestore.collection('users').doc(userId)
-      .snapshots()
-      .map((doc) {
-        if (doc.exists && doc.data() != null) {
-          return UserModel.fromJson(doc.data()!);
-        }
-        return null;
-      });
+    // If it's current user, we know we can use Firebase Auth UID as document ID
+    if (userId == currentUserId) {
+      return _firestore.collection('users').doc(userId)
+        .snapshots()
+        .map((doc) {
+          if (doc.exists && doc.data() != null) {
+            return UserModel.fromJson(doc.data()!);
+          }
+          return null;
+        });
+    }
+    
+    // For other users, we need to watch for any document where uid field equals userId
+    return _firestore
+        .collection('users')
+        .where('uid', isEqualTo: userId)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.docs.isNotEmpty) {
+            return UserModel.fromJson(snapshot.docs.first.data());
+          }
+          return null;
+        });
   }
   
   // Get current user
@@ -72,8 +111,8 @@ class UserService {
       }
       
       return true;
-    } catch (e) {
-      print('Error updating display name: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateDisplayName', stackTrace: stackTrace);
       return false;
     }
   }
@@ -95,8 +134,8 @@ class UserService {
       });
       
       return true;
-    } catch (e) {
-      print('Error updating date of birth: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateDateOfBirth', stackTrace: stackTrace);
       return false;
     }
   }
@@ -118,8 +157,8 @@ class UserService {
       });
       
       return true;
-    } catch (e) {
-      print('Error updating gender: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateGender', stackTrace: stackTrace);
       return false;
     }
   }
@@ -132,10 +171,9 @@ class UserService {
         'roomId': roomId
       });
       
-      print('Updated roomId to $roomId for user $userId');
       return true;
-    } catch (e) {
-      print('Error updating roomId: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateRoomId', stackTrace: stackTrace);
       return false;
     }
   }
@@ -156,8 +194,6 @@ class UserService {
       
       // Move top-level email to metadata
       if (userData.containsKey('email') && userData['email'] != null) {
-        print('Moving top-level email to metadata for user $userId');
-        
         final email = userData['email'];
         if (email is String) {
           metadataUpdates['email'] = email;
@@ -168,8 +204,6 @@ class UserService {
       
       // Move top-level phoneNumber to metadata
       if (userData.containsKey('phoneNumber') && userData['phoneNumber'] != null) {
-        print('Moving top-level phoneNumber to metadata for user $userId');
-        
         final phoneNumber = userData['phoneNumber'];
         metadataUpdates['phoneNumber'] = phoneNumber;
         updates['phoneNumber'] = firestore.FieldValue.delete();
@@ -178,8 +212,6 @@ class UserService {
       
       // Move top-level dateOfBirth to metadata
       if (userData.containsKey('dateOfBirth') && userData['dateOfBirth'] != null) {
-        print('Moving top-level dateOfBirth to metadata for user $userId');
-        
         final dob = userData['dateOfBirth'];
         if (dob is firestore.Timestamp) {
           metadataUpdates['dateOfBirth'] = dob;
@@ -190,8 +222,6 @@ class UserService {
       
       // Move top-level gender to metadata
       if (userData.containsKey('gender') && userData['gender'] != null) {
-        print('Moving top-level gender to metadata for user $userId');
-        
         final gender = userData['gender'];
         if (gender is String) {
           metadataUpdates['gender'] = gender;
@@ -202,8 +232,6 @@ class UserService {
       
       // Move roomId from metadata to top level
       if (metadataUpdates.containsKey('roomId')) {
-        print('Moving roomId from metadata to top level for user $userId');
-        
         final roomId = metadataUpdates['roomId'];
         if (roomId is String) {
           updates['roomId'] = roomId;
@@ -214,8 +242,6 @@ class UserService {
       
       // Handle profileUrl vs photoURL inconsistency
       if (userData.containsKey('profileUrl')) {
-        print('Found profileUrl for user $userId, moving to photoURL');
-        
         final profileUrl = userData['profileUrl'];
         if (profileUrl is String && profileUrl.isNotEmpty) {
           final photoURL = userData['photoURL'];
@@ -230,16 +256,12 @@ class UserService {
       // If any changes needed, update the document
       if (needsUpdate) {
         updates['metadata'] = metadataUpdates;
-        
         await _firestore.collection('users').doc(userId).update(updates);
-        print('Fixed field inconsistencies for user $userId');
-      } else {
-        print('No inconsistencies found for user $userId');
       }
       
       return true;
-    } catch (e) {
-      print('Error fixing user document fields: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'fixUserDocumentFields', stackTrace: stackTrace);
       return false;
     }
   }
@@ -258,10 +280,10 @@ class UserService {
         await Future.delayed(Duration(milliseconds: 100));
       }
       
-      print('Fixed field inconsistencies for $count/${usersSnapshot.docs.length} users');
+      _appConfig.log('Fixed $count/${usersSnapshot.docs.length} user documents');
       return true;
-    } catch (e) {
-      print('Error fixing all user documents: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'fixAllUserDocuments', stackTrace: stackTrace);
       return false;
     }
   }
@@ -269,44 +291,31 @@ class UserService {
   // Upload photo and update user photoURL
   Future<bool> uploadAndUpdatePhoto(String userId, File imageFile) async {
     try {
-      print('Starting photo upload process for user: $userId');
-      
       // Check if file exists
       if (!await imageFile.exists()) {
-        print('ERROR: Image file does not exist at path: ${imageFile.path}');
         return false;
       }
       
       // Upload image to cloud storage
-      print('Uploading image to cloud storage...');
       final photoUrl = await _uploadToCloudinary(imageFile);
       
       if (photoUrl == null) {
-        print('ERROR: Failed to get photo URL from cloud storage');
         return false;
       }
       
-      print('Successfully uploaded image. URL received.');
-      
       // Update Firestore
-      print('Updating user profile with new photo URL...');
       await _firestore.collection('users').doc(userId).update({
         'photoURL': photoUrl,
       });
       
       // Also update Firebase Auth photoURL if it's the current user
       if (userId == currentUserId) {
-        print('Updating Firebase Auth user profile...');
         await _auth.currentUser?.updatePhotoURL(photoUrl);
       }
       
-      print('Photo upload and update process completed successfully');
       return true;
-    } catch (e) {
-      print('ERROR in uploadAndUpdatePhoto: $e');
-      if (e is DioException) {
-        print('Network error details: ${e.message}');
-      }
+    } catch (e, stackTrace) {
+      _reportError(e, 'uploadAndUpdatePhoto', stackTrace: stackTrace);
       return false;
     }
   }
@@ -319,8 +328,6 @@ class UserService {
       final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       final filename = path.basename(imageFile.path);
       
-      print('Preparing image upload...');
-      
       // Create form data with folder structure and public_id
       final formData = FormData.fromMap({
         'upload_preset': _uploadPreset,
@@ -331,8 +338,6 @@ class UserService {
           filename: filename,
         ),
       });
-      
-      print('Sending upload request...');
       
       // Send request with timeout
       final response = await _dio.post(
@@ -346,54 +351,59 @@ class UserService {
       );
       
       // Check if successful
-      print('Upload response status: ${response.statusCode}');
       if (response.statusCode == 200) {
         // Return the secure URL
         return response.data['secure_url'];
       } else {
-        print('Failed to upload image. Status code: ${response.statusCode}');
         return null;
       }
-    } catch (e) {
-      print('ERROR in image upload: $e');
-      if (e is DioException) {
-        print('Network error type: ${e.type}');
-        
-        // Check for common issues
-        if (e.type == DioExceptionType.connectionTimeout || 
-            e.type == DioExceptionType.sendTimeout) {
-          print('Connection timeout - please check your internet connection');
-        } else if (e.type == DioExceptionType.receiveTimeout) {
-          print('Response timeout - the image might be too large');
-        }
-      }
+    } catch (e, stackTrace) {
+      _reportError(e, '_uploadToCloudinary', stackTrace: stackTrace);
       return null;
     }
   }
 
-  // Method to set predefined status animations
+  // Set user status animation in the real-time database
   Future<void> setUserStatusAnimation(String userId, String? animation, {bool explicitAnimationChange = true}) async {
-    print("UserService: Setting status animation for user: $userId");
-    
-    if (animation == null) {
-      if (explicitAnimationChange) {
-        print("UserService: Explicitly setting null animation (no animation)");
-      } else {
-        print("UserService: Null animation passed during initialization, will preserve existing");
+    try {
+      // Use the same userStatus path as other methods
+      final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
+      
+      // Get current status data to preserve other values
+      final snapshot = await statusRef.get();
+      Map<String, dynamic> existingData = {};
+      
+      if (snapshot.exists) {
+        existingData = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
       }
-    } else {
-      print("UserService: Setting animation: $animation");
+      
+      // Update animation while preserving other values
+      final Map<String, dynamic> updates = {
+        ...existingData,
+        'animation': animation,
+        'timestamp': ServerValue.timestamp,
+      };
+      
+      if (explicitAnimationChange) {
+        updates['lastAnimationUpdate'] = ServerValue.timestamp;
+      }
+      
+      // Make sure we don't accidentally mark user as offline
+      // If no online status exists yet, set to true
+      if (!existingData.containsKey('isOnline') && !existingData.containsKey('_actualIsOnline')) {
+        updates['isOnline'] = true;
+        updates['_actualIsOnline'] = true;
+      }
+      
+      await statusRef.update(updates);
+    } catch (e, stackTrace) {
+      _reportError(e, 'setUserStatusAnimation', stackTrace: stackTrace);
     }
-
-    await updateUserStatus(userId, animation, explicitAnimationChange: explicitAnimationChange);
   }
 
   // Add these new methods for status management
   Future<void> updateUserStatus(String userId, String? statusAnimation, {bool explicitAnimationChange = false}) async {
     try {
-      print("UserService: Updating user status in Realtime DB for user: $userId");
-      print("UserService: Setting animation: ${statusAnimation ?? 'null'}, isOnline: true");
-      
       final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
       
       // Only preserve animation if this is not an explicit animation change (like during initialization)
@@ -403,109 +413,225 @@ class UserService {
         if (snapshot.exists) {
           final data = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
           statusAnimation = data['animation'] as String?;
-          print("UserService: Retrieved existing animation: ${statusAnimation ?? 'null'}");
         }
       }
       
       // Update the status with preserved or new animation
       await statusRef.set({
         'animation': statusAnimation,
-        'timestamp': database.ServerValue.timestamp,
+        'timestamp': ServerValue.timestamp,
         'isOnline': true,
-        'lastSeen': database.ServerValue.timestamp,
+        'lastSeen': ServerValue.timestamp,
       });
-      
-      print("UserService: Status updated successfully in Realtime DB");
 
       // Set user as offline on disconnect instead of removing
       statusRef.onDisconnect().update({
         'isOnline': false,
-        'timestamp': database.ServerValue.timestamp,
-        'lastSeen': database.ServerValue.timestamp,
+        'timestamp': ServerValue.timestamp,
+        'lastSeen': ServerValue.timestamp,
         // Keep the animation as is
       });
-      print("UserService: Set onDisconnect handler to mark user as offline");
-    } catch (e) {
-      print('Error updating user status: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateUserStatus', stackTrace: stackTrace);
     }
   }
 
   Stream<Map<String, dynamic>> getUserStatusStream(String userId) {
-    print("UserService: Setting up status stream for user: $userId");
-    return _realtimeDb
-        .ref()
-        .child('userStatus')
-        .child(userId)
-        .onValue
-        .map((event) {
-      if (event.snapshot.value != null) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        print("UserService: Status update received: animation=${data['animation']}, isOnline=${data['isOnline']}");
+    // First get the user document to check privacy settings
+    return _firestore.collection('users').doc(userId)
+      .snapshots()
+      .asyncMap((userDoc) async {
+        // Extract privacy settings
+        bool showOnlineStatus = true;
+        bool showLastSeen = true;
+        
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data()!;
+          final metadata = userData['metadata'] as Map<String, dynamic>? ?? {};
+          showOnlineStatus = metadata['showOnlineStatus'] ?? true;
+          showLastSeen = metadata['showLastSeen'] ?? true;
+        }
+        
+        // Now get the real-time status
+        final snapshot = await _realtimeDb
+            .ref()
+            .child('userStatus')
+            .child(userId)
+            .get();
+        
+        if (snapshot.exists && snapshot.value != null) {
+          final data = Map<String, dynamic>.from(snapshot.value as Map);
+          
+          // Get the actual status values
+          final bool actualIsOnline = data['_actualIsOnline'] ?? data['isOnline'] ?? false;
+          final int? actualLastSeen = data['lastSeen'];
+          
+          // Apply privacy filters
+          final bool visibleIsOnline = showOnlineStatus ? actualIsOnline : false;
+          final int? visibleLastSeen = showLastSeen ? actualLastSeen : null;
+                
+          return {
+            'animation': data['animation'],
+            'timestamp': data['timestamp'] ?? 0,
+            'isOnline': visibleIsOnline,
+            'lastSeen': visibleLastSeen ?? 0,
+            'actualIsOnline': actualIsOnline, // Only visible to the user themselves
+          };
+        }
+        
         return {
-          'animation': data['animation'],
-          'timestamp': data['timestamp'] ?? 0,
-          'isOnline': data['isOnline'] ?? false,
-          'lastSeen': data['lastSeen'] ?? 0,
+          'animation': null,
+          'timestamp': 0,
+          'isOnline': false,
+          'lastSeen': 0,
+          'actualIsOnline': false,
         };
-      }
-      print("UserService: Status update received: null (user offline)");
-      return {
-        'animation': null,
-        'timestamp': 0,
-        'isOnline': false,
-        'lastSeen': 0,
-      };
-    });
+      });
   }
 
   // Method to clear user status when logging out
   Future<void> clearUserStatus(String userId) async {
     try {
-      print("UserService: Clearing user status for user: $userId");
       await _realtimeDb.ref().child('userStatus').child(userId).remove();
-      print("UserService: User status cleared successfully");
-    } catch (e) {
-      print('Error clearing user status: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'clearUserStatus', stackTrace: stackTrace);
     }
   }
 
   // Method to set user's online status without changing animation
   Future<void> setUserOnlineStatus(String userId, bool isOnline) async {
     try {
-      print("UserService: Setting user online status to $isOnline for user: $userId");
-      
       final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
       
-      // Get current animation status if it exists
+      // Get current animation status and privacy settings if they exist
       String? currentAnimation;
+      bool showOnlineStatus = true; // Default to showing online status
+      bool showLastSeen = true; // Default to showing last seen
+      
+      // First, check the user's privacy settings from Firestore
+      try {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          final userData = userDoc.data()!;
+          final metadata = userData['metadata'] as Map<String, dynamic>? ?? {};
+          showOnlineStatus = metadata['showOnlineStatus'] ?? true;
+          showLastSeen = metadata['showLastSeen'] ?? true;
+        }
+      } catch (e) {
+        // Continue with defaults if there's an error
+      }
+      
+      // Get current animation status if it exists
       final snapshot = await statusRef.get();
       if (snapshot.exists) {
         final data = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
         currentAnimation = data['animation'] as String?;
-        print("UserService: Retrieved existing animation: ${currentAnimation ?? 'null'}");
       }
       
-      // Update only online status while preserving animation
-      await statusRef.update({
-        'isOnline': isOnline,
-        'timestamp': database.ServerValue.timestamp,
-        'lastSeen': database.ServerValue.timestamp,
-      });
+      // Create a map with internal actual status
+      final Map<String, dynamic> statusUpdates = {
+        '_actualIsOnline': isOnline, // Store actual status internally
+        'timestamp': ServerValue.timestamp,
+        'lastSeen': showLastSeen ? ServerValue.timestamp : null,
+        'animation': currentAnimation, // Preserve current animation
+      };
       
-      print("UserService: Online status updated to $isOnline successfully");
+      // Set the public online status based on privacy settings
+      if (showOnlineStatus) {
+        statusUpdates['isOnline'] = isOnline;
+      } else {
+        // If the user doesn't want to show online status, always appear offline to others
+        statusUpdates['isOnline'] = false;
+      }
+      
+      // Update the status
+      await statusRef.update(statusUpdates);
 
       // If setting to online, also setup the onDisconnect handler
       if (isOnline) {
-        statusRef.onDisconnect().update({
-          'isOnline': false,
-          'timestamp': database.ServerValue.timestamp,
-          'lastSeen': database.ServerValue.timestamp,
-          // Keep the animation as is
-        });
-        print("UserService: Set onDisconnect handler to mark user as offline");
+        final Map<String, dynamic> disconnectUpdates = {
+          '_actualIsOnline': false,
+          'timestamp': ServerValue.timestamp,
+        };
+        
+        // Only update public values based on privacy settings
+        if (showOnlineStatus) {
+          disconnectUpdates['isOnline'] = false;
+        }
+        
+        if (showLastSeen) {
+          disconnectUpdates['lastSeen'] = ServerValue.timestamp;
+        }
+        
+        statusRef.onDisconnect().update(disconnectUpdates);
       }
-    } catch (e) {
-      print('Error updating user online status: $e');
+    } catch (e, stackTrace) {
+      _reportError(e, 'setUserOnlineStatus', stackTrace: stackTrace);
+    }
+  }
+
+  // Update user privacy setting
+  Future<void> updateUserPrivacySetting(String userId, String settingKey, bool value) async {
+    try {
+      // First update the metadata in Firestore
+      final docRef = _firestore.collection('users').doc(userId);
+      final userDoc = await docRef.get();
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final metadata = Map<String, dynamic>.from(userData?['metadata'] ?? {});
+        
+        // Update the specific setting
+        metadata[settingKey] = value;
+        
+        // Save back to Firestore
+        await docRef.update({'metadata': metadata});
+        
+        // For specific privacy settings that affect real-time presence, immediately apply the change
+        if (settingKey == 'showOnlineStatus' || settingKey == 'showLastSeen') {
+          // Get current user status from real-time DB
+          final statusRef = _realtimeDb.ref().child('userStatus').child(userId);
+          final snapshot = await statusRef.get();
+          
+          if (snapshot.exists) {
+            final data = Map<String, dynamic>.from(snapshot.value as Map? ?? {});
+            
+            // Determine the current actual online status
+            final bool actualIsOnline = data['_actualIsOnline'] ?? data['isOnline'] ?? false;
+            
+            // Prepare updates based on new privacy settings
+            final Map<String, dynamic> updates = {};
+            
+            if (settingKey == 'showOnlineStatus') {
+              // Update the public online status based on the new setting
+              if (value) {
+                // If showing online status now, use the actual status
+                updates['isOnline'] = actualIsOnline;
+              } else {
+                // If hiding online status now, always show as offline
+                updates['isOnline'] = false;
+              }
+            }
+            
+            if (settingKey == 'showLastSeen') {
+              if (value) {
+                // If showing last seen now, update it to current time
+                updates['lastSeen'] = ServerValue.timestamp;
+              } else {
+                // If hiding last seen now, remove or set to null
+                updates['lastSeen'] = null;
+              }
+            }
+            
+            // Apply the updates if any
+            if (updates.isNotEmpty) {
+              await statusRef.update(updates);
+            }
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      _reportError(e, 'updateUserPrivacySetting', stackTrace: stackTrace);
     }
   }
 }

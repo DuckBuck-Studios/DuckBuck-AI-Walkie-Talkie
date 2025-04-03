@@ -15,11 +15,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "297951233838-s28k17lvo877lqlffdrheill7nh13grj.apps.googleusercontent.com",
+          "client_id": "297951233838-rdg33cduc08tktak8ecfol5dkticbpp3.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.duckbuck",
-            "certificate_hash": "afb391d869c660be6ea6b14449bdfda0be37db97"
+            "certificate_hash": "69ba3ff32e1e4c4413b006e3b5efa980ec661536"
           }
         },
         {

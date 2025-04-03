@@ -3,16 +3,30 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import '../../../providers/auth_provider.dart' as auth;
 import '../../../providers/user_provider.dart';
 import '../../../models/user_model.dart';
 import '../../../widgets/animated_background.dart';
 import '../../../widgets/phone_auth_popup.dart';
 import '../../onboarding/profile_photo_preview_screen.dart';
-import 'blocked_users_screen.dart';
+import 'blocked_users_screen.dart'; 
+import 'package:url_launcher/url_launcher.dart'; 
+import 'dart:convert';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,230 +41,232 @@ class SettingsScreen extends StatelessWidget {
     }
     
     return Scaffold(
+      extendBodyBehindAppBar: true, // Extend body behind AppBar for gradient
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF8B4513),
+          ),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF8B4513)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: DuckBuckAnimatedBackground(
         opacity: 0.03,
         child: SafeArea(
-          child: Column(
-            children: [
-              // Top bar
-              _buildTopBar(context),
-              
-              // Settings content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Edit Profile Section
-                      _buildSettingSection(
-                        title: 'Edit Profile',
-                        icon: Icons.edit,
-                        children: [
-                          _buildSettingOption(
-                            context: context,
-                            title: 'Update Display Name',
-                            subtitle: userModel.displayName,
-                            icon: Icons.person,
-                            onTap: () => _showUpdateNameDialog(context, userModel),
-                            delay: 100,
-                          ),
-                          _buildSettingOption(
-                            context: context,
-                            title: 'Update Profile Photo',
-                            subtitle: 'Change your profile picture',
-                            icon: Icons.photo_camera,
-                            onTap: () => _showUpdatePhotoDialog(context, userModel),
-                            delay: 200,
-                          ),
-                          _buildSettingOption(
-                            context: context,
-                            title: 'Update Date of Birth',
-                            subtitle: userModel.dateOfBirth != null 
-                                ? _formatDate(userModel.dateOfBirth!) 
-                                : 'Not set',
-                            icon: Icons.cake,
-                            onTap: () => _showUpdateDateOfBirthDialog(context, userModel),
-                            delay: 300,
-                          ),
-                          _buildSettingOption(
-                            context: context,
-                            title: 'Update Gender',
-                            subtitle: userModel.gender != null 
-                                ? _formatGender(userModel.gender.toString().split('.').last)
-                                : 'Not set',
-                            icon: Icons.person_outline,
-                            onTap: () => _showUpdateGenderDialog(context, userModel),
-                            delay: 400,
-                          ),
-                        ],
-                        delay: 100,
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Account Section
-                      _buildSettingSection(
-                        title: 'Account',
-                        icon: Icons.account_circle,
-                        children: [
-                          _buildSettingOption(
-                            context: context,
-                            title: userModel.phoneNumber != null && userModel.phoneNumber!.isNotEmpty 
-                                ? 'Phone: ${userModel.phoneNumber}' 
-                                : 'Add Phone Number',
-                            icon: Icons.phone,
-                            onTap: () => _showPhoneAuthDialog(context),
-                            delay: 500,
-                          ),
-                          _buildProvidersList(context, userModel),
-                        ],
-                        delay: 200,
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Privacy Section
-                      _buildSettingSection(
-                        title: 'Privacy',
-                        icon: Icons.lock,
-                        children: [
-                          _buildSettingOption(
-                            context: context,
-                            title: 'Blocked Users',
-                            subtitle: 'Manage users you\'ve blocked',
-                            icon: Icons.block,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
-                            ),
-                            delay: 600,
-                          ),
-                          _buildPrivacyToggle(
-                            context: context,
-                            title: 'Show Social Links',
-                            subtitle: 'Display your social media profiles',
-                            icon: Icons.share,
-                            value: userModel.getMetadata('showSocialLinks') ?? true,
-                            onChanged: (value) => _updatePrivacySetting(context, 'showSocialLinks', value),
-                            delay: 700,
-                          ),
-                          _buildPrivacyToggle(
-                            context: context,
-                            title: 'Show Online Status',
-                            subtitle: 'Let others see when you\'re online',
-                            icon: Icons.visibility,
-                            value: userModel.getMetadata('showOnlineStatus') ?? true,
-                            onChanged: (value) => _updatePrivacySetting(context, 'showOnlineStatus', value),
-                            delay: 800,
-                          ),
-                          _buildPrivacyToggle(
-                            context: context,
-                            title: 'Show Last Seen',
-                            subtitle: 'Display your last active time',
-                            icon: Icons.access_time,
-                            value: userModel.getMetadata('showLastSeen') ?? true,
-                            onChanged: (value) => _updatePrivacySetting(context, 'showLastSeen', value),
-                            delay: 900,
-                          ),
-                        ],
-                        delay: 400,
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Preferences Section
-                      _buildSettingSection(
-                        title: 'Preferences',
-                        icon: Icons.tune,
-                        children: [
-                          _buildNotificationToggle(context, userModel),
-                        ],
-                        delay: 500,
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Subscription Status
-                      _buildSettingSection(
-                        title: 'Subscription',
-                        icon: Icons.card_membership,
-                        children: [
-                          _buildSubscriptionStatus(context, userModel),
-                        ],
-                        delay: 600,
-                      ),
-                      
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          child: _buildSettingsContent(context, userModel),
         ),
       ),
-    ).animate().fadeIn();
+    ).animate().fadeIn(duration: 300.ms);
   }
 
-  Widget _buildTopBar(BuildContext context) {
-    // Get screen dimensions and safe area for responsive layout
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final EdgeInsets safePadding = MediaQuery.of(context).padding;
-    final bool isSmallScreen = screenWidth < 360;
-    
-    return Container(
-      padding: EdgeInsets.only(
-        left: 8, 
-        right: 8, 
-        top: 16 + safePadding.top, // Account for safe area at top
-        bottom: 16
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFD4A76A).withOpacity(0.1),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(20),
-          bottomRight: Radius.circular(20),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
+  Widget _buildSettingsContent(BuildContext context, UserModel userModel) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
         children: [
-          // Back button - make tap target larger on small screens
-          SizedBox(
-            width: isSmallScreen ? 44 : 48,
-            height: isSmallScreen ? 44 : 48,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios),
-              iconSize: isSmallScreen ? 20 : 24,
-              padding: EdgeInsets.zero,
-              onPressed: () => Navigator.pop(context),
-              color: const Color(0xFFD4A76A),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              'Settings',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: isSmallScreen ? 20 : 22,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFFD4A76A),
+          // Add a settings icon at the top with Hero animation
+          const SizedBox(height: 20),
+          Hero(
+            tag: 'settings-button',
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.settings,
+                  color: Color(0xFF8B4513),
+                  size: 40,
+                ),
               ),
             ),
+          ).animate(autoPlay: true).scale(
+            begin: const Offset(0.8, 0.8),
+            end: const Offset(1.0, 1.0),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutBack,
           ),
-          // Maintain symmetry with a placeholder of the same size as the back button
-          SizedBox(width: isSmallScreen ? 44 : 48),
+          const SizedBox(height: 30),
+          
+          // Settings sections
+          _buildAllSettingSections(context, userModel),
         ],
       ),
-    ).animate()
-      .fadeIn()
-      .slideY(begin: -0.2, end: 0, curve: Curves.easeOutQuad);
+    );
+  }
+
+  Widget _buildAllSettingSections(BuildContext context, UserModel userModel) {
+    return Column(
+      children: [
+        // Account Section (moved to the top)
+        _buildSettingSection(
+          title: 'Account',
+          icon: Icons.person,
+          children: [
+            _buildSettingOption(
+              context: context,
+              title: 'Edit Profile',
+              subtitle: 'Update your profile details',
+              icon: Icons.edit,
+              onTap: () => _showUpdateNameDialog(context, userModel),
+              delay: 0,
+            ),
+            _buildSettingOption(
+              context: context,
+              title: 'Change Phone Number',
+              subtitle: userModel.phoneNumber ?? 'Add a phone number',
+              icon: Icons.phone,
+              onTap: () => _showPhoneAuthDialog(context),
+              delay: 0,
+            ),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 100.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        
+        const SizedBox(height: 24),
+        
+        // Subscription Status
+        _buildSettingSection(
+          title: 'Subscription',
+          icon: Icons.card_membership,
+          children: [
+            _buildSubscriptionStatus(context, userModel),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 200.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        
+        const SizedBox(height: 24),
+        
+        // Privacy Section
+        _buildSettingSection(
+          title: 'Privacy',
+          icon: Icons.lock,
+          children: [
+            _buildSettingOption(
+              context: context,
+              title: 'Blocked Users',
+              subtitle: 'Manage users you\'ve blocked',
+              icon: Icons.block,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
+                );
+              },
+              delay: 0,
+            ),
+            _buildPrivacyToggle(
+              context: context,
+              title: 'Show Social Links',
+              subtitle: 'Display your social media profiles',
+              icon: Icons.share,
+              value: userModel.getMetadata('showSocialLinks') ?? true,
+              onChanged: (value) => _updatePrivacySetting(context, 'showSocialLinks', value),
+              delay: 0,
+            ),
+            _buildPrivacyToggle(
+              context: context,
+              title: 'Show Online Status',
+              subtitle: 'Let others see when you\'re online',
+              icon: Icons.visibility,
+              value: userModel.getMetadata('showOnlineStatus') ?? true,
+              onChanged: (value) => _updatePrivacySetting(context, 'showOnlineStatus', value),
+              delay: 0,
+            ),
+            _buildPrivacyToggle(
+              context: context,
+              title: 'Show Last Seen',
+              subtitle: 'Display your last active time',
+              icon: Icons.access_time,
+              value: userModel.getMetadata('showLastSeen') ?? true,
+              onChanged: (value) => _updatePrivacySetting(context, 'showLastSeen', value),
+              delay: 0,
+            ),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 300.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        
+        const SizedBox(height: 24),
+        
+        // Help & Support Section
+        _buildSettingSection(
+          title: 'Help & Support',
+          icon: Icons.help_outline,
+          children: [
+            _buildSettingOption(
+              context: context,
+              title: 'Contact Support',
+              subtitle: 'Get help with your account',
+              icon: Icons.support_agent,
+              onTap: () => _contactSupport(context),
+              delay: 0,
+            ),
+            _buildSettingOption(
+              context: context,
+              title: 'FAQs',
+              subtitle: 'Frequently asked questions',
+              icon: Icons.question_answer,
+              onTap: () => _showFAQs(context),
+              delay: 0,
+            ),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 400.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        
+        const SizedBox(height: 24),
+        
+        // About Section
+        _buildSettingSection(
+          title: 'About',
+          icon: Icons.info_outline,
+          children: [
+            _buildSettingOption(
+              context: context,
+              title: 'Terms of Service',
+              subtitle: 'Read our terms and conditions',
+              icon: Icons.description,
+              onTap: () => _showLegalBottomSheet(context, 'terms_of_service'),
+              delay: 0,
+            ),
+            _buildSettingOption(
+              context: context,
+              title: 'Privacy Policy',
+              subtitle: 'Learn how we handle your data',
+              icon: Icons.privacy_tip,
+              onTap: () => _showLegalBottomSheet(context, 'privacy_policy'),
+              delay: 0,
+            ),
+            _buildAppVersionInfo(),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 500.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        
+        const SizedBox(height: 32),
+      ],
+    );
   }
 
   Widget _buildSettingSection({
@@ -264,10 +280,17 @@ class SettingsScreen extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              icon,
-              color: const Color(0xFFD4A76A),
-              size: 20,
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6C38D).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                color: const Color(0xFF8B4513),
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
             Text(
@@ -279,13 +302,25 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
-        ).animate()
-          .fadeIn(delay: Duration(milliseconds: delay))
-          .slideX(begin: -0.2, end: 0, delay: Duration(milliseconds: delay)),
+        ),
         
-        const Divider(color: Color(0xFFD4A76A), height: 24),
+        Divider(color: const Color(0xFFD4A76A).withOpacity(0.7), height: 24),
         
-        ...children,
+        // Apply staggered animation to each item within the section
+        ...children.asMap().entries.map((entry) {
+          final index = entry.key;
+          final child = entry.value;
+          
+          return child.animate(autoPlay: true)
+            .fadeIn(delay: Duration(milliseconds: 100 * index))
+            .slideX(
+              begin: 0.1,
+              end: 0,
+              delay: Duration(milliseconds: 100 * index),
+              duration: 400.ms,
+              curve: Curves.easeOutCubic,
+            );
+        }).toList(),
       ],
     );
   }
@@ -307,18 +342,30 @@ class SettingsScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF5E8C7),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFD4A76A).withOpacity(0.2),
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD4A76A).withOpacity(0.15),
+                blurRadius: 8,
+                spreadRadius: 1,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: const Color(0xFFD4A76A),
-                size: 20,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF8B4513),
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -330,6 +377,7 @@ class SettingsScreen extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 16,
                         color: Color(0xFF8B4513),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (subtitle != null)
@@ -337,24 +385,22 @@ class SettingsScreen extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey[600],
+                          color: const Color(0xFF8B4513).withOpacity(0.7),
                         ),
                       ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.arrow_forward_ios,
-                color: Color(0xFFD4A76A),
+                color: const Color(0xFF8B4513),
                 size: 16,
               ),
             ],
           ),
         ),
       ),
-    ).animate()
-      .fadeIn(delay: Duration(milliseconds: delay))
-      .slideY(begin: 0.2, end: 0, delay: Duration(milliseconds: delay));
+    );
   }
 
   Widget _buildProvidersList(BuildContext context, UserModel userModel) {
@@ -362,11 +408,16 @@ class SettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF5E8C7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFD4A76A).withOpacity(0.2),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD4A76A).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,12 +459,19 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Icon(
-                    providerIcon,
-                    color: const Color(0xFF8B4513),
-                    size: 16,
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6C38D).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      providerIcon,
+                      color: const Color(0xFF8B4513),
+                      size: 16,
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   Text(
                     providerName,
                     style: const TextStyle(
@@ -429,79 +487,14 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
-            ).animate()
+            ).animate(autoPlay: true)
               .fadeIn(delay: const Duration(milliseconds: 200))
               .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1));
           }).toList(),
         ],
       ),
-    ).animate()
+    ).animate(autoPlay: true)
       .fadeIn(delay: const Duration(milliseconds: 200))
-      .slideY(begin: 0.2, end: 0);
-  }
-
-  Widget _buildNotificationToggle(BuildContext context, UserModel userModel) {
-    final bool notificationsEnabled = userModel.getMetadata('notificationsEnabled') ?? true;
-    
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFD4A76A).withOpacity(0.2),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.notifications,
-                color: const Color(0xFFD4A76A),
-                size: 20,
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Text(
-                  'Enable Notifications',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF8B4513),
-                  ),
-                ),
-              ),
-              Switch(
-                value: notificationsEnabled,
-                onChanged: (value) async {
-                  setState(() {
-                    // Update user metadata for notifications
-                    final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-                    if (authProvider.userModel != null) {
-                      final updatedUser = authProvider.userModel!.updateMetadata('notificationsEnabled', value);
-                      // Update in Firestore
-                      authProvider.updateUserProfile(
-                        metadata: updatedUser.metadata,
-                      );
-                      // Show feedback
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(value ? 'Notifications enabled' : 'Notifications disabled'),
-                          backgroundColor: const Color(0xFFD4A76A),
-                        ),
-                      );
-                    }
-                  });
-                },
-                activeColor: const Color(0xFFD4A76A),
-              ),
-            ],
-          ),
-        );
-      },
-    ).animate()
-      .fadeIn(delay: const Duration(milliseconds: 250))
       .slideY(begin: 0.2, end: 0);
   }
 
@@ -515,41 +508,59 @@ class SettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: hasSubscription ? const Color(0xFFFFF8E1) : const Color(0xFFF5E8C7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFD4A76A).withOpacity(0.2),
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD4A76A).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: hasSubscription ? Border.all(
+          color: Colors.amber.shade300,
+          width: 1,
+        ) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                hasSubscription ? Icons.star : Icons.star_border,
-                color: hasSubscription ? Colors.amber : Colors.grey,
-                size: 22,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: hasSubscription 
+                      ? Colors.amber.withOpacity(0.2)
+                      : const Color(0xFFE6C38D).withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  hasSubscription ? Icons.star : Icons.star_border,
+                  color: hasSubscription ? Colors.amber.shade700 : const Color(0xFF8B4513),
+                  size: 22,
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Text(
                 hasSubscription ? 'Premium Account' : 'Free Account',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: hasSubscription ? Colors.amber.shade800 : Colors.grey.shade700,
+                  color: hasSubscription ? Colors.amber.shade800 : const Color(0xFF8B4513),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             hasSubscription 
                 ? 'Your premium subscription is active.' 
                 : 'Upgrade to premium to get more features!',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey.shade700,
+              color: hasSubscription ? Colors.amber.shade800 : const Color(0xFF8B4513).withOpacity(0.7),
             ),
           ),
           if (!hasSubscription) ...[
@@ -567,6 +578,7 @@ class SettingsScreen extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD4A76A),
                   foregroundColor: Colors.white,
+                  elevation: 2,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -578,7 +590,7 @@ class SettingsScreen extends StatelessWidget {
           ],
         ],
       ),
-    ).animate()
+    ).animate(autoPlay: true)
       .fadeIn(delay: const Duration(milliseconds: 300))
       .slideY(begin: 0.2, end: 0);
   }
@@ -592,71 +604,139 @@ class SettingsScreen extends StatelessWidget {
     required Function(bool) onChanged,
     required int delay,
   }) {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final bool isActuallyOnline = userProvider.actualIsOnline;
+    
+    // Add visual cue for online status if this is the online status toggle
+    final bool isOnlineStatusToggle = title.contains('Online Status');
+    final bool isLastSeenToggle = title.contains('Last Seen');
+    
+    String statusInfo = '';
+    if (isOnlineStatusToggle) {
+      statusInfo = isActuallyOnline 
+          ? (value ? 'Others can see you\'re online' : 'You appear offline to others')
+          : 'You are currently offline';
+    } else if (isLastSeenToggle && !value) {
+      statusInfo = 'Others cannot see when you were last active';
+    }
+    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF5E8C7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFD4A76A).withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: const Color(0xFFD4A76A),
-            size: 20,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD4A76A).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IntrinsicHeight(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF8B4513),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6C38D).withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: const Color(0xFF8B4513),
+                    size: 20,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF8B4513),
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: const Color(0xFF8B4513).withOpacity(0.7),
+                        ),
+                      ),
+                      if (statusInfo.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          statusInfo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: isActuallyOnline && isOnlineStatusToggle && !value 
+                                ? Colors.red.shade700 
+                                : const Color(0xFF8B4513).withOpacity(0.6),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                ),
+                Switch(
+                  value: value,
+                  onChanged: onChanged,
+                  activeColor: const Color(0xFFD4A76A),
                 ),
               ],
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: const Color(0xFFD4A76A),
-          ),
         ],
       ),
-    ).animate()
-      .fadeIn(delay: Duration(milliseconds: delay))
-      .slideY(begin: 0.2, end: 0, delay: Duration(milliseconds: delay));
+    ).animate(autoPlay: true)
+    .fadeIn(delay: Duration(milliseconds: delay))
+    .slideY(begin: 0.2, end: 0, delay: Duration(milliseconds: delay));
   }
 
   void _updatePrivacySetting(BuildContext context, String key, bool value) {
     final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
     if (authProvider.userModel != null) {
       final updatedUser = authProvider.userModel!.updateMetadata(key, value);
+      
+      // Update Firebase database status settings specifically for online status and last seen
+      if (key == 'showOnlineStatus' || key == 'showLastSeen') {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        userProvider.updatePrivacySettings(key, value);
+      }
+      
+      // Update in Firestore
       authProvider.updateUserProfile(
         metadata: updatedUser.metadata,
       );
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${key.replaceAll(RegExp(r'(?=[A-Z])'), ' ').toLowerCase()} ${value ? 'enabled' : 'disabled'}'),
+          content: Text('${_formatSettingName(key)} ${value ? 'enabled' : 'disabled'}'),
           backgroundColor: const Color(0xFFD4A76A),
         ),
       );
     }
+  }
+  
+  String _formatSettingName(String key) {
+    // Convert camelCase to sentence case
+    final result = key.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (match) => ' ${match.group(0)!.toLowerCase()}'
+    );
+    return result[0].toUpperCase() + result.substring(1);
   }
 
   void _showPhoneAuthDialog(BuildContext context) {
@@ -702,7 +782,7 @@ class SettingsScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate().fadeIn().slideY(begin: -0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
@@ -717,7 +797,7 @@ class SettingsScreen extends StatelessWidget {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
                 style: const TextStyle(color: Color(0xFF8B4513)),
-              ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -758,7 +838,7 @@ class SettingsScreen extends StatelessWidget {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate().fadeIn(delay: 200.ms),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -788,7 +868,7 @@ class SettingsScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate().fadeIn().slideY(begin: -0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               SizedBox(
                 height: 200,
@@ -800,7 +880,7 @@ class SettingsScreen extends StatelessWidget {
                     selectedDate = date;
                   },
                 ),
-              ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -838,7 +918,7 @@ class SettingsScreen extends StatelessWidget {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate().fadeIn(delay: 200.ms),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -868,7 +948,7 @@ class SettingsScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate().fadeIn().slideY(begin: -0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               Column(
                 children: Gender.values.map((gender) {
@@ -881,7 +961,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                   );
                 }).toList(),
-              ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -921,7 +1001,7 @@ class SettingsScreen extends StatelessWidget {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate().fadeIn(delay: 200.ms),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -949,7 +1029,7 @@ class SettingsScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate().fadeIn().slideY(begin: -0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -967,7 +1047,7 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => _pickImage(context, userModel, ImageSource.gallery),
                   ),
                 ],
-              ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -980,7 +1060,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-              ).animate().fadeIn(delay: 200.ms),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -1074,5 +1154,339 @@ class SettingsScreen extends StatelessWidget {
   String _formatGender(String gender) {
     if (gender.isEmpty) return 'Not specified';
     return gender[0].toUpperCase() + gender.substring(1).toLowerCase();
+  }
+
+  // Helper method to show legal documents
+  void _showLegalBottomSheet(BuildContext context, String type) async {
+    try {
+      // Load legal content
+      final String jsonPath = 'assets/legal/${type}.json';
+      String jsonString = await DefaultAssetBundle.of(context).loadString(jsonPath);
+      final Map<String, dynamic> data = json.decode(jsonString);
+      
+      final String url = type == 'terms_of_service' 
+          ? 'https://duckbuck.in/terms' 
+          : 'https://duckbuck.in/privacy';
+      
+      // Get screen metrics for responsive sizing
+      final screenSize = MediaQuery.of(context).size; 
+      final isSmallScreen = screenSize.width < 360;
+      
+      // Check if context is still valid
+      if (!context.mounted) return;
+      
+      // Create a GlobalKey for the action button to ensure we have a valid context
+      final GlobalKey buttonKey = GlobalKey();
+      
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (BuildContext modalContext) => DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (sheetContext, scrollController) {
+            return ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.brown.shade50.withOpacity(0.5),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    border: Border.all(
+                      color: Colors.brown.shade200.withOpacity(0.3),
+                      width: 0.5,
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenSize.width * 0.04,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header with title and close button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              data['title'],
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 18 : 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.brown.shade800,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: Colors.brown.shade800),
+                            onPressed: () => Navigator.pop(modalContext),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last Updated: ${data['lastUpdated']}',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 11 : 12,
+                          color: Colors.brown.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: data['sections'].length,
+                          itemBuilder: (context, index) {
+                            final section = data['sections'][index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    section['title'],
+                                    style: TextStyle(
+                                      fontSize: isSmallScreen ? 14 : 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.brown.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    section['content'],
+                                    style: TextStyle(
+                                      fontSize: isSmallScreen ? 12 : 14,
+                                      color: Colors.brown.shade900,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      
+                      // Read Full Button
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: Container(
+                          key: buttonKey,
+                          height: 56,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4A76A),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                // Close the modal first
+                                Navigator.pop(modalContext);
+                                
+                                // Then attempt to launch URL
+                                _launchBrowserUrl(url);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Center(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Read Full ${type == 'terms_of_service' ? 'Terms' : 'Privacy Policy'}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.open_in_new,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint("Error showing terms bottom sheet: $e");
+    }
+  }
+
+  // Helper method to launch URLs
+  Future<void> _launchBrowserUrl(String url) async {
+    // Add a small delay to avoid animation controller errors
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    try {
+      // Convert URL to URI
+      final Uri uri = Uri.parse(url);
+      
+      // Different handling for Android vs iOS
+      if (Platform.isAndroid) {
+        // For Android: Try to explicitly use https scheme with fallbacks
+        // This addresses the "component name null" issue
+        final androidUrl = uri.toString();
+        final httpsUrl = androidUrl.startsWith('https://') 
+            ? androidUrl 
+            : androidUrl.replaceFirst('http://', 'https://');
+        
+        debugPrint("Attempting to launch: $httpsUrl");
+        
+        // Try the Intent approach first for Chrome
+        bool launched = await launchUrl(
+          Uri.parse(httpsUrl),
+          mode: LaunchMode.externalNonBrowserApplication,
+        );
+        
+        // If that fails, try the universal link approach
+        if (!launched) {
+          launched = await launchUrl(
+            Uri.parse(httpsUrl),
+            mode: LaunchMode.externalApplication,
+          );
+        }
+        
+        // Last resort: try a generic browser fallback
+        if (!launched) {
+          final fallbackUri = Uri.parse('https://www.google.com');
+          await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+        }
+      } else {
+        // For iOS: standard approach works fine
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (e) {
+      debugPrint("Error launching URL: $e");
+      
+      // Try a last-resort approach with a common browser
+      try {
+        final fallbackUri = Uri.parse('https://www.google.com');
+        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        // Silently fail if even the fallback doesn't work
+      }
+    }
+  }
+
+  // Helper methods for new features
+  void _contactSupport(BuildContext context) {
+    // Show a dialog or navigate to support screen
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Contact Support'),
+        content: const Text('For support, please email us at support@duckbuck.app'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showFAQs(BuildContext context) {
+    // Show FAQs in a dialog or navigate to FAQs screen
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Frequently Asked Questions'),
+        content: const Text('FAQs will be available in the next update.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildAppVersionInfo() {
+    const version = '1.0.0';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5E8C7),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD4A76A).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6C38D).withOpacity(0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.system_update,
+              color: Color(0xFF8B4513),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'App Version',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF8B4513),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'v$version',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: const Color(0xFF8B4513).withOpacity(0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 } 

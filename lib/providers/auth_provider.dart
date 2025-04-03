@@ -105,7 +105,26 @@ class AuthProvider with ChangeNotifier {
         return OnboardingStage.notStarted;
       }
       
-      // Always check Firestore first to see if the user exists
+      // Use the cached user model if available to prevent unnecessary database calls
+      if (_userModel != null) {
+        final stageString = _userModel!.metadata?['current_onboarding_stage'];
+        if (stageString != null) {
+          switch (stageString) {
+            case 'name':
+              return OnboardingStage.name;
+            case 'dateOfBirth':
+              return OnboardingStage.dateOfBirth;
+            case 'gender':
+              return OnboardingStage.gender;
+            case 'profilePhoto':
+              return OnboardingStage.profilePhoto;
+            case 'completed':
+              return OnboardingStage.completed;
+          }
+        }
+      }
+      
+      // If not cached, check Firestore
       final userModel = await _authService.getUserModel(userId);
       
       // If user doesn't exist in database, don't use cache and don't recreate the user

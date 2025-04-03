@@ -562,15 +562,17 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                           if (Platform.isIOS)
                             SizedBox(height: isSmallScreen ? 8 : 16),
                           
-                          _buildAuthButton(
-                            "Continue with Phone",
-                            null,
-                            _isPhoneLoading,
-                            () => _onPhoneSignIn(context),
-                            isSmallScreen,
-                            lottieAsset: 'assets/animations/phone.json',
-                            animationDelay: Platform.isIOS ? 400 : 300,
-                          ),
+                          // Only show phone option for Android
+                          if (!Platform.isIOS)
+                            _buildAuthButton(
+                              "Continue with Phone",
+                              null,
+                              _isPhoneLoading,
+                              () => _onPhoneSignIn(context),
+                              isSmallScreen,
+                              lottieAsset: 'assets/animations/phone.json',
+                              animationDelay: Platform.isIOS ? 400 : 300,
+                            ),
                           
                           // More space for showing disclaimer
                           SizedBox(height: isSmallScreen ? 12 : 20),

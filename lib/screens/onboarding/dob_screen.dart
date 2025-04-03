@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:duckbuck/widgets/cool_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lottie/lottie.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 import '../../providers/auth_provider.dart' as auth;
 import 'gender_screen.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +19,7 @@ class DOBScreen extends StatefulWidget {
 class _DOBScreenState extends State<DOBScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   DateTime? _selectedDate;
+  bool _isLoading = false;
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime now = DateTime.now();
@@ -65,6 +68,8 @@ class _DOBScreenState extends State<DOBScreen> {
       return;
     }
 
+    setState(() => _isLoading = true);
+
     try {
       // Get the auth provider
       final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
@@ -107,6 +112,10 @@ class _DOBScreenState extends State<DOBScreen> {
     } catch (e) {
       _showErrorSnackBar('Unable to save your date of birth. Please try again.');
       print('DOBScreen: Error saving DOB: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -125,7 +134,7 @@ class _DOBScreenState extends State<DOBScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async => false,
+      onWillPop: () async => !_isLoading,
       child: Scaffold(
         body: DuckBuckAnimatedBackground(
           child: SafeArea(
@@ -296,24 +305,52 @@ class _DOBScreenState extends State<DOBScreen> {
                         right: 30.0, 
                         bottom: 30.0
                       ),
-                      child: DuckBuckButton(
-                        text: 'Continue',
-                        onTap: _saveDOB,
-                        color: const Color(0xFFD4A76A),
-                        borderColor: const Color(0xFFB38B4D),
-                        textColor: Colors.white,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: const Icon(Icons.arrow_forward, color: Colors.white),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                      child: _isLoading 
+                      ? Container(
+                          height: 100,
+                          width: 100,
+                          alignment: Alignment.center,
+                          child: Lottie.asset(
+                            'assets/animations/loading1.json',
+                            width: 80,
+                            height: 80,
+                            repeat: true,
+                            animate: true,
+                          ),
+                        )
+                      : Container(
+                          width: double.infinity,
+                          height: 65,
+                          child: NeoPopButton(
+                            color: const Color(0xFFD4A76A),
+                            onTapUp: _saveDOB,
+                            onTapDown: () {},
+                            border: Border.all(
+                              color: const Color(0xFFB38B4D),
+                              width: 1.5,
+                            ),
+                            depth: 10,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Continue',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Icon(Icons.arrow_forward, color: Colors.white),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        height: 55,
-                        width: double.infinity,
-                      ),
                     ),
                   )
                   .animate()

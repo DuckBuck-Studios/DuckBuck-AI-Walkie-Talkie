@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:duckbuck/widgets/cool_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lottie/lottie.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 import '../../providers/auth_provider.dart' as auth;
 import '../../widgets/animated_background.dart';
 
@@ -126,7 +128,7 @@ class _GenderScreenState extends State<GenderScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async => false,
+      onWillPop: () async => !_isLoading,
       child: Scaffold(
         body: DuckBuckAnimatedBackground(
           child: SafeArea(
@@ -254,24 +256,52 @@ class _GenderScreenState extends State<GenderScreen> {
                         right: 30.0, 
                         bottom: 30.0
                       ),
-                      child: DuckBuckButton(
-                        text: _isLoading ? 'Loading...' : 'Continue',
-                        onTap: _isLoading ? () {} : _saveGender,
-                        color: const Color(0xFFD4A76A),
-                        borderColor: const Color(0xFFB38B4D),
-                        textColor: Colors.white,
-                        alignment: MainAxisAlignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
-                        icon: const Icon(Icons.arrow_forward, color: Colors.white),
-                        textStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
-                          letterSpacing: 0.5,
+                      child: _isLoading 
+                      ? Container(
+                          height: 100,
+                          width: 100,
+                          alignment: Alignment.center,
+                          child: Lottie.asset(
+                            'assets/animations/loading1.json',
+                            width: 80,
+                            height: 80,
+                            repeat: true,
+                            animate: true,
+                          ),
+                        )
+                      : Container(
+                          width: double.infinity,
+                          height: 65,
+                          child: NeoPopButton(
+                            color: const Color(0xFFD4A76A),
+                            onTapUp: _saveGender,
+                            onTapDown: () {},
+                            border: Border.all(
+                              color: const Color(0xFFB38B4D),
+                              width: 1.5,
+                            ),
+                            depth: 10,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Continue',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Icon(Icons.arrow_forward, color: Colors.white),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        height: 55,
-                        width: double.infinity,
-                      ),
                     ),
                   )
                   .animate()

@@ -21,12 +21,18 @@ class UserProvider with ChangeNotifier {
   
   // Get user status
   bool _isOnline = false;
+  bool _actualIsOnline = false;  
   String? _statusAnimation;
   int _lastStatusTimestamp = 0;
   
   bool get isOnline => _isOnline;
+  bool get actualIsOnline => _actualIsOnline; // Actual status for the current user's own view
   String? get statusAnimation => _statusAnimation;
   int get lastStatusTimestamp => _lastStatusTimestamp;
+  
+  // Privacy settings
+  bool get showOnlineStatus => _currentUser?.getMetadata('showOnlineStatus') ?? true;
+  bool get showLastSeen => _currentUser?.getMetadata('showLastSeen') ?? true;
   
   // Initialize provider
   Future<void> initialize() async {
@@ -94,6 +100,7 @@ class UserProvider with ChangeNotifier {
     // Setup user status listener
     _userStatusSubscription = _userService.getUserStatusStream(uid).listen((statusData) {
       _isOnline = statusData['isOnline'] ?? false;
+      _actualIsOnline = statusData['actualIsOnline'] ?? _isOnline; // Use actual status if available
       _statusAnimation = statusData['animation'];
       _lastStatusTimestamp = statusData['timestamp'] ?? 0;
       notifyListeners();
@@ -137,6 +144,7 @@ class UserProvider with ChangeNotifier {
     await _clearSubscriptions();
     _currentUser = null;
     _isOnline = false;
+    _actualIsOnline = false;
     _statusAnimation = null;
     _lastStatusTimestamp = 0;
     notifyListeners();
@@ -173,7 +181,21 @@ class UserProvider with ChangeNotifier {
   Future<void> setOnlineStatus(bool isOnline) async {
     if (_currentUser == null) return;
     await _userService.setUserOnlineStatus(_currentUser!.uid, isOnline);
-    _isOnline = isOnline;
+    _actualIsOnline = isOnline;
+    _isOnline = showOnlineStatus ? isOnline : false; // Visible status depends on privacy settings
+    notifyListeners();
+  }
+  
+  // Update privacy settings
+  Future<void> updatePrivacySettings(String key, bool value) async {
+    if (_currentUser == null) return;
+    await _userService.updateUserPrivacySetting(_currentUser!.uid, key, value);
+    
+    // Update local state immediately based on the new privacy setting
+    if (key == 'showOnlineStatus') {
+      _isOnline = value ? _actualIsOnline : false;
+    }
+    
     notifyListeners();
   }
   

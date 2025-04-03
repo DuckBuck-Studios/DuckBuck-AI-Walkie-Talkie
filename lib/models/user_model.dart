@@ -21,7 +21,7 @@ enum Gender {
 /// Contains all user data including authentication details,
 /// profile information, and subscription status
 class UserModel {
-  final String uid;
+  final String uid;  // This will be the 8-digit ID
   final String displayName;
   final String? photoURL;
   final List<AuthProvider> providers;
