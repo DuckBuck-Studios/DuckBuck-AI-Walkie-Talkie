@@ -3,8 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:ui';
-import 'package:flutter/cupertino.dart';
+import 'dart:ui'; 
 import '../../../providers/auth_provider.dart' as auth;
 import '../../../providers/user_provider.dart';
 import '../../../models/user_model.dart';
@@ -65,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: _buildSettingsContent(context, userModel),
         ),
       ),
-    ).animate().fadeIn(duration: 300.ms);
+    );
   }
 
   Widget _buildSettingsContent(BuildContext context, UserModel userModel) {
@@ -76,28 +75,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // Add a settings icon at the top with Hero animation
           const SizedBox(height: 20),
-          Hero(
-            tag: 'settings-button',
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6C38D).withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.settings,
-                  color: Color(0xFF8B4513),
-                  size: 40,
+          Column(
+            children: [
+              Hero(
+                tag: 'settings-icon',
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6C38D).withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.settings,
+                    color: Color(0xFF8B4513),
+                    size: 28,
+                  ),
                 ),
               ),
-            ),
-          ).animate(autoPlay: true).scale(
-            begin: const Offset(0.8, 0.8),
-            end: const Offset(1.0, 1.0),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutBack,
+              const SizedBox(height: 8),
+              const Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8B4513),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 30),
           
@@ -134,9 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ).animate(autoPlay: true)
-          .fadeIn(duration: 300.ms, delay: 100.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        ),
         
         const SizedBox(height: 24),
         
@@ -148,9 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSubscriptionStatus(context, userModel),
           ],
           delay: 0,
-        ).animate(autoPlay: true)
-          .fadeIn(duration: 300.ms, delay: 200.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        ),
         
         const SizedBox(height: 24),
         
@@ -201,9 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ).animate(autoPlay: true)
-          .fadeIn(duration: 300.ms, delay: 300.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        ),
         
         const SizedBox(height: 24),
         
@@ -230,9 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ).animate(autoPlay: true)
-          .fadeIn(duration: 300.ms, delay: 400.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        ),
         
         const SizedBox(height: 24),
         
@@ -260,9 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildAppVersionInfo(),
           ],
           delay: 0,
-        ).animate(autoPlay: true)
-          .fadeIn(duration: 300.ms, delay: 500.ms)
-          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+        ),
         
         const SizedBox(height: 32),
       ],
@@ -306,21 +300,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         
         Divider(color: const Color(0xFFD4A76A).withOpacity(0.7), height: 24),
         
-        // Apply staggered animation to each item within the section
-        ...children.asMap().entries.map((entry) {
-          final index = entry.key;
-          final child = entry.value;
-          
-          return child.animate(autoPlay: true)
-            .fadeIn(delay: Duration(milliseconds: 100 * index))
-            .slideX(
-              begin: 0.1,
-              end: 0,
-              delay: Duration(milliseconds: 100 * index),
-              duration: 400.ms,
-              curve: Curves.easeOutCubic,
-            );
-        }).toList(),
+        // Display children without animation
+        ...children,
       ],
     );
   }
@@ -328,76 +309,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSettingOption({
     required BuildContext context,
     required String title,
-    String? subtitle,
+    required String subtitle,
     required IconData icon,
     required VoidCallback onTap,
     required int delay,
   }) {
-    return Material(
-      color: Colors.transparent,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5E8C7),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFD4A76A).withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5E8C7),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFD4A76A).withOpacity(0.15),
-                blurRadius: 8,
-                spreadRadius: 1,
-                offset: const Offset(0, 2),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6C38D).withOpacity(0.5),
+                borderRadius: BorderRadius.circular(10),
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6C38D).withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  color: const Color(0xFF8B4513),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF8B4513),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: const Color(0xFF8B4513).withOpacity(0.7),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
+              child: Icon(
+                icon,
                 color: const Color(0xFF8B4513),
-                size: 16,
+                size: 20,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF8B4513),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: const Color(0xFF8B4513).withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: const Color(0xFF8B4513).withOpacity(0.5),
+              size: 16,
+            ),
+          ],
         ),
       ),
     );
@@ -479,23 +456,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 5),
-                  const Icon(
+                  const SizedBox(width: 4),
+                  Icon(
                     Icons.check_circle,
                     color: Colors.green,
                     size: 16,
                   ),
                 ],
               ),
-            ).animate(autoPlay: true)
-              .fadeIn(delay: const Duration(milliseconds: 200))
-              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1));
+            );
           }).toList(),
         ],
       ),
-    ).animate(autoPlay: true)
-      .fadeIn(delay: const Duration(milliseconds: 200))
-      .slideY(begin: 0.2, end: 0);
+    );
   }
 
   Widget _buildSubscriptionStatus(BuildContext context, UserModel userModel) {
@@ -590,9 +563,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ],
       ),
-    ).animate(autoPlay: true)
-      .fadeIn(delay: const Duration(milliseconds: 300))
-      .slideY(begin: 0.2, end: 0);
+    );
   }
 
   Widget _buildPrivacyToggle({
@@ -700,9 +671,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    ).animate(autoPlay: true)
-    .fadeIn(delay: Duration(milliseconds: delay))
-    .slideY(begin: 0.2, end: 0, delay: Duration(milliseconds: delay));
+    );
   }
 
   void _updatePrivacySetting(BuildContext context, String key, bool value) {
@@ -782,7 +751,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
@@ -797,7 +766,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
                 style: const TextStyle(color: Color(0xFF8B4513)),
-              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -838,7 +807,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
+              ),
             ],
           ),
         ),
@@ -868,7 +837,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
+              ),
               const SizedBox(height: 16),
               SizedBox(
                 height: 200,
@@ -880,7 +849,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     selectedDate = date;
                   },
                 ),
-              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -918,7 +887,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
+              ),
             ],
           ),
         ),
@@ -948,7 +917,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
+              ),
               const SizedBox(height: 16),
               Column(
                 children: Gender.values.map((gender) {
@@ -961,7 +930,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   );
                 }).toList(),
-              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
+              ),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -1001,7 +970,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
+              ),
             ],
           ),
         ),
@@ -1414,18 +1383,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
   
   void _showFAQs(BuildContext context) {
-    // Show FAQs in a dialog or navigate to FAQs screen
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Frequently Asked Questions'),
-        content: const Text('FAQs will be available in the next update.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Frequently Asked Questions',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B4513),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 300,
+                child: ListView(
+                  children: [
+                    FAQItem(
+                      question: 'How do I send money to friends?',
+                      answer: 'Tap on a friend\'s profile, then select the "Send Money" option. Follow the prompts to complete the transaction.',
+                    ),
+                    FAQItem(
+                      question: 'Is there a fee for transactions?',
+                      answer: 'Basic transactions are free. Premium features may have associated fees.',
+                    ),
+                    FAQItem(
+                      question: 'How do I add friends?',
+                      answer: 'Go to the Friends tab and tap the "+" button. You can add friends by username, scan their QR code, or from your contacts.',
+                    ),
+                    FAQItem(
+                      question: 'Can I cancel a payment?',
+                      answer: 'Payments can be canceled if they haven\'t been claimed by the recipient yet. Go to transaction history to check status.',
+                    ),
+                    FAQItem(
+                      question: 'How secure is my information?',
+                      answer: 'We use industry-standard encryption and security measures to protect your data and transactions.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD4A76A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1485,6 +1510,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class FAQItem extends StatelessWidget {
+  final String question;
+  final String answer;
+  
+  const FAQItem({
+    Key? key,
+    required this.question,
+    required this.answer,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF8B4513),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            answer,
+            style: TextStyle(
+              fontSize: 14,
+              color: const Color(0xFF8B4513).withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Divider(color: const Color(0xFFD4A76A).withOpacity(0.5)),
         ],
       ),
     );

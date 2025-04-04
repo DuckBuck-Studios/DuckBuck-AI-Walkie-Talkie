@@ -124,6 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (dialogContext) => Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -140,7 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF8B4513).withOpacity(0.2),
+                  color: const Color(0xFF8B4513).withOpacity(0.3),
                   blurRadius: 20,
                   spreadRadius: 5,
                 ),
@@ -149,43 +150,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Header
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.qr_code,
-                        color: Color(0xFF8B4513),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Your DuckBuck QR Code',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF8B4513),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Share this code with friends to connect',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: const Color(0xFF8B4513).withOpacity(0.7),
+                // Header with animation
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.qr_code,
+                      color: Color(0xFF8B4513),
+                      size: 24,
+                    )
+                    .animate()
+                    .fadeIn(duration: 400.ms)
+                    .scale(
+                      begin: const Offset(0.5, 0.5),
+                      end: const Offset(1.0, 1.0),
+                      curve: Curves.elasticOut,
+                      duration: 800.ms,
+                    )
+                    .then()
+                    .shimmer(
+                      duration: 1800.ms,
+                      delay: 1500.ms,
+                      curve: Curves.easeInOut,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                    
+                    const SizedBox(width: 8),
+                    
+                    const Text(
+                      'Your DuckBuck QR Code',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF8B4513),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(duration: 600.ms, curve: Curves.easeOut)
+                    .slide(
+                      begin: const Offset(0.2, 0),
+                      end: const Offset(0, 0),
+                      duration: 500.ms,
+                      curve: Curves.easeOutQuad,
+                    ),
+                  ],
                 ),
+                
+                const SizedBox(height: 8),
+                
+                Text(
+                  'Share this code with friends to connect',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: const Color(0xFF8B4513).withOpacity(0.7),
+                  ),
+                  textAlign: TextAlign.center,
+                )
+                .animate()
+                .fadeIn(
+                  delay: 300.ms,
+                  duration: 800.ms,
+                ),
+                
                 const SizedBox(height: 20),
-                // QR code
+                
+                // QR code with animation
                 RepaintBoundary(
                   key: _qrKey,
                   child: Container(
@@ -225,52 +253,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
+                )
+                .animate()
+                .fadeIn(
+                  duration: 1000.ms,
+                  delay: 500.ms,
+                  curve: Curves.easeOut,
+                )
+                .scale(
+                  begin: const Offset(0.8, 0.8),
+                  end: const Offset(1.0, 1.0),
+                  duration: 700.ms,
+                  delay: 500.ms,
+                  curve: Curves.easeOutBack,
+                )
+                .then()
+                .custom(
+                  duration: 300.ms,
+                  builder: (context, value, child) => 
+                    Transform.rotate(
+                      angle: (value * 0.06) * 3.1415927,
+                      child: child,
+                    ),
+                )
+                .then(delay: 300.ms)
+                .blurXY(
+                  begin: 5, 
+                  end: 0, 
+                  duration: 700.ms, 
+                  curve: Curves.easeOut
                 ),
+                
                 const SizedBox(height: 20),
-                // Buttons
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Share button on top
-                    SizedBox(
-                      width: double.infinity, // Make button full width
-                      child: ElevatedButton.icon(
-                        onPressed: () => _captureAndShareQR(),
-                        icon: const Icon(Icons.share, size: 18),
-                        label: const Text('Share'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD4A76A),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                
+                // Buttons with animation
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _captureAndShareQR(),
+                    icon: const Icon(Icons.share, size: 18),
+                    label: const Text('Share'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD4A76A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // Close button at the bottom
-                    SizedBox(
-                      width: double.infinity, // Make button full width
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Close'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF8B4513),
-                          side: const BorderSide(color: Color(0xFFE6C38D), width: 1.5),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                  ),
+                )
+                .animate()
+                .fadeIn(delay: 1200.ms, duration: 500.ms)
+                .slideY(begin: 0.5, end: 0, delay: 1200.ms, duration: 500.ms, curve: Curves.easeOutCubic),
+                
+                const SizedBox(height: 12),
+                
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Close'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B4513),
+                      side: const BorderSide(color: Color(0xFFE6C38D), width: 1.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                )
+                .animate()
+                .fadeIn(delay: 1400.ms, duration: 500.ms)
+                .slideY(begin: 0.5, end: 0, delay: 1400.ms, duration: 500.ms, curve: Curves.easeOutCubic),
               ],
             ),
           ),
+        )
+        .animate()
+        .scale(
+          begin: const Offset(0.7, 0.7),
+          end: const Offset(1.0, 1.0),
+          duration: 800.ms,
+          curve: Curves.easeOutExpo,
         ),
       ),
     );
@@ -461,52 +528,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(width: 48),
           // Settings button with Hero animation
-          Hero(
-            tag: 'settings-button',
-            child: Material(
-              color: Colors.transparent,
-              child: _buildActionButton(
-                icon: Icons.settings,
-                label: 'Settings',
-                onTap: () {
-                  if (userModel != null) {
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) => 
-                          const SettingsScreen(),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          const begin = Offset(1.0, 0.0);
-                          const end = Offset.zero;
-                          const curve = Curves.easeOutQuint;
-                          
-                          var tween = Tween(begin: begin, end: end)
-                            .chain(CurveTween(curve: curve));
-                            
-                          var offsetAnimation = animation.drive(tween);
-                          
-                          var fadeAnimation = Tween<double>(
-                            begin: 0.0,
-                            end: 1.0,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-                            ),
-                          );
-                          
-                          return SlideTransition(
-                            position: offsetAnimation,
-                            child: FadeTransition(
-                              opacity: fadeAnimation,
-                              child: child,
-                            ),
-                          );
-                        },
-                        transitionDuration: const Duration(milliseconds: 500),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                if (userModel != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                }
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Hero(
+                      tag: 'settings-icon',
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE6C38D).withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.settings,
+                          color: Color(0xFF8B4513),
+                          size: 24,
+                        ),
                       ),
-                    );
-                  }
-                },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Settings',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF8B4513),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -525,31 +588,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6C38D).withOpacity(0.5),
-                borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 68, // Fixed width for button content
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF8B4513),
+                  size: 24,
+                ),
               ),
-              child: Icon(
-                icon,
-                color: const Color(0xFF8B4513),
-                size: 24,
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8B4513),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF8B4513),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart'; 
 import 'package:flutter/foundation.dart' show kDebugMode; 
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart'; 
 import 'providers/friend_provider.dart';
@@ -12,14 +13,15 @@ import 'screens/onboarding/name_screen.dart';
 import 'screens/onboarding/dob_screen.dart';
 import 'screens/onboarding/gender_screen.dart';
 import 'screens/onboarding/profile_photo_screen.dart';
-import 'screens/Home/home_screen.dart';
-import 'screens/splash_screen.dart';  
+import 'screens/Home/home_screen.dart'; 
 import 'package:flutter/services.dart';
 import 'services/friend_service.dart';
-import 'config/app_config.dart';
+import 'config/app_config.dart'; 
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Ensure Flutter is initialized and preserve native splash
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   
   // Initialize Firebase
   await Firebase.initializeApp(
@@ -61,12 +63,10 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver { 
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-     
   } 
 
   @override
@@ -75,7 +75,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
   
-
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -109,32 +108,100 @@ class AuthenticationWrapper extends StatefulWidget {
   State<AuthenticationWrapper> createState() => _AuthenticationWrapperState();
 }
 
-class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
-  // Add a flag to track if we're still initializing
+class _AuthenticationWrapperState extends State<AuthenticationWrapper> with SingleTickerProviderStateMixin {
+  // Flags to track loading states
   bool _isInitializing = true;
+  
+  // Target screen to show after splash
+  Widget? _targetScreen;
+  
   final AppConfig _appConfig = AppConfig();
   
   @override
   void initState() {
     super.initState();
-    // Check auth state asynchronously
-    _checkAuthState();
+    
+    // Fully initialize the app and determine the correct screen to show
+    _initializeApp();
   }
   
-  // Check auth state asynchronously
-  Future<void> _checkAuthState() async {
-    // Add a minimum delay to show splash screen
-    await Future.delayed(const Duration(milliseconds: 2500));
-    
-    if (mounted) {
-      setState(() {
-        _isInitializing = false;
-      });
+  // Completely initialize the app and determine the target screen
+  Future<void> _initializeApp() async {
+    try {
+      // Get the auth provider
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Wait for auth state to be determined
+      while (authProvider.status == AuthStatus.loading) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      // Determine the correct target screen based on auth state
+      if (!authProvider.isAuthenticated) {
+        // Not authenticated, show welcome screen
+        _targetScreen = const WelcomeScreen();
+      } else {
+        // Authenticated, set user ID for crash reporting
+        if (authProvider.currentUser?.uid != null) {
+          await _setUserForCrashReporting(authProvider.currentUser?.uid);
+        }
+        
+        // Determine onboarding stage
+        final onboardingStage = await authProvider.getOnboardingStage();
+        
+        if (onboardingStage == OnboardingStage.notStarted) {
+          // User doesn't exist in database, sign out and show welcome
+          await authProvider.signOut();
+          _targetScreen = const WelcomeScreen();
+        } else {
+          // Route to the appropriate screen based on onboarding stage
+          switch (onboardingStage) {
+            case OnboardingStage.completed:
+              _targetScreen = const HomeScreen();
+              break;
+            case OnboardingStage.name:
+              _targetScreen = const NameScreen();
+              break;
+            case OnboardingStage.dateOfBirth:
+              _targetScreen = const DOBScreen();
+              break;
+            case OnboardingStage.gender:
+              _targetScreen = const GenderScreen();
+              break;
+            case OnboardingStage.profilePhoto:
+              _targetScreen = const ProfilePhotoScreen();
+              break;
+            default:
+              _targetScreen = const NameScreen();
+          }
+        }
+      }
+      
+      // Update state now that we're done initializing
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+        
+        // Remove native splash only after everything is ready
+        FlutterNativeSplash.remove();
+      }
+    } catch (e) {
+      // Log the error but still continue to show the app
+      _appConfig.log('Error during app initialization: $e');
+      
+      // Set a default screen in case of error
+      _targetScreen = const WelcomeScreen();
+      
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+        
+        // Remove native splash even in case of error
+        FlutterNativeSplash.remove();
+      }
     }
-  }
-
-  Widget _buildSplashScreen() {
-    return const SplashScreen();
   }
 
   // Set user ID for crash reporting
@@ -146,84 +213,15 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // Always show splash screen during initialization
+    // Show loading indicator during initialization
     if (_isInitializing) {
-      return _buildSplashScreen();
+      // Return empty container while native splash is still showing
+      return Container(color: Colors.transparent);
     }
     
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
-        // If still loading auth state, show splash screen
-        if (authProvider.status == AuthStatus.loading) {
-          return _buildSplashScreen();
-        }
-
-        // If not authenticated, show welcome screen
-        if (!authProvider.isAuthenticated) {
-          _appConfig.log('User not authenticated, showing welcome screen');
-          return const WelcomeScreen().animate().fadeIn(
-            duration: const Duration(milliseconds: 300),
-          );
-        }
-
-        // Set user ID for crash reporting if authenticated
-        if (authProvider.currentUser?.uid != null) {
-          _setUserForCrashReporting(authProvider.currentUser?.uid);
-        }
-
-        // For authenticated users, check onboarding stage directly
-        return FutureBuilder<OnboardingStage>(
-          future: authProvider.getOnboardingStage(),
-          builder: (context, stageSnapshot) {
-            // If we're still loading the stage, show the splash screen
-            if (stageSnapshot.connectionState == ConnectionState.waiting) {
-              return _buildSplashScreen();
-            }
-            
-            // Get the current stage
-            final currentStage = stageSnapshot.data ?? OnboardingStage.name;
-            _appConfig.log('Current onboarding stage: $currentStage');
-            
-            // If the user doesn't exist in the database (notStarted), show welcome screen
-            if (currentStage == OnboardingStage.notStarted) {
-              _appConfig.log('User not in database, showing welcome screen');
-              // Sign out the user first
-              authProvider.signOut();
-              return const WelcomeScreen().animate().fadeIn(
-                duration: const Duration(milliseconds: 300),
-              );
-            }
-            
-            // Route to the appropriate screen based on onboarding stage
-            Widget targetScreen;
-            
-            switch (currentStage) {
-              case OnboardingStage.completed:
-                targetScreen = const HomeScreen();
-                break;
-              case OnboardingStage.name:
-                targetScreen = const NameScreen();
-                break;
-              case OnboardingStage.dateOfBirth:
-                targetScreen = const DOBScreen();
-                break;
-              case OnboardingStage.gender:
-                targetScreen = const GenderScreen();
-                break;
-              case OnboardingStage.profilePhoto:
-                targetScreen = const ProfilePhotoScreen();
-                break;
-              default:
-                targetScreen = const NameScreen();
-            }
-            
-            // Animate the transition to the target screen
-            return targetScreen.animate().fadeIn(
-              duration: const Duration(milliseconds: 300),
-            );
-          },
-        );
-      },
+    // Show the target screen with a fade animation
+    return _targetScreen!.animate().fadeIn(
+      duration: const Duration(milliseconds: 400),
     );
   }
 }

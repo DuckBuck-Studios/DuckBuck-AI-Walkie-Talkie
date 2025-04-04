@@ -703,4 +703,18 @@ class FriendProvider with ChangeNotifier {
       print("FriendProvider: Error during force refresh: $e");
     }
   }
+
+  // Get user details by ID
+  Future<Map<String, dynamic>> getUserById(String userId) async {
+    try {
+      return await _friendService.getUserById(userId);
+    } catch (e) {
+      print('FriendProvider: Error getting user by ID: $e');
+      return {
+        'success': false,
+        'error': 'An error occurred while retrieving the user',
+        'exception': e.toString()
+      };
+    }
+  }
 } 
