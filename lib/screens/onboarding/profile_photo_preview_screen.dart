@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:duckbuck/widgets/cool_button.dart';
+import 'package:flutter/material.dart'; 
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io';
 import '../../services/user_service.dart'; 
@@ -21,11 +20,28 @@ class ProfilePhotoPreviewScreen extends StatefulWidget {
   State<ProfilePhotoPreviewScreen> createState() => _ProfilePhotoPreviewScreenState();
 }
 
-class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
+class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> with SingleTickerProviderStateMixin {
   bool _isLoading = false;
   String _progressMessage = '';
   // Create a direct instance of UserService instead of using Provider
   final UserService _userService = UserService();
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _animationController.forward();
+  }
+  
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   Future<void> _setProfilePhoto() async {
     setState(() {
@@ -95,15 +111,23 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              var curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutQuint,
+              );
+              
               return FadeTransition(
-                opacity: animation,
-                child: child.animate().fade().scale(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOut,
+                opacity: curvedAnimation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.2),
+                    end: Offset.zero,
+                  ).animate(curvedAnimation),
+                  child: child,
                 ),
               );
             },
-            transitionDuration: const Duration(milliseconds: 500),
+            transitionDuration: const Duration(milliseconds: 800),
           ),
           (route) => false, // Remove all previous routes
         );
@@ -185,16 +209,65 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
             // Main content
             Column(
               children: [
+                // Top action bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: Colors.black,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      Text(
+                        'Preview',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 48), // Balance the layout
+                    ],
+                  ),
+                )
+                .animate(controller: _animationController)
+                .fadeIn(duration: 400.ms),
+                
                 // Image container (takes most of the screen)
                 Expanded(
                   child: Center(
-                    child: Image.file(
-                      File(widget.imagePath),
-                      fit: BoxFit.contain,
+                    child: Hero(
+                      tag: 'profile_image',
+                      child: Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD4A76A).withOpacity(0.3),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.file(
+                            File(widget.imagePath),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
                     )
-                    .animate()
+                    .animate(controller: _animationController)
                     .fadeIn(
-                      duration: const Duration(milliseconds: 300),
+                      duration: 600.ms,
+                    )
+                    .scale(
+                      begin: const Offset(0.9, 0.9),
+                      end: const Offset(1.0, 1.0),
+                      duration: 600.ms,
+                      curve: Curves.easeOut,
                     ),
                   ),
                 ),
@@ -202,8 +275,14 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                 // Bottom action buttons with vertical layout
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 24.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    border: Border(
+                      top: BorderSide(
+                        color: Color(0xFF222222),
+                        width: 1,
+                      ),
+                    ),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -213,6 +292,22 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                         width: double.infinity,
                         height: 65,
                         margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFE9C78E), Color(0xFFD4A76A)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD4A76A).withOpacity(0.3),
+                              blurRadius: 10,
+                              spreadRadius: 0,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: NeoPopButton(
                           color: const Color(0xFFD4A76A),
                           onTapUp: _isLoading ? () {} : _setProfilePhoto,
@@ -226,7 +321,7 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Text(
-                                'Set',
+                                'Set as Profile Photo',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
@@ -238,18 +333,33 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                             ),
                           ),
                         ),
-                      ),
+                      )
+                      .animate(controller: _animationController)
+                      .fadeIn(duration: 600.ms, delay: 200.ms)
+                      .slideY(begin: 0.3, end: 0, duration: 600.ms, curve: Curves.easeOutQuint),
                       
-                      // Cancel button (below)
+                      // Retake button (below)
                       Container(
                         width: double.infinity,
                         height: 65,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.grey.shade900,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 10,
+                              spreadRadius: 0,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
                         child: NeoPopButton(
                           color: Colors.grey.shade800,
                           onTapUp: _isLoading ? () {} : () => Navigator.of(context).pop(),
                           onTapDown: () {},
                           border: Border.all(
-                            color: Colors.grey.shade600,
+                            color: Colors.grey.shade700,
                             width: 1.5,
                           ),
                           depth: 10,
@@ -257,7 +367,7 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Text(
-                                'Cancel',
+                                'Retake Photo',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
@@ -269,20 +379,17 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                             ),
                           ),
                         ),
-                      ),
+                      )
+                      .animate(controller: _animationController)
+                      .fadeIn(duration: 600.ms, delay: 300.ms)
+                      .slideY(begin: 0.3, end: 0, duration: 600.ms, curve: Curves.easeOutQuint),
                     ],
-                  )
-                  .animate()
-                  .fadeIn(
-                    duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 300),
-                  )
-                  .slideY(begin: 0.3, end: 0),
+                  ),
                 ),
               ],
             ),
             
-            // Optimized Loading Overlay with loading1.json
+            // Enhanced Loading Overlay with loading1.json
             if (_isLoading)
               Container(
                 color: Colors.black.withOpacity(0.85),
@@ -297,12 +404,19 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                         color: const Color(0xFFD4A76A).withOpacity(0.3),
                         width: 1.5,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // Single loading1.json animation
-                        Container(
+                        SizedBox(
                           height: 120,
                           width: 120,
                           child: Lottie.asset(
@@ -327,7 +441,15 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> {
                     ),
                   ),
                 ),
-              ).animate().fadeIn(duration: const Duration(milliseconds: 250)),
+              )
+              .animate()
+              .fadeIn(duration: 250.ms)
+              .scale(
+                begin: const Offset(0.95, 0.95),
+                end: const Offset(1.0, 1.0),
+                duration: 350.ms,
+                curve: Curves.easeOut,
+              ),
           ],
         ),
       ),

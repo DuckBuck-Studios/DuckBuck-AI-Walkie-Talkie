@@ -1743,45 +1743,4 @@ class FriendService {
       return {'hasPendingRequest': false, 'error': e.toString()};
     }
   }
-
-  /// Get user details by their ID
-  Future<Map<String, dynamic>> getUserById(String userId) async {
-    try {
-      _appConfig.log('FriendService: Getting user document for ID: $userId');
-      
-      // Get the user document
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .get();
-          
-      if (!userDoc.exists) {
-        _appConfig.log('FriendService: User not found for ID: $userId');
-        return {
-          'success': false,
-          'error': 'User not found',
-          'errorCode': 'user/not-found'
-        };
-      }
-      
-      // Get user data
-      final userData = userDoc.data()!;
-      userData['id'] = userDoc.id;
-      
-      _appConfig.log('FriendService: Found user: ${userData['displayName']}');
-      
-      return {
-        'success': true,
-        'user': userData
-      };
-    } catch (e, stackTrace) {
-      _appConfig.reportError(e, stackTrace, reason: "Error getting user by ID");
-      return {
-        'success': false,
-        'error': 'Error retrieving user',
-        'errorCode': 'user/error',
-        'exception': e.toString()
-      };
-    }
-  }
 } 

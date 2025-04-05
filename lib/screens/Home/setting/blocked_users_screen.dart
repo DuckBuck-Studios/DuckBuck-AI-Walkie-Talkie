@@ -9,7 +9,12 @@ import '../../../providers/friend_provider.dart';
 import '../../../widgets/animated_background.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
-  const BlockedUsersScreen({super.key});
+  final Function(BuildContext)? onBackPressed;
+  
+  const BlockedUsersScreen({
+    super.key,
+    this.onBackPressed,
+  });
 
   @override
   State<BlockedUsersScreen> createState() => _BlockedUsersScreenState();
@@ -285,9 +290,35 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     }
   }
 
+  // Handle back button press with custom transition if provided
+  void _handleBackPress() {
+    if (widget.onBackPressed != null) {
+      widget.onBackPressed!(context);
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5E8C7),
+        elevation: 0,
+        title: const Text(
+          'Blocked Users',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF8B4513),
+          ),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF8B4513)),
+          onPressed: _handleBackPress,
+        ),
+      ),
       body: DuckBuckAnimatedBackground(
         opacity: 0.03,
         child: SafeArea(

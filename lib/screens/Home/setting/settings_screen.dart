@@ -3,16 +3,23 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:ui'; 
+import 'dart:ui';
+import 'dart:math' as math;
+import 'package:flutter/cupertino.dart';
 import '../../../providers/auth_provider.dart' as auth;
 import '../../../providers/user_provider.dart';
 import '../../../models/user_model.dart';
 import '../../../widgets/animated_background.dart';
 import '../../../widgets/phone_auth_popup.dart';
 import '../../onboarding/profile_photo_preview_screen.dart';
+import '../../Authentication/welcome_screen.dart';
 import 'blocked_users_screen.dart'; 
 import 'package:url_launcher/url_launcher.dart'; 
 import 'dart:convert';
+import 'package:liquid_swipe/liquid_swipe.dart';
+
+// Create a global key for Navigator state to use in background operations
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,7 +28,26 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize animation controller for transitions
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+  }
+  
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+  
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -39,30 +65,234 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
     
-    return Scaffold(
-      extendBodyBehindAppBar: true, // Extend body behind AppBar for gradient
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Settings',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF8B4513),
+    return WillPopScope(
+      onWillPop: () async {
+        _animateBackToProfile(context);
+        return false;
+      },
+      child: Scaffold(
+        extendBodyBehindAppBar: true, // Extend body behind AppBar for gradient
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text(
+            'Settings',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF8B4513),
+            ),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF8B4513)),
+            onPressed: () => _animateBackToProfile(context),
           ),
         ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF8B4513)),
-          onPressed: () => Navigator.of(context).pop(),
+        body: DuckBuckAnimatedBackground(
+          opacity: 0.03,
+          child: SafeArea(
+            child: _buildSettingsContent(context, userModel),
+          ),
         ),
+      ).animate().fadeIn(duration: 300.ms),
+    );
+  }
+
+  // Custom back navigation with liquid effect
+  void _animateBackToProfile(BuildContext context) {
+    // Simple navigation without animation - the transition is handled by
+    // the PageRouteBuilder in profile_screen.dart with a fixed origin point
+    Navigator.of(context).pop();
+  }
+
+  // Navigate to Blocked Users screen with liquid transition
+  void _navigateToBlockedUsers(BuildContext context) {
+    // Use a fixed position for transition
+    final screenSize = MediaQuery.of(context).size;
+    final Offset centerOffset = Offset(screenSize.width * 0.85, screenSize.height * 0.5);
+    
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => 
+          BlockedUsersScreen(
+            onBackPressed: (ctx) => Navigator.of(ctx).pop(),
+          ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          // Value between 0.0 and 1.0
+          final value = animation.value;
+          
+          // For forward transitions (going to blocked users)
+          if (animation.status == AnimationStatus.forward || 
+              animation.status == AnimationStatus.completed) {
+            return Stack(
+              children: [
+                // The liquid reveal animation
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _SimplifiedLiquidPainter(
+                      progress: value,
+                      fillColor: const Color(0xFFF5E8C7),
+                      centerOffset: centerOffset,
+                    ),
+                  ),
+                ),
+                // Fade in the actual screen content
+                Opacity(
+                  opacity: value,
+                  child: child,
+                ),
+              ],
+            );
+          } 
+          // For reverse transitions (going back to settings)
+          else {
+            return Stack(
+              children: [
+                // The settings screen background (already visible underneath)
+                
+                // Blocked users screen with circular hole
+                ClipPath(
+                  clipper: _HoleClipper(
+                    progress: 1.0 - value, // Inverted progress for growing hole
+                    centerOffset: centerOffset,
+                  ),
+                  child: child, // Blocked users screen
+                ),
+                
+                // Wave effects around the hole edge
+                if (value > 0.1 && value < 0.9)
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _HoleEdgeEffectPainter(
+                        progress: 1.0 - value, // Inverted progress for growing hole
+                        color: const Color(0xFFD4A76A).withOpacity(0.3),
+                        centerOffset: centerOffset,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }
+        },
+        transitionDuration: const Duration(milliseconds: 700),
+        reverseTransitionDuration: const Duration(milliseconds: 600),
       ),
-      body: DuckBuckAnimatedBackground(
-        opacity: 0.03,
-        child: SafeArea(
-          child: _buildSettingsContent(context, userModel),
+    );
+  }
+
+  // Show delete account confirmation dialog
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
         ),
+        backgroundColor: const Color(0xFFF5E8C7),
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(
+            color: Color(0xFF8B4513), 
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to delete your account?',
+              style: TextStyle(color: Color(0xFF8B4513)),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This action cannot be undone. All your data will be permanently deleted, including:',
+              style: TextStyle(color: Color(0xFF8B4513)),
+            ),
+            const SizedBox(height: 8),
+            _buildDeleteWarningItem('Your profile information'),
+            _buildDeleteWarningItem('All friend connections'),
+            _buildDeleteWarningItem('Any messages you\'ve sent'),
+            _buildDeleteWarningItem('Your blocked users list'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _deleteAccount(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Delete Account'),
+          ),
+        ],
+      ).animate().fadeIn(duration: 300.ms).scale(
+        begin: const Offset(0.9, 0.9),
+        end: const Offset(1.0, 1.0),
+        curve: Curves.easeOutBack,
+      ),
+    );
+  }
+  
+  // Delete account helper method
+  Future<void> _deleteAccount(BuildContext context) async {
+    // Close the confirmation dialog
+    Navigator.of(context).pop();
+    
+    // First navigate to WelcomeScreen immediately
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const WelcomeScreen(accountDeleted: true),
+      ),
+      (route) => false, // Remove all existing routes from stack
+    );
+    
+    // Now perform the actual account deletion in the background
+    try {
+      // Get the UserProvider using the saved NavigatorKey context
+      if (navigatorKey.currentContext != null) {
+        final userProvider = Provider.of<UserProvider>(
+          navigatorKey.currentContext!, 
+          listen: false
+        );
+        
+        // Attempt to delete the account
+        await userProvider.deleteAccount();
+      }
+    } catch (e) {
+      print('Error deleting account after navigation: $e');
+    }
+  }
+  
+  // Helper method to build warning list items
+  Widget _buildDeleteWarningItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.red.shade800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -75,33 +305,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // Add a settings icon at the top with Hero animation
           const SizedBox(height: 20),
-          Column(
-            children: [
-              Hero(
-                tag: 'settings-icon',
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE6C38D).withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.settings,
-                    color: Color(0xFF8B4513),
-                    size: 28,
-                  ),
+          Hero(
+            tag: 'settings-button',
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                  shape: BoxShape.circle,
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Settings',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                child: const Icon(
+                  Icons.settings,
                   color: Color(0xFF8B4513),
+                  size: 40,
                 ),
               ),
-            ],
+            ),
+          ).animate(autoPlay: true).scale(
+            begin: const Offset(0.8, 0.8),
+            end: const Offset(1.0, 1.0),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutBack,
           ),
           const SizedBox(height: 30),
           
@@ -138,19 +363,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // Subscription Status
-        _buildSettingSection(
-          title: 'Subscription',
-          icon: Icons.card_membership,
-          children: [
-            _buildSubscriptionStatus(context, userModel),
-          ],
-          delay: 0,
-        ),
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 100.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
         
         const SizedBox(height: 24),
         
@@ -164,21 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Blocked Users',
               subtitle: 'Manage users you\'ve blocked',
               icon: Icons.block,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
-                );
-              },
-              delay: 0,
-            ),
-            _buildPrivacyToggle(
-              context: context,
-              title: 'Show Social Links',
-              subtitle: 'Display your social media profiles',
-              icon: Icons.share,
-              value: userModel.getMetadata('showSocialLinks') ?? true,
-              onChanged: (value) => _updatePrivacySetting(context, 'showSocialLinks', value),
+              onTap: () => _navigateToBlockedUsers(context),
               delay: 0,
             ),
             _buildPrivacyToggle(
@@ -201,7 +402,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ),
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 300.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
         
         const SizedBox(height: 24),
         
@@ -228,7 +431,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
           delay: 0,
-        ),
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 400.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
         
         const SizedBox(height: 24),
         
@@ -256,11 +461,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildAppVersionInfo(),
           ],
           delay: 0,
-        ),
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 500.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
+          
+        const SizedBox(height: 24),
+        
+        // Danger Zone Section
+        _buildSettingSection(
+          title: 'Danger Zone',
+          icon: Icons.warning_amber_rounded,
+          children: [
+            _buildDangerOption(
+              context: context,
+              title: 'Delete Account',
+              subtitle: 'Permanently delete your account and all data',
+              icon: Icons.delete_forever,
+              onTap: () => _showDeleteAccountDialog(context),
+              delay: 0,
+            ),
+          ],
+          delay: 0,
+        ).animate(autoPlay: true)
+          .fadeIn(duration: 300.ms, delay: 600.ms)
+          .slideY(begin: 0.2, end: 0, duration: 400.ms, curve: Curves.easeOutQuad),
         
         const SizedBox(height: 32),
       ],
     );
+  }
+
+  // Danger option with red styling
+  Widget _buildDangerOption({
+    required BuildContext context,
+    required String title,
+    String? subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required int delay,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.15),
+                blurRadius: 8,
+                spreadRadius: 1,
+                offset: const Offset(0, 2),
+              ),
+            ],
+            border: Border.all(
+              color: Colors.red.shade200,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.red.shade700,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red.shade800,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red.shade700.withOpacity(0.7),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.red.shade300,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).animate(autoPlay: true)
+    .fadeIn(delay: (delay * 1.0).ms)
+    .slideY(begin: 0.2, end: 0, delay: (delay * 1.0).ms);
   }
 
   Widget _buildSettingSection({
@@ -300,8 +613,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         
         Divider(color: const Color(0xFFD4A76A).withOpacity(0.7), height: 24),
         
-        // Display children without animation
-        ...children,
+        // Apply staggered animation to each item within the section
+        ...children.asMap().entries.map((entry) {
+          final index = entry.key;
+          final child = entry.value;
+          
+          return child.animate(autoPlay: true)
+            .fadeIn(delay: (100 * index * 1.0).ms)
+            .slideX(
+              begin: 0.1,
+              end: 0,
+              delay: (100 * index * 1.0).ms,
+              duration: 400.ms,
+              curve: Curves.easeOutCubic,
+            );
+        }).toList(),
       ],
     );
   }
@@ -309,72 +635,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSettingOption({
     required BuildContext context,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
     required VoidCallback onTap,
     required int delay,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5E8C7),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFD4A76A).withOpacity(0.15),
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6C38D).withOpacity(0.5),
-                borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5E8C7),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD4A76A).withOpacity(0.15),
+                blurRadius: 8,
+                spreadRadius: 1,
+                offset: const Offset(0, 2),
               ),
-              child: Icon(
-                icon,
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6C38D).withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  color: const Color(0xFF8B4513),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF8B4513),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: const Color(0xFF8B4513).withOpacity(0.7),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
                 color: const Color(0xFF8B4513),
-                size: 20,
+                size: 16,
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF8B4513),
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: const Color(0xFF8B4513).withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              color: const Color(0xFF8B4513).withOpacity(0.5),
-              size: 16,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -456,19 +786,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
+                  const SizedBox(width: 5),
+                  const Icon(
                     Icons.check_circle,
                     color: Colors.green,
                     size: 16,
                   ),
                 ],
               ),
-            );
+            ).animate(autoPlay: true)
+              .fadeIn(delay: const Duration(milliseconds: 200))
+              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1));
           }).toList(),
         ],
       ),
-    );
+    ).animate(autoPlay: true)
+      .fadeIn(delay: const Duration(milliseconds: 200))
+      .slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildSubscriptionStatus(BuildContext context, UserModel userModel) {
@@ -563,7 +897,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ],
       ),
-    );
+    ).animate(autoPlay: true)
+      .fadeIn(delay: const Duration(milliseconds: 300))
+      .slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildPrivacyToggle({
@@ -671,7 +1007,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
+    ).animate(autoPlay: true)
+    .fadeIn(delay: (delay * 1.0).ms)
+    .slideY(begin: 0.2, end: 0, delay: (delay * 1.0).ms);
   }
 
   void _updatePrivacySetting(BuildContext context, String key, bool value) {
@@ -712,10 +1050,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => PhoneAuthPopup(
-        onSubmit: (countryCode, phoneNumber) {
+        onSubmit: (phoneNumber) {
           final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
           authProvider.updateUserProfile(
-            metadata: {'phoneNumber': '$countryCode$phoneNumber'},
+            metadata: {'phoneNumber': phoneNumber},
           );
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -751,7 +1089,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
@@ -766,7 +1104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
                 style: const TextStyle(color: Color(0xFF8B4513)),
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -807,7 +1145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -837,7 +1175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               SizedBox(
                 height: 200,
@@ -849,7 +1187,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     selectedDate = date;
                   },
                 ),
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -887,7 +1225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -917,7 +1255,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF8B4513),
                 ),
-              ),
+              ).animate(autoPlay: true).fadeIn().slideY(begin: -0.2, end: 0),
               const SizedBox(height: 16),
               Column(
                 children: Gender.values.map((gender) {
@@ -930,7 +1268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   );
                 }).toList(),
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 100.ms).slideY(begin: 0.2, end: 0),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -970,7 +1308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: const Text('Update'),
                   ),
                 ],
-              ),
+              ).animate(autoPlay: true).fadeIn(delay: 200.ms),
             ],
           ),
         ),
@@ -1383,74 +1721,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
   
   void _showFAQs(BuildContext context) {
+    // Show FAQs in a dialog or navigate to FAQs screen
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Frequently Asked Questions',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF8B4513),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 300,
-                child: ListView(
-                  children: [
-                    FAQItem(
-                      question: 'How do I send money to friends?',
-                      answer: 'Tap on a friend\'s profile, then select the "Send Money" option. Follow the prompts to complete the transaction.',
-                    ),
-                    FAQItem(
-                      question: 'Is there a fee for transactions?',
-                      answer: 'Basic transactions are free. Premium features may have associated fees.',
-                    ),
-                    FAQItem(
-                      question: 'How do I add friends?',
-                      answer: 'Go to the Friends tab and tap the "+" button. You can add friends by username, scan their QR code, or from your contacts.',
-                    ),
-                    FAQItem(
-                      question: 'Can I cancel a payment?',
-                      answer: 'Payments can be canceled if they haven\'t been claimed by the recipient yet. Go to transaction history to check status.',
-                    ),
-                    FAQItem(
-                      question: 'How secure is my information?',
-                      answer: 'We use industry-standard encryption and security measures to protect your data and transactions.',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD4A76A),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Frequently Asked Questions'),
+        content: const Text('FAQs will be available in the next update.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1516,43 +1798,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class FAQItem extends StatelessWidget {
-  final String question;
-  final String answer;
-  
-  const FAQItem({
-    Key? key,
-    required this.question,
-    required this.answer,
-  }) : super(key: key);
-  
+// Simplified liquid painter for transitions
+class _SimplifiedLiquidPainter extends CustomPainter {
+  final double progress;
+  final Color fillColor;
+  final Offset centerOffset;
+
+  _SimplifiedLiquidPainter({
+    required this.progress,
+    required this.fillColor,
+    required this.centerOffset,
+  });
+
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            question,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF8B4513),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            answer,
-            style: TextStyle(
-              fontSize: 14,
-              color: const Color(0xFF8B4513).withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Divider(color: const Color(0xFFD4A76A).withOpacity(0.5)),
-        ],
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height);
+    final radius = maxRadius * progress;
+    
+    final paint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: centerOffset, radius: radius));
+    
+    canvas.drawPath(path, paint);
+    
+    if (progress > 0.1 && progress < 0.9) {
+      final wavePaint = Paint()
+        ..color = fillColor.withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 8.0;
+      
+      final wavePath = Path();
+      final waveRadius = radius + 15 * math.sin(progress * math.pi * 2);
+      wavePath.addOval(Rect.fromCircle(center: centerOffset, radius: waveRadius));
+      
+      canvas.drawPath(wavePath, wavePaint);
+    }
   }
+
+  @override
+  bool shouldRepaint(_SimplifiedLiquidPainter oldDelegate) => progress != oldDelegate.progress;
+}
+
+// Hole clipper for creating circular hole transition
+class _HoleClipper extends CustomClipper<Path> {
+  final double progress;
+  final Offset centerOffset;
+
+  _HoleClipper({
+    required this.progress,
+    required this.centerOffset,
+  });
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height);
+    final radius = maxRadius * progress;
+    
+    // Start with entire screen
+    path.addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    
+    // Cut out circle
+    path.addOval(Rect.fromCircle(center: centerOffset, radius: radius));
+    
+    // Use evenOdd to make the circle a hole
+    path.fillType = PathFillType.evenOdd;
+    
+    return path;
+  }
+
+  @override
+  bool shouldReclip(_HoleClipper oldClipper) => 
+    progress != oldClipper.progress || centerOffset != oldClipper.centerOffset;
+}
+
+// Edge effect painter for liquid transitions
+class _HoleEdgeEffectPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final Offset centerOffset;
+
+  _HoleEdgeEffectPainter({
+    required this.progress,
+    required this.color,
+    required this.centerOffset,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height);
+    final baseRadius = maxRadius * progress;
+    
+    // Primary wave
+    final wavePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8.0;
+    
+    final wavePath = Path();
+    final waveRadius = baseRadius + 12 * math.sin(progress * math.pi * 2);
+    wavePath.addOval(Rect.fromCircle(center: centerOffset, radius: waveRadius));
+    canvas.drawPath(wavePath, wavePaint);
+    
+    // Secondary wave
+    if (progress > 0.3) {
+      final wave2Paint = Paint()
+        ..color = color.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.0;
+      
+      final wave2Path = Path();
+      final wave2Radius = baseRadius + 24 * math.sin(progress * math.pi * 1.5);
+      wave2Path.addOval(Rect.fromCircle(center: centerOffset, radius: wave2Radius));
+      canvas.drawPath(wave2Path, wave2Paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HoleEdgeEffectPainter oldDelegate) => 
+    progress != oldDelegate.progress;
 } 

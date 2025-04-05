@@ -81,7 +81,7 @@ class UserProvider with ChangeNotifier {
         _setupUserListeners(user.uid);
       } else if (user == null) {
         print("UserProvider: Auth state changed, user logged out");
-        _clearUser();
+        logout();
       }
     });
   }
@@ -134,14 +134,19 @@ class UserProvider with ChangeNotifier {
     return result;
   }
   
-  // Clear user data on logout
-  Future<void> _clearUser() async {
+  // Logout user and clear data 
+  Future<void> logout() async {
     final uid = _currentUser?.uid;
     if (uid != null) {
+      // Clear FCM token first
+      await _userService.clearFcmToken(uid);
+      
+      // Clear user status
       await _userService.clearUserStatus(uid);
     }
     
     await _clearSubscriptions();
+    
     _currentUser = null;
     _isOnline = false;
     _actualIsOnline = false;
@@ -197,6 +202,57 @@ class UserProvider with ChangeNotifier {
     }
     
     notifyListeners();
+  }
+  
+  // Set user offline for account deletion
+  Future<void> _setUserOffline() async {
+    if (_currentUser == null) return;
+    await setOnlineStatus(false);
+  }
+  
+  // Clear FCM token for account deletion
+  Future<void> _clearFCMToken() async {
+    if (_currentUser == null) return;
+    await _userService.clearFcmToken(_currentUser!.uid);
+  }
+
+  // Delete user account
+  Future<bool> deleteAccount() async {
+    try {
+      // Get current user ID for logging purposes
+      final currentUser = auth.FirebaseAuth.instance.currentUser;
+      final String currentUserId = currentUser?.uid ?? 'unknown';
+      print('UserProvider: Attempting to delete account for user: $currentUserId');
+      
+      // First set the user as offline
+      await _setUserOffline();
+      
+      // Delete the user account via UserService
+      await _userService.deleteUserAccount(currentUserId);
+      print('UserProvider: User data deleted successfully for user: $currentUserId');
+      
+      // Sign out regardless of the result to ensure session is terminated
+      await auth.FirebaseAuth.instance.signOut();
+      
+      // Clear FCM token if available
+      await _clearFCMToken();
+      
+      print('UserProvider: User signed out successfully after account deletion');
+      return true;
+    } catch (e) {
+      print('UserProvider: Error during account deletion: $e');
+      
+      // Try to sign out even if the deletion failed
+      try {
+        await auth.FirebaseAuth.instance.signOut();
+        await _clearFCMToken();
+        print('UserProvider: User signed out after deletion failure');
+      } catch (signOutError) {
+        print('UserProvider: Error signing out after deletion failure: $signOutError');
+      }
+      
+      return false;
+    }
   }
   
   @override

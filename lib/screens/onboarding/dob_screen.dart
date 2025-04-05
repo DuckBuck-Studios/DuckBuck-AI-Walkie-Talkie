@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:duckbuck/widgets/cool_button.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
-import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 import '../../providers/auth_provider.dart' as auth;
 import 'gender_screen.dart';
 import 'package:intl/intl.dart';
-import '../../widgets/animated_background.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
+import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
 
 class DOBScreen extends StatefulWidget {
   const DOBScreen({super.key});
@@ -16,10 +16,34 @@ class DOBScreen extends StatefulWidget {
   State<DOBScreen> createState() => _DOBScreenState();
 }
 
-class _DOBScreenState extends State<DOBScreen> {
+class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMixin {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   DateTime? _selectedDate;
   bool _isLoading = false;
+  late AnimationController _animationController;
+  
+  // Enhanced gradient for background
+  final LinearGradient _backgroundGradient = const LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFE9C78E), Color(0xFFD4A76A)],
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime now = DateTime.now();
@@ -27,34 +51,125 @@ class _DOBScreenState extends State<DOBScreen> {
     final DateTime firstDate = DateTime(now.year - 100);
     final DateTime lastDate = DateTime(now.year - 13, now.month, now.day);
 
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFFD4A76A),
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      // iOS-style date picker with custom styling
+      showCupertinoModalPopup(
+        context: context,
+        builder: (BuildContext context) {
+          return Container(
+            height: 350,
+            padding: const EdgeInsets.only(top: 6.0),
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFD4A76A),
+            color: CupertinoColors.systemBackground.resolveFrom(context),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      Text(
+                        'Select Date of Birth',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      CupertinoButton(
+                        child: const Text(
+                          'Done',
+                          style: TextStyle(
+                            color: Color(0xFFD4A76A),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Provide haptic feedback on selection
+                          HapticFeedback.selectionClick();
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 0),
+                  Expanded(
+                    child: CupertinoTheme(
+                      data: const CupertinoThemeData(
+                        textTheme: CupertinoTextThemeData(
+                          dateTimePickerTextStyle: TextStyle(
+                            fontSize: 22,
+                            color: Color(0xFF333333),
+                          ),
+                        ),
+                        primaryColor: Color(0xFFD4A76A),
+                      ),
+                      child: CupertinoDatePicker(
+                        initialDateTime: _selectedDate ?? initialDate,
+                        mode: CupertinoDatePickerMode.date,
+                        minimumDate: firstDate,
+                        maximumDate: lastDate,
+                        onDateTimeChanged: (DateTime dateTime) {
+                          setState(() {
+                            _selectedDate = dateTime;
+                          });
+                        },
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          child: child!,
-        );
-      },
-    );
+          );
+        },
+      );
+    } else {
+      // Material design date picker with custom styling
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDate ?? initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFFD4A76A),
+                onPrimary: Colors.white,
+                onSurface: Color(0xFF333333),
+                surface: Colors.white,
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFD4A76A),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              dialogBackgroundColor: Colors.white,
+            ),
+            child: child!,
+          );
+        },
+      );
 
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      if (picked != null && picked != _selectedDate) {
+        setState(() {
+          _selectedDate = picked;
+        });
+        
+        // Provide haptic feedback on selection
+        HapticFeedback.selectionClick();
+      }
     }
   }
 
@@ -91,8 +206,8 @@ class _DOBScreenState extends State<DOBScreen> {
       // Update onboarding stage to gender
       await authProvider.updateOnboardingStage(auth.OnboardingStage.gender);
       
-      // Log for debugging
-      print('DOBScreen: Saved DOB: ${_selectedDate!.toIso8601String()}, Age: $age');
+      // Debug logging
+      debugPrint('DOBScreen: Saved DOB: ${_selectedDate!.toIso8601String()}, Age: $age');
       
       // Navigate to Gender screen if mounted
       if (mounted) {
@@ -100,18 +215,30 @@ class _DOBScreenState extends State<DOBScreen> {
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const GenderScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
+              // Use curve animation for smoother transition
+              var curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutQuint,
+              );
+              
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(1.0, 0.0),
+                  end: Offset.zero,
+                ).animate(curvedAnimation),
+                child: FadeTransition(
+                  opacity: Tween<double>(begin: 0.0, end: 1.0).animate(curvedAnimation),
+                  child: child,
+                ),
               );
             },
-            transitionDuration: const Duration(milliseconds: 300),
+            transitionDuration: const Duration(milliseconds: 500),
           ),
         );
       }
     } catch (e) {
       _showErrorSnackBar('Unable to save your date of birth. Please try again.');
-      print('DOBScreen: Error saving DOB: $e');
+      debugPrint('DOBScreen: Error saving DOB: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -125,187 +252,288 @@ class _DOBScreenState extends State<DOBScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: const EdgeInsets.all(16),
+        elevation: 8,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return WillPopScope(
       onWillPop: () async => !_isLoading,
       child: Scaffold(
-        body: DuckBuckAnimatedBackground(
-          child: SafeArea(
-            child: Container(
-              height: MediaQuery.of(context).size.height,
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 2),
-                  
-                  // Calendar icon
-                  Container(
-                    width: MediaQuery.of(context).size.width * 0.3,
-                    height: MediaQuery.of(context).size.width * 0.3,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD4A76A).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.calendar_today,
-                      size: 60,
-                      color: Color(0xFFD4A76A),
-                    ),
-                  )
-                  .animate()
-                  .scale(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOutBack,
-                    begin: const Offset(0.8, 0.8),
-                    end: const Offset(1.0, 1.0),
-                  ),
-                  
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.03),
-                  
-                  // Title and subtitle
-                  Text(
-                    "When were you born?",
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(duration: const Duration(milliseconds: 500))
-                  .slideY(begin: 0.3, end: 0),
-                  
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.01),
-                  
-                  Text(
-                    "We'll use this to customize your experience",
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(
-                    duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 200),
-                  ),
-                  
-                  const Spacer(flex: 1),
-                  
-                  // Date picker form
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        // Date picker button remains the same
-                        InkWell(
-                          onTap: () => _selectDate(context),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: _selectedDate != null 
-                                    ? const Color(0xFFD4A76A) 
-                                    : Colors.grey.shade300,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_month,
-                                  color: _selectedDate != null 
-                                      ? const Color(0xFFD4A76A) 
-                                      : Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    _selectedDate != null
-                                        ? DateFormat('MMMM d, yyyy').format(_selectedDate!)
-                                        : 'Select your birth date',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: _selectedDate != null 
-                                          ? Colors.black87 
-                                          : Colors.grey.shade600,
-                                      fontWeight: _selectedDate != null 
-                                          ? FontWeight.w500 
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.arrow_drop_down,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                        .animate()
-                        .fadeIn(
-                          duration: const Duration(milliseconds: 500),
-                          delay: const Duration(milliseconds: 300),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: _backgroundGradient,
+          ),
+          child: Stack(
+            children: [
+              // Background decorative elements
+              ..._buildBackgroundElements(),
+              
+              // Main content
+              SafeArea(
+                child: Container(
+                  height: screenHeight,
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(flex: 2),
+                      
+                      // Calendar icon with enhanced animation
+                      Container(
+                        width: screenWidth * 0.3,
+                        height: screenWidth * 0.3,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFB38B4D).withOpacity(0.3),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                              offset: const Offset(0, 10),
+                            )
+                          ],
                         ),
-                        
-                        if (_selectedDate != null) ...[
-                          SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFD4A76A).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.info_outline,
-                                  color: Color(0xFFD4A76A),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'You are ${DateTime.now().year - _selectedDate!.year} years old',
-                                    style: const TextStyle(
-                                      color: Color(0xFFD4A76A),
-                                      fontWeight: FontWeight.w500,
+                        child: const Icon(
+                          Icons.calendar_month_rounded,
+                          size: 60,
+                          color: Color(0xFFB38B4D),
+                        ),
+                      )
+                      .animate(controller: _animationController)
+                      .fadeIn(duration: const Duration(milliseconds: 600))
+                      .scale(
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeOutBack,
+                        begin: const Offset(0.6, 0.6),
+                        end: const Offset(1.0, 1.0),
+                      ),
+                      
+                      SizedBox(height: screenHeight * 0.04),
+                      
+                      // Title with enhanced animation
+                      Text(
+                        "When were you born?",
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 28,
+                        ),
+                      )
+                      .animate(controller: _animationController)
+                      .fadeIn(duration: const Duration(milliseconds: 600), delay: const Duration(milliseconds: 200))
+                      .slideY(
+                        begin: 0.3, 
+                        end: 0, 
+                        duration: const Duration(milliseconds: 800), 
+                        curve: Curves.easeOutQuint
+                      )
+                      .shimmer(
+                        duration: const Duration(milliseconds: 1200),
+                        delay: const Duration(milliseconds: 900),
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                      
+                      SizedBox(height: screenHeight * 0.01),
+                      
+                      // Subtitle with staggered animation
+                      Text(
+                        "We'll customize your experience based on your age",
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 16,
+                        ),
+                      )
+                      .animate(controller: _animationController)
+                      .fadeIn(
+                        duration: const Duration(milliseconds: 600),
+                        delay: const Duration(milliseconds: 400),
+                      )
+                      .slideY(
+                        begin: 0.3, 
+                        end: 0, 
+                        delay: const Duration(milliseconds: 400), 
+                        duration: const Duration(milliseconds: 800)
+                      ),
+                      
+                      const Spacer(flex: 1),
+                      
+                      // Date picker form
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            // Enhanced date display/button
+                            InkWell(
+                              onTap: () => _selectDate(context),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 15,
+                                      spreadRadius: 0,
+                                      offset: const Offset(0, 5),
                                     ),
+                                  ],
+                                  border: Border.all(
+                                    color: _selectedDate != null 
+                                        ? const Color(0xFFD4A76A) 
+                                        : Colors.transparent,
+                                    width: _selectedDate != null ? 1.5 : 0,
                                   ),
                                 ),
-                              ],
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFD4A76A).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.calendar_month,
+                                        color: _selectedDate != null 
+                                            ? const Color(0xFFD4A76A) 
+                                            : Colors.grey.shade600,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        _selectedDate != null
+                                            ? DateFormat('MMMM d, yyyy').format(_selectedDate!)
+                                            : 'Select your birth date',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: _selectedDate != null 
+                                              ? Colors.black87
+                                              : Colors.grey.shade600,
+                                          fontWeight: _selectedDate != null 
+                                              ? FontWeight.w500 
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_drop_down,
+                                      color: Colors.grey.shade600,
+                                      size: 28,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .animate(controller: _animationController)
+                            .fadeIn(
+                              duration: const Duration(milliseconds: 600),
+                              delay: const Duration(milliseconds: 600),
+                            )
+                            .slideY(
+                              begin: 0.3, 
+                              end: 0, 
+                              delay: const Duration(milliseconds: 600), 
+                              duration: const Duration(milliseconds: 600), 
+                              curve: Curves.easeOutQuint
                             ),
-                          )
-                          .animate()
-                          .fadeIn(
-                            duration: const Duration(milliseconds: 300),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  
-                  const Spacer(flex: 4),
-                  
-                  // Continue button - move to bottom of screen
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 30.0, 
-                        right: 30.0, 
-                        bottom: 30.0
+                            
+                            if (_selectedDate != null) ...[
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      spreadRadius: 0,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFD4A76A).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.cake_rounded,
+                                        color: Color(0xFFD4A76A),
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'You are ${DateTime.now().year - _selectedDate!.year} years old',
+                                            style: const TextStyle(
+                                              color: Color(0xFF333333),
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Born on ${DateFormat('MMMM d, yyyy').format(_selectedDate!)}',
+                                            style: TextStyle(
+                                              color: Colors.grey.shade600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                              .animate(controller: _animationController)
+                              .fadeIn(
+                                duration: const Duration(milliseconds: 400),
+                              )
+                              .scale(
+                                begin: const Offset(0.95, 0.95),
+                                end: const Offset(1.0, 1.0),
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeOut,
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                      child: _isLoading 
+                      
+                      const Spacer(flex: 4),
+                      
+                      // Continue button
+                      _isLoading 
                       ? Container(
                           height: 100,
                           width: 100,
@@ -321,6 +549,17 @@ class _DOBScreenState extends State<DOBScreen> {
                       : Container(
                           width: double.infinity,
                           height: 65,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFB38B4D).withOpacity(0.4),
+                                blurRadius: 12,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
                           child: NeoPopButton(
                             color: const Color(0xFFD4A76A),
                             onTapUp: _saveDOB,
@@ -335,9 +574,9 @@ class _DOBScreenState extends State<DOBScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(
+                                  const Text(
                                     'Continue',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 18,
@@ -345,25 +584,111 @@ class _DOBScreenState extends State<DOBScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Icon(Icons.arrow_forward, color: Colors.white),
+                                  const Icon(Icons.arrow_forward, color: Colors.white),
                                 ],
                               ),
                             ),
                           ),
-                        ),
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(
-                    duration: const Duration(milliseconds: 500),
-                    delay: const Duration(milliseconds: 400),
+                        )
+                      .animate(controller: _animationController)
+                      .fadeIn(
+                        duration: const Duration(milliseconds: 600),
+                        delay: const Duration(milliseconds: 800),
+                      )
+                      .slideY(begin: 0.3, end: 0, delay: const Duration(milliseconds: 800), duration: const Duration(milliseconds: 800)),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
+  }
+  
+  // Add decorative background elements
+  List<Widget> _buildBackgroundElements() {
+    final screenSize = MediaQuery.of(context).size;
+    
+    return [
+      // Top right decorative circle
+      Positioned(
+        top: screenSize.height * 0.1,
+        right: -screenSize.width * 0.1,
+        child: Container(
+          width: screenSize.width * 0.4,
+          height: screenSize.width * 0.4,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+        ),
+      ).animate(controller: _animationController)
+        .fadeIn(duration: const Duration(milliseconds: 1000))
+        .slideX(begin: 0.3, end: 0, duration: const Duration(milliseconds: 1200), curve: Curves.easeOutQuint),
+        
+      // Bottom left decorative shape
+      Positioned(
+        bottom: -screenSize.width * 0.2,
+        left: -screenSize.width * 0.1,
+        child: Container(
+          width: screenSize.width * 0.7,
+          height: screenSize.width * 0.7,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(screenSize.width * 0.3),
+          ),
+        ),
+      ).animate(controller: _animationController)
+        .fadeIn(duration: const Duration(milliseconds: 1000), delay: const Duration(milliseconds: 200))
+        .slideY(begin: 0.2, end: 0, duration: const Duration(milliseconds: 1200), curve: Curves.easeOutQuint),
+      
+      // Calendar decorative elements
+      Positioned(
+        top: screenSize.height * 0.25,
+        left: screenSize.width * 0.1,
+        child: Transform.rotate(
+          angle: 0.3,
+          child: Container(
+            width: 15,
+            height: 30,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(5),
+            ),
+          ),
+        ),
+      ).animate(controller: _animationController)
+        .fadeIn(duration: const Duration(milliseconds: 600), delay: const Duration(milliseconds: 300))
+        .scale(
+          begin: const Offset(0, 0),
+          end: const Offset(1, 1),
+          duration: const Duration(milliseconds: 600), 
+          delay: const Duration(milliseconds: 300),
+          curve: Curves.elasticOut,
+        ),
+        
+      Positioned(
+        bottom: screenSize.height * 0.3,
+        right: screenSize.width * 0.15,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+        ),
+      ).animate(controller: _animationController)
+        .fadeIn(duration: const Duration(milliseconds: 600), delay: const Duration(milliseconds: 400))
+        .scale(
+          begin: const Offset(0, 0),
+          end: const Offset(1, 1),
+          duration: const Duration(milliseconds: 600), 
+          delay: const Duration(milliseconds: 400),
+          curve: Curves.elasticOut,
+        ),
+    ];
   }
 }

@@ -9,8 +9,163 @@ import 'package:lottie/lottie.dart';
 import 'package:shimmer/shimmer.dart';
 import 'dart:math' as math;
 
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({Key? key}) : super(key: key);
+class WelcomeScreen extends StatefulWidget {
+  final bool accountDeleted;
+  final bool loggedOut;
+  
+  const WelcomeScreen({
+    super.key, 
+    this.accountDeleted = false,
+    this.loggedOut = false,
+  });
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    
+    // Show appropriate dialog after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.accountDeleted) {
+        _showAccountDeletedDialog();
+      } else if (widget.loggedOut) {
+        _showLoggedOutDialog();
+      }
+    });
+  }
+
+  // Show account deleted success dialog with animation
+  void _showAccountDeletedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          backgroundColor: const Color(0xFFF5E8C7),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Animation from assets
+                Lottie.asset(
+                  'assets/animations/delete.json',
+                  width: 120,
+                  height: 120,
+                  repeat: false,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Account Deleted Successfully',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF8B4513),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Your account and all related data have been successfully deleted.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF8B4513),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4A76A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  ),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Show logged out success dialog without animation
+  void _showLoggedOutDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          backgroundColor: const Color(0xFFF5E8C7),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon instead of animation
+                const Icon(
+                  Icons.logout_rounded,
+                  size: 70,
+                  color: Color(0xFFD4A76A),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Logged Out Successfully',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF8B4513),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'You have been successfully logged out of your account.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF8B4513),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4A76A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  ),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

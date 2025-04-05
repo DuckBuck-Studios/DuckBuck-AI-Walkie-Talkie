@@ -3,8 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart'; 
 import 'dart:io' show Platform;
 import '../../providers/friend_provider.dart';
 import '../../widgets/cool_button.dart';
@@ -12,7 +11,12 @@ import '../../widgets/animated_background.dart';
 import '../../widgets/add_friend_popup.dart';
 
 class FriendScreen extends StatefulWidget {
-  const FriendScreen({super.key});
+  final Function(BuildContext)? onBackPressed;
+  
+  const FriendScreen({
+    super.key, 
+    this.onBackPressed,
+  });
 
   @override
   State<FriendScreen> createState() => _FriendScreenState();
@@ -139,6 +143,18 @@ class _FriendScreenState extends State<FriendScreen> {
     );
   }
 
+  // Handle the back navigation
+  void _handleBackPress() {
+    print("FRIEND SCREEN BACK BUTTON PRESSED");
+    // Use the custom back handler if provided, otherwise just pop
+    // The transition is handled by HomeScreen with a fixed animation origin
+    if (widget.onBackPressed != null) {
+      widget.onBackPressed!(context);
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,7 +210,7 @@ class _FriendScreenState extends State<FriendScreen> {
                                     color: _textColor,
                                     size: 20,
                                   ),
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: _handleBackPress,
                                 ),
                                 Text(
                                   'Friends',
