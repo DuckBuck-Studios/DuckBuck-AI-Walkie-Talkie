@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
+import 'package:dio/dio.dart';
+import '../services/user_service.dart';
 
 /// AgoraService provides a wrapper around the Agora RTC Engine SDK
 /// to simplify voice and video calling functionality in the application.
@@ -148,6 +150,9 @@ class AgoraService {
       await enableLocalVideo(enableVideo);
       await enableLocalAudio(enableAudio);
       
+      // Mute local audio by default - user will unmute later via UI
+      await muteLocalAudio(true);
+      
       // Set audio profile for optimal quality
       await _engine!.setAudioProfile(
         profile: AudioProfileType.audioProfileDefault,
@@ -165,7 +170,7 @@ class AgoraService {
         ),
       );
       
-      debugPrint('Join channel request sent: $channelId');
+      debugPrint('Join channel request sent: $channelId (with audio muted)');
       return true;
     } catch (e) {
       debugPrint('Error joining channel: $e');
@@ -518,6 +523,91 @@ class AgoraService {
 
   /// Returns the set of user IDs currently in the channel
   Set<int> get remoteUsers => _remoteUsers;
+
+  /// Fetches Agora credentials from the backend and joins the channel in one step
+  ///
+  /// This method:
+  /// 1. Gets the current user ID from UserService
+  /// 2. Sends a request to your backend API to fetch token, uid, and channelId
+  /// 3. Joins the Agora channel with the fetched credentials
+  ///
+  /// [enableVideo] - Whether to enable video when joining
+  /// [enableAudio] - Whether to enable audio when joining
+  ///
+  /// Returns a boolean indicating success or failure
+  Future<bool> fetchAndJoinChannel({
+    bool enableVideo = false,
+    bool enableAudio = true,
+  }) async {
+    try {
+      // Ensure Agora engine is initialized first
+      if (!_isInitialized) {
+        final initSuccess = await initialize();
+        if (!initSuccess) {
+          debugPrint('Failed to initialize Agora engine');
+          return false;
+        }
+      }
+      
+      // Get current user ID from UserService
+      final userService = UserService();
+      final userId = userService.currentUserId;
+      
+      if (userId == null || userId.isEmpty) {
+        debugPrint('Error: No current user ID available');
+        return false;
+      }
+      
+      // Fetch Agora credentials from backend
+      final dio = Dio();
+      final baseUrl = 'https://firm-bluegill-engaged.ngrok-free.app'; // Replace with your actual backend URL
+      final endpoint = '$baseUrl/api/agora/credentials';
+      
+      final response = await dio.get(
+        endpoint,
+        queryParameters: {'userId': userId},
+        options: Options(
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+      
+      // Check if the request was successful
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        
+        // Validate that all required fields are present
+        if (data.containsKey('token') && data.containsKey('uid') && data.containsKey('channelId')) {
+          // Convert uid to integer if needed
+          final dynamic rawUid = data['uid'];
+          final int uid = rawUid is int ? rawUid : int.tryParse(rawUid.toString()) ?? 0;
+          
+          if (uid <= 0) {
+            debugPrint('Error: Invalid UID received from server');
+            return false;
+          }
+          
+          // Join the channel with the fetched credentials
+          return joinChannel(
+            token: data['token'],
+            channelId: data['channelId'],
+            uid: uid,
+            enableVideo: enableVideo,
+            enableAudio: enableAudio,
+          );
+        } else {
+          debugPrint('Error: Missing required fields in server response');
+          return false;
+        }
+      } else {
+        debugPrint('Error: Failed to fetch Agora token. Status: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error in fetchAndJoinChannel: $e');
+      return false;
+    }
+  }
 
   /// Returns the current state of the service
   ///
