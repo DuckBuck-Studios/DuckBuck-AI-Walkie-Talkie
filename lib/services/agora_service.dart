@@ -1,422 +1,597 @@
+import 'package:flutter/material.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
-import 'package:flutter/services.dart';
 
-/// AgoraRtcService provides an interface to the Agora RTC Engine for real-time audio and video communication.
-/// This service acts as a bridge between the Flutter app and native Agora SDK.
-class AgoraRtcService {
-  // Singleton instance
-  static final AgoraRtcService _instance = AgoraRtcService._internal();
+/// AgoraService provides a wrapper around the Agora RTC Engine SDK
+/// to simplify voice and video calling functionality in the application.
+///
+/// This service handles:
+/// - Initialization of the Agora SDK
+/// - Managing channel connections
+/// - Audio and video control
+/// - Real-time user tracking
+/// - Event streaming for UI updates
+class AgoraService {
+  /// Default Agora App ID for the application
+  static const String appId = '3983e52a08424b7da5e79be4c9dfae0f';
   
-  // Method channel for communication with platform-specific code
-  final MethodChannel _channel = const MethodChannel('com.duckbuck/agora_rtc');
+  /// The Agora RTC Engine instance
+  RtcEngine? _engine;
   
-  // Event listeners
-  final _userJoinedStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _userOfflineStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _joinChannelSuccessStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _connectionStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _errorStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _localAudioStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _localVideoStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _remoteVideoStateStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _networkQualityStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _rtcStatsStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _localVideoViewCreatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _remoteVideoViewCreatedStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  
-  // Connection state tracking
+  /// Tracks whether the service has been initialized
   bool _isInitialized = false;
-  bool _isInChannel = false;
-  String? _currentChannel;
-  int? _localUid;
-  final Set<int> _remoteUsers = {};
   
-  // Media state tracking
-  bool _isLocalAudioEnabled = true;
-  bool _isLocalVideoEnabled = false;
-  bool _isLocalAudioMuted = false;
-  bool _isLocalVideoMuted = false;
+  /// Current channel name the user is connected to
+  String? _currentChannel;
+  
+  /// Current token used for authenticating with Agora servers
+  String? _currentToken;
+  
+  /// Current user ID in the Agora session
+  int? _currentUid;
+  
+  /// Tracks if local video (camera) is currently enabled
+  bool _isVideoEnabled = false;
+  
+  /// Tracks if local audio (microphone) is currently enabled
+  bool _isAudioEnabled = true;
+  
+  /// Tracks if speakerphone mode is enabled
   bool _isSpeakerphoneEnabled = true;
   
-  // Factory constructor returns singleton instance
-  factory AgoraRtcService() {
-    return _instance;
-  }
+  /// Set of user IDs currently in the channel
+  /// This provides quick access to active participants
+  final Set<int> _remoteUsers = {};
   
-  // Private constructor to initialize the service
-  AgoraRtcService._internal() {
-    _setupMethodCallHandler();
-  }
+  /// Stream controller for user joined events
+  final StreamController<UserJoinedEvent> _userJoinedController = StreamController.broadcast();
   
-  // Getters for connection state
-  bool get isInitialized => _isInitialized;
-  bool get isInChannel => _isInChannel;
-  String? get currentChannel => _currentChannel;
-  int? get localUid => _localUid;
-  Set<int> get remoteUsers => Set.from(_remoteUsers);
+  /// Stream controller for user offline events
+  final StreamController<UserOfflineEvent> _userOfflineController = StreamController.broadcast();
   
-  // Getters for media state
-  bool get isLocalAudioEnabled => _isLocalAudioEnabled;
-  bool get isLocalVideoEnabled => _isLocalVideoEnabled;
-  bool get isLocalAudioMuted => _isLocalAudioMuted;
-  bool get isLocalVideoMuted => _isLocalVideoMuted;
-  bool get isSpeakerphoneEnabled => _isSpeakerphoneEnabled;
+  /// Stream controller for successful channel join events
+  final StreamController<JoinChannelSuccessEvent> _joinChannelSuccessController = StreamController.broadcast();
   
-  // Stream getters for event listeners
-  Stream<Map<String, dynamic>> get onUserJoined => _userJoinedStreamController.stream;
-  Stream<Map<String, dynamic>> get onUserOffline => _userOfflineStreamController.stream;
-  Stream<Map<String, dynamic>> get onJoinChannelSuccess => _joinChannelSuccessStreamController.stream;
-  Stream<Map<String, dynamic>> get onConnectionStateChanged => _connectionStateStreamController.stream;
-  Stream<Map<String, dynamic>> get onError => _errorStreamController.stream;
-  Stream<Map<String, dynamic>> get onLocalAudioStateChanged => _localAudioStateStreamController.stream;
-  Stream<Map<String, dynamic>> get onLocalVideoStateChanged => _localVideoStateStreamController.stream;
-  Stream<Map<String, dynamic>> get onRemoteVideoStateChanged => _remoteVideoStateStreamController.stream;
-  Stream<Map<String, dynamic>> get onNetworkQuality => _networkQualityStreamController.stream;
-  Stream<Map<String, dynamic>> get onRtcStats => _rtcStatsStreamController.stream;
-  Stream<Map<String, dynamic>> get onLocalVideoViewCreated => _localVideoViewCreatedStreamController.stream;
-  Stream<Map<String, dynamic>> get onRemoteVideoViewCreated => _remoteVideoViewCreatedStreamController.stream;
+  /// Stream controller for channel leave events
+  final StreamController<LeaveChannelEvent> _leaveChannelController = StreamController.broadcast();
   
-  /// Initialize the Agora RTC Engine
-  Future<bool> initialize(String appId, {bool enableVideo = false}) async {
+  /// Stream that emits events when a user joins the channel
+  Stream<UserJoinedEvent> get onUserJoined => _userJoinedController.stream;
+  
+  /// Stream that emits events when a user leaves the channel
+  Stream<UserOfflineEvent> get onUserOffline => _userOfflineController.stream;
+  
+  /// Stream that emits events when successfully joining a channel
+  Stream<JoinChannelSuccessEvent> get onJoinChannelSuccess => _joinChannelSuccessController.stream;
+  
+  /// Stream that emits events when leaving a channel
+  Stream<LeaveChannelEvent> get onLeaveChannel => _leaveChannelController.stream;
+  
+  /// Singleton instance of the AgoraService
+  static final AgoraService _instance = AgoraService._internal();
+  
+  /// Factory constructor to return the singleton instance
+  factory AgoraService() => _instance;
+  
+  /// Internal constructor for singleton pattern
+  AgoraService._internal();
+  
+  /// Initializes the Agora engine with the provided app ID
+  ///
+  /// This must be called before any other methods.
+  /// [customAppId] - Optional custom Agora App ID. If not provided, the default app ID will be used.
+  ///
+  /// Returns a boolean indicating success or failure
+  Future<bool> initialize({String? customAppId}) async {
+    if (_isInitialized) return true;
+    
     try {
-      final result = await _channel.invokeMethod('initialize', {
-        'appId': appId,
-        'enableVideo': enableVideo,
-      });
-      _isInitialized = result ?? false;
-      _isLocalVideoEnabled = enableVideo;
-      return _isInitialized;
+      // Use custom app ID if provided, otherwise use default
+      final String agoraAppId = customAppId ?? appId;
+      
+      // Request necessary permissions for audio/video
+      await _requestPermissions();
+      
+      // Create the RTC engine instance
+      _engine = createAgoraRtcEngine();
+      
+      // Initialize with app ID and set default channel profile
+      await _engine!.initialize(RtcEngineContext(
+        appId: agoraAppId,
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+      ));
+      
+      // Register event handlers for Agora callbacks
+      _registerEventHandlers();
+      
+      _isInitialized = true;
+      debugPrint('Agora engine initialized successfully with appId: $agoraAppId');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to initialize: $e'});
+      debugPrint('Error initializing Agora engine: $e');
       return false;
     }
   }
   
-  /// Join an audio/video channel
+  /// Joins an Agora channel with the specified parameters
+  ///
+  /// [token] - The token for authentication with Agora servers
+  /// [channelId] - The channel name to join
+  /// [uid] - The user ID to use in the channel
+  /// [enableVideo] - Whether to enable video (camera) when joining
+  /// [enableAudio] - Whether to enable audio (microphone) when joining
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> joinChannel({
-    required String channelName,
-    String? token,
-    int uid = 0,
-    bool enableAudio = true,
+    required String token,
+    required String channelId,
+    required int uid,
     bool enableVideo = false,
+    bool enableAudio = true,
   }) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('joinChannel', {
-        'token': token ?? '',
-        'channelName': channelName,
-        'uid': uid,
-        'enableAudio': enableAudio,
-        'enableVideo': enableVideo,
-      });
+      // Store current channel information for later use
+      _currentChannel = channelId;
+      _currentToken = token;
+      _currentUid = uid;
       
-      if (result == true) {
-        _isLocalAudioEnabled = enableAudio;
-        _isLocalVideoEnabled = enableVideo;
-        _currentChannel = channelName;
-        // Note: We'll get the actual UID from onJoinChannelSuccess callback
-      }
+      // Set client role to broadcaster (can send audio/video)
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       
-      return result ?? false;
+      // Configure video and audio based on parameters
+      await enableLocalVideo(enableVideo);
+      await enableLocalAudio(enableAudio);
+      
+      // Set audio profile for optimal quality
+      await _engine!.setAudioProfile(
+        profile: AudioProfileType.audioProfileDefault,
+        scenario: AudioScenarioType.audioScenarioGameStreaming,
+      );
+      
+      // Join the channel with the specified parameters
+      await _engine!.joinChannel(
+        token: token,
+        channelId: channelId,
+        uid: uid,
+        options: const ChannelMediaOptions(
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+          clientRoleType: ClientRoleType.clientRoleBroadcaster,
+        ),
+      );
+      
+      debugPrint('Join channel request sent: $channelId');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to join channel: $e'});
+      debugPrint('Error joining channel: $e');
       return false;
     }
   }
   
-  /// Leave the current audio/video channel
+  /// Leaves the current channel
+  ///
+  /// This disconnects from the active call and cleans up resources
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> leaveChannel() async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('leaveChannel');
-      
-      if (result == true) {
-        _isInChannel = false;
-        _currentChannel = null;
-        _remoteUsers.clear();
-      }
-      
-      return result ?? false;
+      await _engine!.leaveChannel();
+      _currentChannel = null;
+      _currentToken = null;
+      // Clear remote users when leaving channel
+      _remoteUsers.clear();
+      debugPrint('Left channel successfully');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to leave channel: $e'});
+      debugPrint('Error leaving channel: $e');
       return false;
     }
   }
   
-  /// Enable or disable local audio capture and transmission
+  /// Enables or disables the local audio (microphone)
+  ///
+  /// [enabled] - Whether to enable (true) or disable (false) the microphone
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> enableLocalAudio(bool enabled) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('enableLocalAudio', {
-        'enabled': enabled,
-      });
-      
-      if (result == true) {
-        _isLocalAudioEnabled = enabled;
-      }
-      
-      return result ?? false;
+      await _engine!.enableLocalAudio(enabled);
+      _isAudioEnabled = enabled;
+      debugPrint('Local audio ${enabled ? 'enabled' : 'disabled'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to enable/disable local audio: $e'});
+      debugPrint('Error toggling local audio: $e');
       return false;
     }
   }
   
-  /// Mute or unmute local audio
+  /// Mutes or unmutes the local audio stream
+  ///
+  /// This differs from enableLocalAudio - muting still keeps the audio
+  /// module active but stops sending audio data, which is more efficient
+  /// for temporary muting.
+  ///
+  /// [mute] - Whether to mute (true) or unmute (false) the microphone
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> muteLocalAudio(bool mute) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('muteLocalAudio', {
-        'mute': mute,
-      });
-      
-      if (result == true) {
-        _isLocalAudioMuted = mute;
-      }
-      
-      return result ?? false;
+      await _engine!.muteLocalAudioStream(mute);
+      debugPrint('Local audio ${mute ? 'muted' : 'unmuted'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to mute/unmute local audio: $e'});
+      debugPrint('Error muting local audio: $e');
       return false;
     }
   }
   
-  /// Enable or disable local video capture and transmission
+  /// Enables or disables the local video (camera)
+  ///
+  /// [enabled] - Whether to enable (true) or disable (false) the camera
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> enableLocalVideo(bool enabled) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('enableLocalVideo', {
-        'enabled': enabled,
-      });
-      
-      if (result == true) {
-        _isLocalVideoEnabled = enabled;
+      if (enabled && !_isVideoEnabled) {
+        // If enabling video for the first time, enable the video module
+        await _engine!.enableVideo();
       }
       
-      return result ?? false;
+      await _engine!.enableLocalVideo(enabled);
+      _isVideoEnabled = enabled;
+      debugPrint('Local video ${enabled ? 'enabled' : 'disabled'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to enable/disable local video: $e'});
+      debugPrint('Error toggling local video: $e');
       return false;
     }
   }
   
-  /// Mute or unmute local video
+  /// Mutes or unmutes the local video stream
+  ///
+  /// This differs from enableLocalVideo - muting still keeps the video
+  /// module active but stops sending video data, which is more efficient
+  /// for temporary video pausing.
+  ///
+  /// [mute] - Whether to mute (true) or unmute (false) the camera
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> muteLocalVideo(bool mute) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('muteLocalVideo', {
-        'mute': mute,
-      });
-      
-      if (result == true) {
-        _isLocalVideoMuted = mute;
-      }
-      
-      return result ?? false;
+      await _engine!.muteLocalVideoStream(mute);
+      debugPrint('Local video ${mute ? 'muted' : 'unmuted'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to mute/unmute local video: $e'});
+      debugPrint('Error muting local video: $e');
       return false;
     }
   }
   
-  /// Switch between front and back camera
+  /// Switches between front and back camera
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> switchCamera() async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('switchCamera');
-      return result ?? false;
+      await _engine!.switchCamera();
+      debugPrint('Camera switched');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to switch camera: $e'});
+      debugPrint('Error switching camera: $e');
       return false;
     }
   }
   
-  /// Setup the local video view
-  Future<bool> setupLocalVideo(int viewId) async {
-    try {
-      final result = await _channel.invokeMethod('setupLocalVideo', {
-        'viewId': viewId,
-      });
-      return result ?? false;
-    } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to setup local video: $e'});
-      return false;
-    }
-  }
-  
-  /// Setup a remote video view
-  Future<bool> setupRemoteVideo(int uid, int viewId) async {
-    try {
-      final result = await _channel.invokeMethod('setupRemoteVideo', {
-        'uid': uid,
-        'viewId': viewId,
-      });
-      return result ?? false;
-    } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to setup remote video: $e'});
-      return false;
-    }
-  }
-  
-  /// Set local audio volume (0-100)
-  Future<bool> setVolume(int volume) async {
-    try {
-      // Ensure volume is within allowed range
-      if (volume < 0) volume = 0;
-      if (volume > 400) volume = 400; // Agora allows up to 400% volume
-      
-      final result = await _channel.invokeMethod('setVolume', {
-        'volume': volume,
-      });
-      return result ?? false;
-    } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to set volume: $e'});
-      return false;
-    }
-  }
-  
-  /// Mute a specific remote user's audio
-  Future<bool> muteRemoteUser(int uid, bool mute) async {
-    try {
-      final result = await _channel.invokeMethod('muteRemoteUser', {
-        'uid': uid,
-        'mute': mute,
-      });
-      return result ?? false;
-    } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to mute remote user: $e'});
-      return false;
-    }
-  }
-  
-  /// Get a list of remote users in the channel
-  Future<List<int>> getRemoteUsers() async {
-    try {
-      final result = await _channel.invokeMethod('getRemoteUsers');
-      if (result is List) {
-        return result.map((item) => item as int).toList();
-      }
-      return [];
-    } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to get remote users: $e'});
-      return [];
-    }
-  }
-  
-  /// Enable or disable the speakerphone
+  /// Enables or disables the speakerphone mode
+  ///
+  /// [enabled] - Whether to use speakerphone (true) or earpiece (false)
+  ///
+  /// Returns a boolean indicating success or failure
   Future<bool> setEnableSpeakerphone(bool enabled) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('setEnableSpeakerphone', {
-        'enabled': enabled,
-      });
-      
-      if (result == true) {
-        _isSpeakerphoneEnabled = enabled;
-      }
-      
-      return result ?? false;
+      await _engine!.setEnableSpeakerphone(enabled);
+      _isSpeakerphoneEnabled = enabled;
+      debugPrint('Speakerphone ${enabled ? 'enabled' : 'disabled'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to toggle speakerphone: $e'});
+      debugPrint('Error toggling speakerphone: $e');
       return false;
     }
   }
   
-  /// Destroy the Agora RTC Engine and release resources
-  Future<bool> destroy() async {
+  /// Mutes or unmutes a specific remote user's audio
+  ///
+  /// [uid] - The user ID of the remote user to mute/unmute
+  /// [mute] - Whether to mute (true) or unmute (false) the user
+  ///
+  /// Returns a boolean indicating success or failure
+  Future<bool> muteRemoteUser(int uid, bool mute) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
     try {
-      final result = await _channel.invokeMethod('destroy');
-      
-      if (result == true) {
-        _isInitialized = false;
-        _isInChannel = false;
-        _currentChannel = null;
-        _localUid = null;
-        _remoteUsers.clear();
-      }
-      
-      return result ?? false;
+      await _engine!.muteRemoteAudioStream(uid: uid, mute: mute);
+      debugPrint('Remote user $uid audio ${mute ? 'muted' : 'unmuted'}');
+      return true;
     } catch (e) {
-      _errorStreamController.add({'errorMessage': 'Failed to destroy Agora engine: $e'});
+      debugPrint('Error muting remote user: $e');
       return false;
     }
   }
   
-  /// Dispose of resources when no longer needed
-  void dispose() {
-    destroy();
-    _userJoinedStreamController.close();
-    _userOfflineStreamController.close();
-    _joinChannelSuccessStreamController.close();
-    _connectionStateStreamController.close();
-    _errorStreamController.close();
-    _localAudioStateStreamController.close();
-    _localVideoStateStreamController.close();
-    _remoteVideoStateStreamController.close();
-    _networkQualityStreamController.close();
-    _rtcStatsStreamController.close();
-    _localVideoViewCreatedStreamController.close();
-    _remoteVideoViewCreatedStreamController.close();
+  /// Sets the audio recording volume
+  ///
+  /// [volume] - Volume value from 0-400. Default is 100.
+  ///   Values 0-100 create attenuation, values > 100 create amplification.
+  ///
+  /// Returns a boolean indicating success or failure
+  Future<bool> setVolume(int volume) async {
+    if (!_isInitialized || _engine == null) {
+      debugPrint('Agora engine not initialized');
+      return false;
+    }
+    
+    try {
+      await _engine!.adjustRecordingSignalVolume(volume);
+      debugPrint('Audio volume set to $volume');
+      return true;
+    } catch (e) {
+      debugPrint('Error setting volume: $e');
+      return false;
+    }
   }
   
-  /// Set up method call handler to handle platform events
-  void _setupMethodCallHandler() {
-    _channel.setMethodCallHandler((MethodCall call) async {
-      switch (call.method) {
-        case 'onUserJoined':
-          final uid = call.arguments['uid'] as int;
-          _remoteUsers.add(uid);
-          _userJoinedStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
+  /// Destroys the Agora engine instance and cleans up resources
+  ///
+  /// Should be called when the app is closing or the service is no longer needed
+  Future<void> destroy() async {
+    if (_engine != null) {
+      if (_currentChannel != null) {
+        await leaveChannel();
+      }
+      await _engine!.release();
+      _engine = null;
+      _isInitialized = false;
+      
+      // Close all stream controllers
+      _closeStreamControllers();
+      
+      debugPrint('Agora engine destroyed');
+    }
+  }
+  
+  /// Registers event handlers for Agora RTC callbacks
+  ///
+  /// This sets up listeners for various events like users joining/leaving,
+  /// connection state changes, etc.
+  void _registerEventHandlers() {
+    _engine?.registerEventHandler(RtcEngineEventHandler(
+      // Called when successfully joined an Agora channel
+      onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+        debugPrint('Successfully joined channel: ${connection.channelId} with uid: ${connection.localUid}');
         
-        case 'onUserOffline':
-          final uid = call.arguments['uid'] as int;
-          _remoteUsers.remove(uid);
-          _userOfflineStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-        
-        case 'onJoinChannelSuccess':
-          _isInChannel = true;
-          _localUid = call.arguments['uid'] as int;
-          _joinChannelSuccessStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-        
-        case 'onConnectionStateChanged':
-          _connectionStateStreamController.add(Map<String, dynamic>.from(call.arguments));
-          
-          // Update connection state based on state code
-          final state = call.arguments['state'] as int;
-          if (state == 4) { // FAILED
-            _isInChannel = false;
+        // According to Agora docs, channelId and localUid are guaranteed to be non-null
+        // after successful join, so we use defensive coding to avoid null issues
+        try {
+          final localUid = connection.localUid;
+          if (localUid != null && localUid > 0) { // Safe check for valid non-null UID
+            _remoteUsers.add(localUid);
           }
-          break;
-        
-        case 'onError':
-          _errorStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-        
-        case 'onLocalAudioStateChanged':
-          _localAudioStateStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
           
-        case 'onLocalVideoStateChanged':
-          _localVideoStateStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-          
-        case 'onRemoteVideoStateChanged':
-          _remoteVideoStateStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-          
-        case 'onNetworkQuality':
-          _networkQualityStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-          
-        case 'onRtcStats':
-          _rtcStatsStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-          
-        case 'onLocalVideoViewCreated':
-          _localVideoViewCreatedStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-          
-        case 'onRemoteVideoViewCreated':
-          _remoteVideoViewCreatedStreamController.add(Map<String, dynamic>.from(call.arguments));
-          break;
-      }
+          // Use the event class that handles null values gracefully
+          _joinChannelSuccessController.add(
+            JoinChannelSuccessEvent(connection.channelId, connection.localUid, elapsed)
+          );
+        } catch (e) {
+          debugPrint('Error processing join success: $e');
+        }
+      },
       
-      return null;
-    });
+      // Called when leaving an Agora channel
+      onLeaveChannel: (RtcConnection connection, RtcStats stats) {
+        debugPrint('Left channel: ${connection.channelId}');
+        
+        // Clear remote users list when leaving channel
+        _remoteUsers.clear();
+        
+        try {
+          // Use the event class that handles null values gracefully
+          _leaveChannelController.add(
+            LeaveChannelEvent(connection.channelId)
+          );
+        } catch (e) {
+          debugPrint('Error processing leave event: $e');
+        }
+      },
+      
+      // Called when a remote user joins the channel
+      onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+        debugPrint('Remote user joined: $remoteUid');
+        
+        // Add user to tracking set - remoteUid is guaranteed to be non-null
+        _remoteUsers.add(remoteUid);
+        
+        // Emit event
+        _userJoinedController.add(
+          UserJoinedEvent(remoteUid, elapsed)
+        );
+      },
+      
+      // Called when a remote user leaves the channel
+      onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+        debugPrint('Remote user offline: $remoteUid, reason: ${reason.name}');
+        
+        // Remove user from tracking set - remoteUid is guaranteed to be non-null
+        _remoteUsers.remove(remoteUid);
+        
+        // Emit event
+        _userOfflineController.add(
+          UserOfflineEvent(remoteUid, reason)
+        );
+      },
+      
+      // Called when an error occurs in the Agora SDK
+      onError: (ErrorCodeType errorCode, String msg) {
+        debugPrint('Agora error: $errorCode - $msg');
+      },
+      
+      // Called when the connection state changes
+      onConnectionStateChanged: (RtcConnection connection, ConnectionStateType state, ConnectionChangedReasonType reason) {
+        debugPrint('Connection state changed to: ${state.name}, reason: ${reason.name}');
+      },
+      
+      // Simplified handlers for other events to avoid type issues
+      onLocalAudioStateChanged: (connection, state, error) {
+        debugPrint('Local audio state changed');
+      },
+      
+      onRemoteVideoStateChanged: (connection, uid, state, reason, elapsed) {
+        debugPrint('Remote video state changed for user: $uid');
+      },
+      
+      onNetworkQuality: (connection, uid, txQuality, rxQuality) {
+        debugPrint('Network quality update for user: $uid');
+      },
+      
+      onRtcStats: (RtcConnection connection, RtcStats stats) {
+        // Throttled stats reporting
+      },
+    ));
   }
+  
+  /// Closes all stream controllers to prevent memory leaks
+  void _closeStreamControllers() {
+    _userJoinedController.close();
+    _userOfflineController.close();
+    _joinChannelSuccessController.close();
+    _leaveChannelController.close();
+  }
+  
+  /// Requests necessary permissions for audio and video functionality
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.microphone,
+      Permission.camera,
+    ].request();
+  }
+
+  /// Returns the set of user IDs currently in the channel
+  Set<int> get remoteUsers => _remoteUsers;
+
+  /// Returns the current state of the service
+  ///
+  /// This provides a snapshot of the service's state including:
+  /// - Initialization status
+  /// - Current channel information
+  /// - Audio/video status
+  /// - Connected users
+  Map<String, dynamic> getCurrentState() {
+    return {
+      'isInitialized': _isInitialized,
+      'currentChannel': _currentChannel,
+      'currentUid': _currentUid,
+      'isVideoEnabled': _isVideoEnabled,
+      'isAudioEnabled': _isAudioEnabled,
+      'isSpeakerphoneEnabled': _isSpeakerphoneEnabled,
+      'remoteUsers': remoteUsers.toList(),
+    };
+  }
+}
+
+/// Event class for when a user joins the channel
+///
+/// Contains information about the user who joined and when
+class UserJoinedEvent {
+  /// The user ID of the user who joined
+  final int uid;
+  
+  /// Time elapsed (ms) since the local user joined the channel
+  final int elapsed;
+  
+  UserJoinedEvent(this.uid, this.elapsed);
+}
+
+/// Event class for when a user leaves the channel
+///
+/// Contains information about the user who left and why
+class UserOfflineEvent {
+  /// The user ID of the user who left
+  final int uid;
+  
+  /// The reason why the user went offline
+  final UserOfflineReasonType reason;
+  
+  UserOfflineEvent(this.uid, this.reason);
+}
+
+/// Event class for when successfully joining a channel
+///
+/// Contains information about the joined channel and local user
+class JoinChannelSuccessEvent {
+  /// The channel ID that was joined
+  final String channelId;
+  
+  /// The user ID assigned to the local user
+  final int uid;
+  
+  /// Time elapsed (ms) from calling joinChannel until this callback
+  final int elapsed;
+  
+  // Constructor that handles potentially null values
+  JoinChannelSuccessEvent(String? channelId, int? uid, this.elapsed)
+      : channelId = channelId ?? "unknown",
+        uid = uid ?? 0;
+}
+
+/// Event class for when leaving a channel
+///
+/// Contains information about the channel that was left
+class LeaveChannelEvent {
+  /// The channel ID that was left
+  final String channelId;
+  
+  // Constructor that handles potentially null values
+  LeaveChannelEvent(String? channelId)
+      : channelId = channelId ?? "unknown";
 } 
