@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter 
-  cupertino_icons: ^1.0.8 
+  cupertino_icons: ^1.0.8  
   firebase_messaging: ^15.2.4
   firebase_core: ^3.12.1
   firebase_auth: ^5.5.1
@@ -73,6 +73,7 @@ dependencies:
   path_provider: ^2.1.5
   liquid_swipe: ^3.1.0
   calendar_view: ^1.4.0
+  flame: ^1.16.0
 
 dev_dependencies:
   flutter_test:
@@ -122,9 +123,8 @@ flutter:
     - assets/animations/
     - assets/legal/
     - assets/status/usr-emoji/
-    - assets/status/blue-demon/
-    - assets/rive/
-    - assets/app_logo.png
+    - assets/status/blue-demon/ 
+    - assets/app_logo.png 
 
   # To add assets to your application, add an assets section, like this:
   # assets:

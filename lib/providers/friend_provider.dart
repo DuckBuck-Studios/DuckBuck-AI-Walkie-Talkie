@@ -37,6 +37,7 @@ class FriendProvider with ChangeNotifier {
   List<Map<String, dynamic>> get outgoingRequests => _outgoingRequests;
   List<Map<String, dynamic>> get blockedUsers => _blockedUsers;
   bool get isInitializing => _isInitializing;
+  bool get isLoading => _isLoading;
   String? get lastError => _lastError;
 
   // Initialize provider
@@ -702,5 +703,55 @@ class FriendProvider with ChangeNotifier {
     } catch (e) {
       print("FriendProvider: Error during force refresh: $e");
     }
+  }
+
+  Future<Map<String, dynamic>> muteUser(String targetUserId) async {
+    try {
+      final result = await _friendService.muteUser(targetUserId);
+      return result;
+    } catch (e) {
+      debugPrint('Error muting user: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> unmuteUser(String targetUserId) async {
+    try {
+      final result = await _friendService.unmuteUser(targetUserId);
+      return result;
+    } catch (e) {
+      debugPrint('Error unmuting user: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<bool> isUserMuted(String targetUserId) async {
+    try {
+      return await _friendService.isUserMuted(targetUserId);
+    } catch (e) {
+      debugPrint('Error checking mute status: $e');
+      return false;
+    }
+  }
+
+  Stream<List<String>> getMutedUsersStream() {
+    return _friendService.getMutedUsersStream();
+  }
+
+  Future<bool> isMutedByUser(String targetUserId) async {
+    try {
+      return await _friendService.isMutedByUser(targetUserId);
+    } catch (e) {
+      debugPrint('Error checking if muted by user: $e');
+      return false;
+    }
+  }
+
+  Stream<bool> isMutedByUserStream(String targetUserId) {
+    return _friendService.isMutedByUserStream(targetUserId);
+  }
+
+  Stream<bool> isUserMutedStream(String targetUserId) {
+    return _friendService.isUserMutedStream(targetUserId);
   }
 } 

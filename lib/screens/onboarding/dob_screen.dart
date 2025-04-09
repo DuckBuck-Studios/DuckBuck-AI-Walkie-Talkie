@@ -120,7 +120,8 @@ class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMix
                             _selectedDate = dateTime;
                           });
                         },
-                        backgroundColor: Colors.white,
+                        backgroundColor: const Color(0xFFF8F4E9),
+                        use24hFormat: false,
                       ),
                     ),
                   ),
@@ -144,7 +145,8 @@ class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMix
                 primary: Color(0xFFD4A76A),
                 onPrimary: Colors.white,
                 onSurface: Color(0xFF333333),
-                surface: Colors.white,
+                surface: Color(0xFFF8F4E9),
+                background: Color(0xFFF8F4E9),
               ),
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(
@@ -155,7 +157,11 @@ class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMix
                   ),
                 ),
               ),
-              dialogBackgroundColor: Colors.white,
+              dialogBackgroundColor: const Color(0xFFF8F4E9),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Color(0xFF333333)),
+                bodyMedium: TextStyle(color: Color(0xFF333333)),
+              ),
             ),
             child: child!,
           );
@@ -183,17 +189,23 @@ class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMix
       return;
     }
 
+    // Calculate age
+    final DateTime now = DateTime.now();
+    final int age = now.year - _selectedDate!.year - 
+        (now.month > _selectedDate!.month || 
+        (now.month == _selectedDate!.month && now.day >= _selectedDate!.day) ? 0 : 1);
+    
+    // Check if user is under 13
+    if (age < 13) {
+      _showErrorSnackBar('You must be at least 13 years old to use this app');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       // Get the auth provider
       final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
-      
-      // Calculate age
-      final DateTime now = DateTime.now();
-      final int age = now.year - _selectedDate!.year - 
-          (now.month > _selectedDate!.month || 
-          (now.month == _selectedDate!.month && now.day >= _selectedDate!.day) ? 0 : 1);
       
       // Save DOB to user profile metadata
       await authProvider.updateUserProfile(
@@ -459,61 +471,29 @@ class _DOBScreenState extends State<DOBScreen> with SingleTickerProviderStateMix
                             
                             if (_selectedDate != null) ...[
                               const SizedBox(height: 20),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                      spreadRadius: 0,
-                                      offset: const Offset(0, 3),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'You are ${DateTime.now().year - _selectedDate!.year} years old',
+                                    style: const TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18,
                                     ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFD4A76A).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.cake_rounded,
-                                        color: Color(0xFFD4A76A),
-                                        size: 24,
-                                      ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Born on ${DateFormat('MMMM d, yyyy').format(_selectedDate!)}',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 14,
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'You are ${DateTime.now().year - _selectedDate!.year} years old',
-                                            style: const TextStyle(
-                                              color: Color(0xFF333333),
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Born on ${DateFormat('MMMM d, yyyy').format(_selectedDate!)}',
-                                            style: TextStyle(
-                                              color: Colors.grey.shade600,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               )
                               .animate(controller: _animationController)
                               .fadeIn(

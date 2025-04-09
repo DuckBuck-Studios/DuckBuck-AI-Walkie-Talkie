@@ -18,6 +18,18 @@ import 'widgets/animated_background.dart';
 import 'services/friend_service.dart';
 import 'config/app_config.dart';
 import 'screens/Home/setting/settings_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'providers/call_provider.dart';
+import 'services/fcm_receiver_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Ensure Firebase is initialized for background notifications
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  // Call our handler
+  await firebaseMessagingBackgroundHandler(message);
+}
 
 void main() async {
   // Keep native splash screen up until app is fully loaded
@@ -28,6 +40,17 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Initialize FCM with background handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  
+  // Initialize the FCM receiver service
+  final fcmService = FCMReceiverService();
+  await fcmService.initialize();
+  
+  // Initialize the CallProvider
+  final callProvider = CallProvider();
+  await callProvider.initialize();
   
   // Initialize app configuration
   final appConfig = AppConfig();
@@ -41,6 +64,7 @@ void main() async {
       ChangeNotifierProvider(create: (_) => AuthProvider()),
       ChangeNotifierProvider(create: (_) => FriendProvider(FriendService())),
       ChangeNotifierProvider(create: (_) => UserProvider()),
+      ChangeNotifierProvider<CallProvider>.value(value: callProvider),
     ],
     child: const MyApp(),
   ));
@@ -72,25 +96,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FriendProvider(FriendService())),
-        ChangeNotifierProvider(create: (_) => UserProvider()),
-      ],
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        title: 'DuckBuck',
-        debugShowCheckedModeBanner: false, 
-        theme: ThemeData(
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'DuckBuck',
+      debugShowCheckedModeBanner: false, 
+      theme: ThemeData(
+        primarySwatch: Colors.brown,
+        colorScheme: ColorScheme.fromSwatch(
           primarySwatch: Colors.brown,
-          colorScheme: ColorScheme.fromSwatch(
-            primarySwatch: Colors.brown,
-            brightness: Brightness.light,
-          ),
+          brightness: Brightness.light,
         ),
-        home: const AuthenticationWrapper(),
       ),
+      home: const AuthenticationWrapper(),
     );
   }
 }

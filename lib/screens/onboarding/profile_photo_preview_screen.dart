@@ -5,8 +5,7 @@ import '../../services/user_service.dart';
 import '../Home/home_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart' as auth;
-import 'package:lottie/lottie.dart';
-import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
+import 'package:lottie/lottie.dart'; 
 
 class ProfilePhotoPreviewScreen extends StatefulWidget {
   final String imagePath;
@@ -203,95 +202,100 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> w
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Main content
-            Column(
-              children: [
-                // Top action bar
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: Colors.black,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
+      body: Stack(
+        children: [
+          // Full screen image
+          Positioned.fill(
+            child: Hero(
+              tag: 'profile_image',
+              child: Image.file(
+                File(widget.imagePath),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          
+          // Semi-transparent overlay for better text visibility
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.5),
+                    Colors.black.withOpacity(0.2),
+                    Colors.black.withOpacity(0.5),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // Top action bar with close button
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
                         icon: const Icon(Icons.close, color: Colors.white, size: 28),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
-                      Text(
-                        'Preview',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .animate(controller: _animationController)
+          .fadeIn(duration: 400.ms),
+          
+          // Bottom action button
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 24.0),
+                child: Container(
+                  width: double.infinity,
+                  height: 65,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFE9C78E), Color(0xFFD4A76A)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFD4A76A).withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 4),
                       ),
-                      SizedBox(width: 48), // Balance the layout
                     ],
                   ),
-                )
-                .animate(controller: _animationController)
-                .fadeIn(duration: 400.ms),
-                
-                // Image container (takes most of the screen)
-                Expanded(
-                  child: Center(
-                    child: Hero(
-                      tag: 'profile_image',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isLoading ? null : _setProfilePhoto,
+                      borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFD4A76A).withOpacity(0.3),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.file(
-                            File(widget.imagePath),
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    )
-                    .animate(controller: _animationController)
-                    .fadeIn(
-                      duration: 600.ms,
-                    )
-                    .scale(
-                      begin: const Offset(0.9, 0.9),
-                      end: const Offset(1.0, 1.0),
-                      duration: 600.ms,
-                      curve: Curves.easeOut,
-                    ),
-                  ),
-                ),
-                
-                // Bottom action buttons with vertical layout
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 24.0),
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    border: Border(
-                      top: BorderSide(
-                        color: Color(0xFF222222),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Set button (on top)
-                      Container(
                         width: double.infinity,
-                        height: 65,
-                        margin: const EdgeInsets.only(bottom: 16),
+                        height: double.infinity,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           gradient: const LinearGradient(
@@ -307,151 +311,96 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> w
                               offset: const Offset(0, 4),
                             ),
                           ],
-                        ),
-                        child: NeoPopButton(
-                          color: const Color(0xFFD4A76A),
-                          onTapUp: _isLoading ? () {} : _setProfilePhoto,
-                          onTapDown: () {},
                           border: Border.all(
                             color: const Color(0xFFB38B4D),
                             width: 1.5,
                           ),
-                          depth: 10,
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Set as Profile Photo',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 18,
-                                  letterSpacing: 0.5,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Set as Profile Photo',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 18,
+                              letterSpacing: 0.5,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
-                      )
-                      .animate(controller: _animationController)
-                      .fadeIn(duration: 600.ms, delay: 200.ms)
-                      .slideY(begin: 0.3, end: 0, duration: 600.ms, curve: Curves.easeOutQuint),
-                      
-                      // Retake button (below)
-                      Container(
-                        width: double.infinity,
-                        height: 65,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.grey.shade900,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 10,
-                              spreadRadius: 0,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+          .animate(controller: _animationController)
+          .fadeIn(duration: 600.ms, delay: 200.ms)
+          .slideY(begin: 0.3, end: 0, duration: 600.ms, curve: Curves.easeOutQuint),
+          
+          // Enhanced Loading Overlay with loading1.json
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.85),
+              child: Center(
+                child: Container(
+                  width: 250,
+                  padding: const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFD4A76A).withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Single loading1.json animation
+                      SizedBox(
+                        height: 120,
+                        width: 120,
+                        child: Lottie.asset(
+                          'assets/animations/loading1.json',
+                          repeat: true,
+                          animate: true,
+                          fit: BoxFit.contain,
                         ),
-                        child: NeoPopButton(
-                          color: Colors.grey.shade800,
-                          onTapUp: _isLoading ? () {} : () => Navigator.of(context).pop(),
-                          onTapDown: () {},
-                          border: Border.all(
-                            color: Colors.grey.shade700,
-                            width: 1.5,
-                          ),
-                          depth: 10,
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Retake Photo',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 18,
-                                  letterSpacing: 0.5,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Progress message
+                      Text(
+                        _progressMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
-                      )
-                      .animate(controller: _animationController)
-                      .fadeIn(duration: 600.ms, delay: 300.ms)
-                      .slideY(begin: 0.3, end: 0, duration: 600.ms, curve: Curves.easeOutQuint),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            
-            // Enhanced Loading Overlay with loading1.json
-            if (_isLoading)
-              Container(
-                color: Colors.black.withOpacity(0.85),
-                child: Center(
-                  child: Container(
-                    width: 250,
-                    padding: const EdgeInsets.all(25),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFFD4A76A).withOpacity(0.3),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Single loading1.json animation
-                        SizedBox(
-                          height: 120,
-                          width: 120,
-                          child: Lottie.asset(
-                            'assets/animations/loading1.json',
-                            repeat: true,
-                            animate: true,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Progress message
-                        Text(
-                          _progressMessage,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-              .animate()
-              .fadeIn(duration: 250.ms)
-              .scale(
-                begin: const Offset(0.95, 0.95),
-                end: const Offset(1.0, 1.0),
-                duration: 350.ms,
-                curve: Curves.easeOut,
               ),
-          ],
-        ),
+            )
+            .animate()
+            .fadeIn(duration: 250.ms)
+            .scale(
+              begin: const Offset(0.95, 0.95),
+              end: const Offset(1.0, 1.0),
+              duration: 350.ms,
+              curve: Curves.easeOut,
+            ),
+        ],
       ),
     );
   }

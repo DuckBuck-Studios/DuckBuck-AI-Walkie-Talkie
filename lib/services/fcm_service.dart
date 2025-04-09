@@ -13,6 +13,10 @@ class FCMService {
     required String senderUid,
   }) async {
     try {
+      debugPrint('FCMService: Preparing room invitation');
+      debugPrint('FCMService: Channel ID: $channelId');
+      debugPrint('FCMService: Receiver UID: $receiverUid');
+      
       final payload = {
         'channel_id': channelId,
         'receiver_uid': receiverUid,
@@ -20,9 +24,12 @@ class FCMService {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       
-      return _sendThroughBackend('$_backendUrl/room-invitation', payload);
+      debugPrint('FCMService: Sending invitation payload via backend');
+      final result = await _sendThroughBackend('$_backendUrl/room-invitation', payload);
+      debugPrint('FCMService: Room invitation send result: $result');
+      return result;
     } catch (e) {
-      debugPrint('Error sending room invitation: $e');
+      debugPrint('FCMService: Error sending room invitation: $e');
       return false;
     }
   }
@@ -32,7 +39,7 @@ class FCMService {
     try {
       return await FirebaseAuth.instance.currentUser?.getIdToken();
     } catch (e) {
-      debugPrint('Error getting auth token: $e');
+      debugPrint('FCMService: Error getting auth token: $e');
       return null;
     }
   }
@@ -40,35 +47,43 @@ class FCMService {
   // Send through backend
   Future<bool> _sendThroughBackend(String endpoint, Map<String, dynamic> payload) async {
     try {
-      // Get auth token
+      // Add auth token to the request
       final authToken = await _getAuthToken();
       if (authToken == null) {
-        debugPrint('Authentication token not available');
+        debugPrint('FCMService: No auth token available for sending notification');
         return false;
       }
       
+      // Send the request to the backend
       final response = await _dio.post(
         endpoint,
+        data: payload,
         options: Options(
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $authToken',
           },
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
         ),
-        data: payload,
       );
       
       if (response.statusCode == 200) {
-        final responseData = response.data;
-        debugPrint('Notification sent successfully through backend: $responseData');
+        debugPrint('FCMService: Notification sent successfully');
+        // Additional debug information from the backend response
+        if (response.data != null && response.data is Map) {
+          final responseData = response.data as Map;
+          if (responseData.containsKey('message')) {
+            debugPrint('FCMService: Server response: ${responseData['message']}');
+          }
+        }
         return true;
       } else {
-        debugPrint('Notification failed with status: ${response.statusCode}');
-        debugPrint('Response: ${response.data}');
+        debugPrint('FCMService: Failed to send notification. Status: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      debugPrint('Error in _sendThroughBackend: $e');
+      debugPrint('FCMService: Error sending through backend: $e');
       return false;
     }
   }

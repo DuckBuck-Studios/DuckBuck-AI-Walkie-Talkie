@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import '../services/user_service.dart';
+import '../services/fcm_service.dart';
 
 /// AgoraService provides a wrapper around the Agora RTC Engine SDK
 /// to simplify voice and video calling functionality in the application.
@@ -421,7 +422,9 @@ class AgoraService {
         try {
           final localUid = connection.localUid;
           if (localUid != null && localUid > 0) { // Safe check for valid non-null UID
-            _remoteUsers.add(localUid);
+            // DO NOT add our own UID to remoteUsers - it causes confusion
+            // _remoteUsers.add(localUid);
+            debugPrint('Local user joined with UID: $localUid - NOT adding to remote users');
           }
           
           // Use the event class that handles null values gracefully
@@ -524,29 +527,44 @@ class AgoraService {
   /// Returns the set of user IDs currently in the channel
   Set<int> get remoteUsers => _remoteUsers;
 
+  /// Returns the RTC engine instance for advanced operations
+  /// Note: Use with caution as direct engine access should be limited
+  Future<RtcEngine?> getEngine() async {
+    if (!_isInitialized) {
+      final initSuccess = await initialize();
+      if (!initSuccess) {
+        return null;
+      }
+    }
+    return _engine;
+  }
+
   /// Fetches Agora credentials from the backend and joins the channel in one step
-  ///
-  /// This method:
-  /// 1. Gets the current user ID from UserService
-  /// 2. Sends a request to your backend API to fetch token, uid, and channelId
-  /// 3. Joins the Agora channel with the fetched credentials
-  ///
+  /// 
+  /// [receiverUid] - The Firebase UID of the user to invite to the call
   /// [enableVideo] - Whether to enable video when joining
   /// [enableAudio] - Whether to enable audio when joining
-  ///
-  /// Returns a boolean indicating success or failure
   Future<bool> fetchAndJoinChannel({
+    required String receiverUid,
     bool enableVideo = false,
     bool enableAudio = true,
   }) async {
     try {
+      debugPrint('==== INITIATOR: fetchAndJoinChannel started ====');
+      debugPrint('INITIATOR: Receiver UID: $receiverUid');
+      debugPrint('INITIATOR: Enable video: $enableVideo, Enable audio: $enableAudio');
+      
       // Ensure Agora engine is initialized first
       if (!_isInitialized) {
+        debugPrint('INITIATOR: Agora engine not initialized, initializing now...');
         final initSuccess = await initialize();
         if (!initSuccess) {
-          debugPrint('Failed to initialize Agora engine');
+          debugPrint('INITIATOR: Failed to initialize Agora engine');
           return false;
         }
+        debugPrint('INITIATOR: Agora engine initialized successfully');
+      } else {
+        debugPrint('INITIATOR: Agora engine already initialized');
       }
       
       // Get current user ID from UserService
@@ -554,57 +572,216 @@ class AgoraService {
       final userId = userService.currentUserId;
       
       if (userId == null || userId.isEmpty) {
-        debugPrint('Error: No current user ID available');
+        debugPrint('INITIATOR ERROR: No current user ID available');
         return false;
       }
+      
+      debugPrint('INITIATOR: Current user ID: $userId');
       
       // Fetch Agora credentials from backend
       final dio = Dio();
       final baseUrl = 'https://firm-bluegill-engaged.ngrok-free.app'; // Replace with your actual backend URL
       final endpoint = '$baseUrl/api/agora/credentials';
       
-      final response = await dio.get(
+      debugPrint('INITIATOR: Requesting Agora credentials from: $endpoint');
+      debugPrint('INITIATOR: Request body: {"firebaseUid": "$userId"}');
+      
+      // Send a POST request with firebaseUid in the request body
+      final response = await dio.post(
         endpoint,
-        queryParameters: {'userId': userId},
+        data: {
+          'firebaseUid': userId
+        },
         options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
       
+      debugPrint('INITIATOR: Received response with status: ${response.statusCode}');
+      
       // Check if the request was successful
       if (response.statusCode == 200 && response.data != null) {
+        debugPrint('INITIATOR: Response data: ${response.data}');
         final data = response.data as Map<String, dynamic>;
         
         // Validate that all required fields are present
         if (data.containsKey('token') && data.containsKey('uid') && data.containsKey('channelId')) {
+          debugPrint('INITIATOR: Required fields present in response');
+          
           // Convert uid to integer if needed
           final dynamic rawUid = data['uid'];
           final int uid = rawUid is int ? rawUid : int.tryParse(rawUid.toString()) ?? 0;
           
+          debugPrint('INITIATOR: Converted UID: $uid');
+          
           if (uid <= 0) {
-            debugPrint('Error: Invalid UID received from server');
+            debugPrint('INITIATOR ERROR: Invalid UID received from server');
             return false;
           }
           
+          debugPrint('INITIATOR: About to join channel: ${data['channelId']} with token length: ${data['token'].toString().length}');
+          
           // Join the channel with the fetched credentials
-          return joinChannel(
+          final joinSuccess = await joinChannel(
             token: data['token'],
             channelId: data['channelId'],
             uid: uid,
             enableVideo: enableVideo,
             enableAudio: enableAudio,
           );
+          
+          if (!joinSuccess) {
+            debugPrint('INITIATOR ERROR: Failed to join channel');
+            return false;
+          }
+          
+          debugPrint('INITIATOR: Successfully joined channel: ${data['channelId']}');
+          
+          // Send room invitation using FCMService after successfully joining channel
+          final fcmService = FCMService();
+          debugPrint('INITIATOR: Sending FCM invitation to: $receiverUid');
+          final sendInvitationSuccess = await fcmService.sendRoomInvitation(
+            channelId: data['channelId'],
+            receiverUid: receiverUid,
+            senderUid: userId,
+          );
+          
+          debugPrint('INITIATOR: Room invitation sent: $sendInvitationSuccess');
+          
+          // Wait for another user to join with a 15-second timeout
+          debugPrint('INITIATOR: Waiting for receiver to join...');
+          final completer = Completer<bool>();
+          StreamSubscription? subscription;
+          
+          try {
+            // First check if remote users already contains someone other than ourselves
+            // This handles the case where the receiver joined before we set up the listener
+            debugPrint('INITIATOR: Checking if remote users already contains anyone: $_remoteUsers');
+            debugPrint('INITIATOR: Our local UID is: $uid');
+            
+            // Clean up remote users from our own UID which should not be there
+            // This fixes issues from previous implementation
+            _remoteUsers.remove(uid);
+            
+            // The issue is that we're in the set ourselves! Check explicitly who is in the set
+            final otherUsers = _remoteUsers.toList();
+            
+            // Log the detailed comparison for debugging
+            _remoteUsers.forEach((remoteId) {
+              debugPrint('INITIATOR: Remote user in set: $remoteId');
+            });
+            
+            if (otherUsers.isNotEmpty) {
+              debugPrint('INITIATOR: Remote user already joined with UID ${otherUsers.first}');
+              
+              // Skip waiting since user already joined
+              if (enableAudio) {
+                debugPrint('INITIATOR: Automatically unmuting microphone');
+                await muteLocalAudio(false); // Unmute the microphone
+              }
+              
+              debugPrint('==== INITIATOR: fetchAndJoinChannel completed successfully (user already joined) ====');
+              return true;
+            } else {
+              debugPrint('INITIATOR: No other users in channel yet, waiting for them to join');
+            }
+            
+            // Set up listener for join events - make sure we detect new remote users
+            subscription = onUserJoined.listen((event) {
+              debugPrint('INITIATOR: User joined event received: UID ${event.uid}');
+              
+              // Check if the joining user is not us
+              if (event.uid != uid) {
+                debugPrint('INITIATOR: Remote user with UID ${event.uid} joined! Confirming connection.');
+                
+                // Add this user to our remote users set if not already there
+                _remoteUsers.add(event.uid);
+                
+                // Complete the future with success
+                if (!completer.isCompleted) {
+                  debugPrint('INITIATOR: Completing join wait with success');
+                  completer.complete(true);
+                }
+              } else {
+                debugPrint('INITIATOR: Local user join event (our own UID) - ignoring');
+              }
+            });
+            
+            // Also listen to the remoteUsers set directly in case events are missed
+            Timer.periodic(Duration(seconds: 3), (timer) {
+              if (!completer.isCompleted) {
+                final currentRemoteUsers = _remoteUsers.where((id) => id != uid).toList();
+                debugPrint('INITIATOR: Periodic check of remote users: $currentRemoteUsers');
+                
+                if (currentRemoteUsers.isNotEmpty) {
+                  debugPrint('INITIATOR: Found remote user in periodic check: ${currentRemoteUsers.first}');
+                  completer.complete(true);
+                  timer.cancel();
+                }
+              } else {
+                timer.cancel();
+              }
+            });
+            
+            // Add back a timeout for safety
+            Timer(const Duration(seconds: 30), () {
+              if (!completer.isCompleted) {
+                debugPrint('INITIATOR: Timeout waiting for receiver to join after 30 seconds');
+                completer.complete(false);
+              }
+            });
+            
+            // Wait for either another user to join or timeout
+            debugPrint('INITIATOR: Awaiting for receiver to join...');
+            final result = await completer.future;
+            
+            if (!result) {
+              debugPrint('INITIATOR ERROR: Failed to establish connection with receiver');
+              // Leave the channel and clean up
+              await leaveChannel();
+              return false;
+            }
+            
+            // Success - the receiver has joined!
+            debugPrint('INITIATOR: Successfully established connection with receiver');
+            
+            // Automatically unmute microphone for audio calls
+            if (enableAudio) {
+              debugPrint('INITIATOR: Automatically unmuting microphone');
+              await muteLocalAudio(false); // Unmute the microphone
+            }
+            
+            debugPrint('==== INITIATOR: fetchAndJoinChannel completed successfully ====');
+            return true;
+            
+          } catch (e) {
+            debugPrint('INITIATOR ERROR: Exception while waiting for receiver: $e');
+            await leaveChannel();
+            return false;
+          } finally {
+            // Clean up the subscription in all cases
+            subscription?.cancel();
+          }
         } else {
-          debugPrint('Error: Missing required fields in server response');
+          debugPrint('INITIATOR ERROR: Missing required fields in server response');
+          debugPrint('INITIATOR: Response keys: ${data.keys.toList()}');
           return false;
         }
       } else {
-        debugPrint('Error: Failed to fetch Agora token. Status: ${response.statusCode}');
+        debugPrint('INITIATOR ERROR: Failed to fetch Agora token. Status: ${response.statusCode}');
+        if (response.data != null) {
+          debugPrint('INITIATOR: Error response: ${response.data}');
+        }
         return false;
       }
     } catch (e) {
-      debugPrint('Error in fetchAndJoinChannel: $e');
+      debugPrint('INITIATOR ERROR in fetchAndJoinChannel: $e');
+      // Make sure to leave the channel and clean up in case of error
+      await leaveChannel();
       return false;
     }
   }

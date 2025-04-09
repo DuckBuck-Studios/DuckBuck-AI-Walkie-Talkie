@@ -8,7 +8,6 @@ class UserProvider with ChangeNotifier {
   final UserService _userService = UserService();
   UserModel? _currentUser;
   StreamSubscription? _userSubscription;
-  StreamSubscription? _userStatusSubscription;
   
   // Get current user data
   UserModel? get currentUser => _currentUser;
@@ -18,21 +17,6 @@ class UserProvider with ChangeNotifier {
   String? get email => _currentUser?.email;
   Map<String, dynamic>? get metadata => _currentUser?.metadata;
   String? get roomId => _currentUser?.roomId;
-  
-  // Get user status
-  bool _isOnline = false;
-  bool _actualIsOnline = false;  
-  String? _statusAnimation;
-  int _lastStatusTimestamp = 0;
-  
-  bool get isOnline => _isOnline;
-  bool get actualIsOnline => _actualIsOnline; // Actual status for the current user's own view
-  String? get statusAnimation => _statusAnimation;
-  int get lastStatusTimestamp => _lastStatusTimestamp;
-  
-  // Privacy settings
-  bool get showOnlineStatus => _currentUser?.getMetadata('showOnlineStatus') ?? true;
-  bool get showLastSeen => _currentUser?.getMetadata('showLastSeen') ?? true;
   
   // Initialize provider
   Future<void> initialize() async {
@@ -86,7 +70,7 @@ class UserProvider with ChangeNotifier {
     });
   }
   
-  // Setup listeners for user data and status
+  // Setup listeners for user data
   Future<void> _setupUserListeners(String uid) async {
     // Cancel existing subscriptions
     await _clearSubscriptions();
@@ -96,28 +80,6 @@ class UserProvider with ChangeNotifier {
       _currentUser = userData;
       notifyListeners();
     });
-    
-    // Setup user status listener
-    _userStatusSubscription = _userService.getUserStatusStream(uid).listen((statusData) {
-      _isOnline = statusData['isOnline'] ?? false;
-      _actualIsOnline = statusData['actualIsOnline'] ?? _isOnline; // Use actual status if available
-      _statusAnimation = statusData['animation'];
-      _lastStatusTimestamp = statusData['timestamp'] ?? 0;
-      notifyListeners();
-    });
-  }
-  
-  // Set user status animation
-  void setStatusAnimation(String? animation, {bool explicitChange = true}) {
-    if (_currentUser == null) return;
-    
-    // For explicit changes (from popup), directly use the animation value
-    // For non-explicit changes (initialization), only update if animation is not null
-    if (explicitChange || animation != null) {
-      _userService.setUserStatusAnimation(_currentUser!.uid, animation, explicitAnimationChange: explicitChange);
-      _statusAnimation = animation;
-      notifyListeners();
-    }
   }
   
   // Update user display name
@@ -140,18 +102,11 @@ class UserProvider with ChangeNotifier {
     if (uid != null) {
       // Clear FCM token first
       await _userService.clearFcmToken(uid);
-      
-      // Clear user status
-      await _userService.clearUserStatus(uid);
     }
     
     await _clearSubscriptions();
     
     _currentUser = null;
-    _isOnline = false;
-    _actualIsOnline = false;
-    _statusAnimation = null;
-    _lastStatusTimestamp = 0;
     notifyListeners();
   }
   
@@ -159,9 +114,6 @@ class UserProvider with ChangeNotifier {
   Future<void> _clearSubscriptions() async {
     await _userSubscription?.cancel();
     _userSubscription = null;
-    
-    await _userStatusSubscription?.cancel();
-    _userStatusSubscription = null;
   }
   
   // Force refresh user data from Firestore
@@ -181,40 +133,6 @@ class UserProvider with ChangeNotifier {
       return false;
     }
   }
-  
-  // Set user online status (without changing animation)
-  Future<void> setOnlineStatus(bool isOnline) async {
-    if (_currentUser == null) return;
-    await _userService.setUserOnlineStatus(_currentUser!.uid, isOnline);
-    _actualIsOnline = isOnline;
-    _isOnline = showOnlineStatus ? isOnline : false; // Visible status depends on privacy settings
-    notifyListeners();
-  }
-  
-  // Update privacy settings
-  Future<void> updatePrivacySettings(String key, bool value) async {
-    if (_currentUser == null) return;
-    await _userService.updateUserPrivacySetting(_currentUser!.uid, key, value);
-    
-    // Update local state immediately based on the new privacy setting
-    if (key == 'showOnlineStatus') {
-      _isOnline = value ? _actualIsOnline : false;
-    }
-    
-    notifyListeners();
-  }
-  
-  // Set user offline for account deletion
-  Future<void> _setUserOffline() async {
-    if (_currentUser == null) return;
-    await setOnlineStatus(false);
-  }
-  
-  // Clear FCM token for account deletion
-  Future<void> _clearFCMToken() async {
-    if (_currentUser == null) return;
-    await _userService.clearFcmToken(_currentUser!.uid);
-  }
 
   // Delete user account
   Future<bool> deleteAccount() async {
@@ -223,9 +141,6 @@ class UserProvider with ChangeNotifier {
       final currentUser = auth.FirebaseAuth.instance.currentUser;
       final String currentUserId = currentUser?.uid ?? 'unknown';
       print('UserProvider: Attempting to delete account for user: $currentUserId');
-      
-      // First set the user as offline
-      await _setUserOffline();
       
       // Delete the user account via UserService
       await _userService.deleteUserAccount(currentUserId);
@@ -253,6 +168,12 @@ class UserProvider with ChangeNotifier {
       
       return false;
     }
+  }
+  
+  // Clear FCM token for account deletion
+  Future<void> _clearFCMToken() async {
+    if (_currentUser == null) return;
+    await _userService.clearFcmToken(_currentUser!.uid);
   }
   
   @override

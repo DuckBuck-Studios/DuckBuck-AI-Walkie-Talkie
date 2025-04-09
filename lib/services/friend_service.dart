@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../config/app_config.dart';
+import 'package:flutter/foundation.dart';
 
 /// Status of a friend request
 enum FriendRequestStatus {
@@ -1742,5 +1743,155 @@ class FriendService {
       _appConfig.reportError(e, stackTrace, reason: 'Error checking pending requests');
       return {'hasPendingRequest': false, 'error': e.toString()};
     }
+  }
+
+  /// Mute a user to prevent them from calling
+  Future<Map<String, dynamic>> muteUser(String targetUserId) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        return {'success': false, 'error': 'User not logged in'};
+      }
+
+      // Add current user to target's mutedBy list (track who has muted this user)
+      final targetUserDoc = await _firestore.collection('users').doc(targetUserId).get();
+      if (!targetUserDoc.exists) {
+        return {'success': false, 'error': 'Target user document not found'};
+      }
+
+      final mutedBy = List<String>.from(targetUserDoc.data()?['mutedBy'] ?? []);
+      if (!mutedBy.contains(currentUser.uid)) {
+        mutedBy.add(currentUser.uid);
+        await _firestore.collection('users').doc(targetUserId).update({
+          'mutedBy': mutedBy,
+        });
+        debugPrint('User ${currentUser.uid} has muted user $targetUserId');
+      }
+
+      return {'success': true};
+    } catch (e) {
+      debugPrint('Error in muteUser: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Unmute a user to allow them to call again
+  Future<Map<String, dynamic>> unmuteUser(String targetUserId) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        return {'success': false, 'error': 'User not logged in'};
+      }
+
+      // Remove current user from target's mutedBy list
+      final targetUserDoc = await _firestore.collection('users').doc(targetUserId).get();
+      if (!targetUserDoc.exists) {
+        return {'success': false, 'error': 'Target user document not found'};
+      }
+
+      final mutedBy = List<String>.from(targetUserDoc.data()?['mutedBy'] ?? []);
+      mutedBy.remove(currentUser.uid);
+      await _firestore.collection('users').doc(targetUserId).update({
+        'mutedBy': mutedBy,
+      });
+      debugPrint('User ${currentUser.uid} has unmuted user $targetUserId');
+
+      return {'success': true};
+    } catch (e) {
+      debugPrint('Error in unmuteUser: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Check if current user has muted a target user
+  Future<bool> isUserMuted(String targetUserId) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return false;
+
+      // Check if current user is in target's mutedBy list
+      final targetUserDoc = await _firestore.collection('users').doc(targetUserId).get();
+      if (!targetUserDoc.exists) return false;
+
+      final mutedBy = List<String>.from(targetUserDoc.data()?['mutedBy'] ?? []);
+      return mutedBy.contains(currentUser.uid);
+    } catch (e) {
+      debugPrint('Error in isUserMuted: $e');
+      return false;
+    }
+  }
+
+  /// Stream to check if current user has muted a target user
+  Stream<bool> isUserMutedStream(String targetUserId) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return Stream.value(false);
+    }
+
+    return _firestore
+        .collection('users')
+        .doc(targetUserId)
+        .snapshots()
+        .map((doc) {
+          final mutedBy = List<String>.from(doc.data()?['mutedBy'] ?? []);
+          final isMuted = mutedBy.contains(currentUser.uid);
+          debugPrint('Mute status check: User ${currentUser.uid} has ${isMuted ? "muted" : "not muted"} user $targetUserId');
+          return isMuted;
+        });
+  }
+
+  /// Check if current user is muted by a specific user
+  Future<bool> isMutedByUser(String targetUserId) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return false;
+
+      // Check if target user has muted current user
+      final currentUserDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      if (!currentUserDoc.exists) return false;
+
+      final mutedBy = List<String>.from(currentUserDoc.data()?['mutedBy'] ?? []);
+      return mutedBy.contains(targetUserId);
+    } catch (e) {
+      debugPrint('Error checking if muted by user: $e');
+      return false;
+    }
+  }
+
+  /// Stream to check if current user is muted by a specific user
+  Stream<bool> isMutedByUserStream(String targetUserId) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return Stream.value(false);
+    }
+
+    return _firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .snapshots()
+        .map((doc) {
+          final mutedBy = List<String>.from(doc.data()?['mutedBy'] ?? []);
+          final isMuted = mutedBy.contains(targetUserId);
+          debugPrint('Mute status check: User $targetUserId has ${isMuted ? "muted" : "not muted"} current user ${currentUser.uid}');
+          return isMuted;
+        });
+  }
+
+  /// Get stream of users who have muted the current user
+  Stream<List<String>> getMutedUsersStream() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .snapshots()
+        .map((doc) {
+          final mutedBy = List<String>.from(doc.data()?['mutedBy'] ?? []);
+          debugPrint('Mute status updated: ${mutedBy.length} users have muted me');
+          return mutedBy;
+        });
   }
 } 

@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
-import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:async'; 
 import '../../../providers/friend_provider.dart';
 import '../../../widgets/animated_background.dart';
 
