@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import '../services/agora_service.dart';
 import '../services/fcm_receiver_service.dart';
+import '../services/background_call_service.dart';
+import 'package:flutter/foundation.dart';
 
 enum CallState {
   idle,
@@ -9,6 +13,14 @@ enum CallState {
   connected,
   connectionFailed,
   ended,
+}
+
+// Event class for remote video state changes
+class RemoteVideoStateEvent {
+  final int uid;
+  final bool isEnabled;
+  
+  RemoteVideoStateEvent(this.uid, this.isEnabled);
 }
 
 class CallProvider extends ChangeNotifier {
@@ -20,14 +32,17 @@ class CallProvider extends ChangeNotifier {
   // Services
   final AgoraService _agoraService = AgoraService();
   final FCMReceiverService _fcmService = FCMReceiverService();
+  final BackgroundCallService _backgroundCallService = BackgroundCallService();
   
   // Call state
   CallState _callState = CallState.idle;
   Map<String, dynamic> _currentCall = {};
-  bool _isVideoEnabled = false;
   bool _isAudioMuted = true;
   bool _isSpeakerEnabled = true;
   String _connectionErrorMessage = "";
+  
+  // Remote user state tracking
+  int? _remoteUid;
   
   // Call state change stream controller
   final StreamController<CallState> _callStateController = StreamController<CallState>.broadcast();
@@ -35,11 +50,16 @@ class CallProvider extends ChangeNotifier {
   // Getters
   CallState get callState => _callState;
   Map<String, dynamic> get currentCall => _currentCall;
-  bool get isVideoEnabled => _isVideoEnabled;
   bool get isAudioMuted => _isAudioMuted;
   bool get isSpeakerEnabled => _isSpeakerEnabled;
   String get connectionErrorMessage => _connectionErrorMessage;
   Stream<CallState> get callStateChanges => _callStateController.stream;
+  
+  // Getter for agoraEngine - exposes the RTC engine for video views
+  RtcEngine? get agoraEngine => _agoraService.getEngineSync();
+  
+  // Getter for the remote user ID
+  int? get remoteUid => _remoteUid;
   
   // Timer for call duration
   Timer? _callTimer;
@@ -115,17 +135,60 @@ class CallProvider extends ChangeNotifier {
       
       // Start call timer once connected
       _startCallTimer();
+      
+      // Start background service to keep call active when app is minimized
+      _startBackgroundService();
+    }
+  }
+  
+  /// Start the background service to keep the call active when app is minimized
+  Future<void> _startBackgroundService() async {
+    try {
+      // Get caller information from current call data
+      final callerName = _currentCall['sender_name'] ?? 'Unknown Caller';
+      final callerAvatar = _currentCall['sender_photo'];
+      
+      // Start background service with current mute state
+      final success = await _backgroundCallService.startBackgroundService(
+        callerName: callerName,
+        callerAvatar: callerAvatar,
+        initialDurationSeconds: _callDurationSeconds,
+        isAudioMuted: _isAudioMuted,
+      );
+      debugPrint('CallProvider: Background service ${success ? 'started' : 'failed to start'}');
+    } catch (e) {
+      debugPrint('CallProvider: Error starting background service - $e');
+    }
+  }
+  
+  /// Stop the background service
+  Future<void> _stopBackgroundService() async {
+    try {
+      await _backgroundCallService.stopBackgroundService();
+      debugPrint('CallProvider: Background service stopped');
+    } catch (e) {
+      debugPrint('CallProvider: Error stopping background service - $e');
     }
   }
   
   /// Handle a user joining the channel
   void _handleUserJoined(UserJoinedEvent event) {
     debugPrint('CallProvider: User joined - ${event.uid}');
+    
+    // Track the remote user ID
+    _remoteUid = event.uid;
+    notifyListeners();
   }
   
   /// Handle a user leaving the channel
   void _handleUserOffline(UserOfflineEvent event) {
     debugPrint('CallProvider: User offline - ${event.uid}');
+    
+    // Clear remote user ID if it matches the user who left
+    if (_remoteUid == event.uid) {
+      _remoteUid = null;
+      notifyListeners();
+    }
     
     // End the call if we were connected and the last remote user left
     if (_callState == CallState.connected) {
@@ -172,22 +235,11 @@ class CallProvider extends ChangeNotifier {
     try {
       await _agoraService.muteLocalAudio(!_isAudioMuted);
       _isAudioMuted = !_isAudioMuted;
+      
       notifyListeners();
       debugPrint('CallProvider: Microphone ${_isAudioMuted ? 'muted' : 'unmuted'}');
     } catch (e) {
       debugPrint('CallProvider: Error toggling mute - $e');
-    }
-  }
-  
-  /// Toggle video state
-  Future<void> toggleVideo() async {
-    try {
-      await _agoraService.enableLocalVideo(!_isVideoEnabled);
-      _isVideoEnabled = !_isVideoEnabled;
-      notifyListeners();
-      debugPrint('CallProvider: Video ${_isVideoEnabled ? 'enabled' : 'disabled'}');
-    } catch (e) {
-      debugPrint('CallProvider: Error toggling video - $e');
     }
   }
   
@@ -200,16 +252,6 @@ class CallProvider extends ChangeNotifier {
       debugPrint('CallProvider: Speaker ${_isSpeakerEnabled ? 'enabled' : 'disabled'}');
     } catch (e) {
       debugPrint('CallProvider: Error toggling speaker - $e');
-    }
-  }
-  
-  /// Switch between front and back camera
-  Future<void> switchCamera() async {
-    try {
-      await _agoraService.switchCamera();
-      debugPrint('CallProvider: Camera switched');
-    } catch (e) {
-      debugPrint('CallProvider: Error switching camera - $e');
     }
   }
   
@@ -260,7 +302,6 @@ class CallProvider extends ChangeNotifier {
         token: token,
         channelId: channelId,
         uid: uid,
-        enableVideo: false,
         enableAudio: true,
       );
       
@@ -293,11 +334,17 @@ class CallProvider extends ChangeNotifier {
       debugPrint('CallProvider: Ending call');
       await _agoraService.leaveChannel();
       
+      // Stop background service
+      await _stopBackgroundService();
+      
       _updateCallState(CallState.ended);
       _callTimer?.cancel();
       _callTimer = null;
       _callDurationSeconds = 0;
       _updateCallDurationText();
+      
+      // Reset remote user ID
+      _remoteUid = null;
       
       // Reset state with a small delay to allow animations to complete
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -319,6 +366,7 @@ class CallProvider extends ChangeNotifier {
     _userOfflineSubscription?.cancel();
     _joinChannelSuccessSubscription?.cancel();
     _callStateController.close();
+    _stopBackgroundService();  // Ensure background service is stopped
     super.dispose();
   }
 
@@ -335,6 +383,19 @@ class CallProvider extends ChangeNotifier {
     notifyListeners();
   }
   
+  /// Synchronize button states based on call type and settings
+  void syncButtonStates() {
+    if (_callState == CallState.connected) {
+      // For call initiator, ensure their mic is unmuted by default
+      _isAudioMuted = false;
+      
+      // Notify listeners of state changes
+      notifyListeners();
+      
+      debugPrint('CallProvider: Button states synchronized - audio muted: $_isAudioMuted');
+    }
+  }
+  
   /// Start a call with the given data
   void startCall(Map<String, dynamic> callData) {
     // Set call data
@@ -343,7 +404,13 @@ class CallProvider extends ChangeNotifier {
     // Update call state to connected
     _updateCallState(CallState.connected);
     
+    // Sync button states
+    syncButtonStates();
+    
     // Start call timer
     _startCallTimer();
+    
+    // Start background service
+    _startBackgroundService();
   }
 } 

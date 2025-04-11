@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart'; 
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../providers/call_provider.dart';
+import 'call_control_buttons.dart';
+import 'dart:async';
 
 class CallScreen extends StatefulWidget {
-  const CallScreen({Key? key}) : super(key: key);
+  const CallScreen({super.key});
 
   @override
   State<CallScreen> createState() => _CallScreenState();
@@ -14,6 +15,8 @@ class CallScreen extends StatefulWidget {
 class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   bool _controlsVisible = true;
+  StreamSubscription? _callStateSubscription;
+  Timer? _autoHideTimer;
   
   @override
   void initState() {
@@ -23,8 +26,21 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       duration: const Duration(milliseconds: 500),
     );
     
-    // Auto-hide controls after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
+    // Auto-hide controls after 4 seconds
+    _startAutoHideTimer();
+    
+    // Add listener for call state changes after a brief delay to let mounting complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listenToCallStateChanges();
+    });
+  }
+
+  void _startAutoHideTimer() {
+    // Cancel any existing timer
+    _autoHideTimer?.cancel();
+    
+    // Start new timer
+    _autoHideTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() {
           _controlsVisible = false;
@@ -33,9 +49,36 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     });
   }
   
+  void _listenToCallStateChanges() {
+    final callProvider = Provider.of<CallProvider>(context, listen: false);
+    
+    // Listen to call state changes to detect remote-ended calls
+    _callStateSubscription = callProvider.callStateChanges.listen((state) {
+      if (state == CallState.ended || state == CallState.idle) {
+        // Call ended by remote user, pop back to previous screen
+        debugPrint('CallScreen: Call ended remotely, closing screen');
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      } else if (state == CallState.connected) {
+        // Call just connected - ensure controls visible briefly
+        if (mounted) {
+          setState(() {
+            _controlsVisible = true;
+          });
+          
+          // Then auto-hide after delay
+          _startAutoHideTimer();
+        }
+      }
+    });
+  }
+  
   @override
   void dispose() {
     _animationController.dispose();
+    _callStateSubscription?.cancel();
+    _autoHideTimer?.cancel();
     super.dispose();
   }
   
@@ -45,15 +88,60 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
     });
     
     if (_controlsVisible) {
-      // Auto-hide controls after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) {
-          setState(() {
-            _controlsVisible = false;
-          });
-        }
-      });
+      // Auto-hide controls after 4 seconds
+      _startAutoHideTimer();
+    } else {
+      // If hiding controls, cancel any pending auto-hide
+      _autoHideTimer?.cancel();
     }
+  }
+  
+  // Build profile view for audio-only call
+  Widget _buildProfileView(CallProvider callProvider) {
+    final call = callProvider.currentCall;
+    final callerName = call['sender_name'] ?? 'Unknown Caller';
+    final callerPhoto = call['sender_photo'];
+    
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (callerPhoto != null && callerPhoto.isNotEmpty)
+          Hero(
+            tag: 'caller_photo_${call['sender_uid']}',
+            child: CircleAvatar(
+              radius: 75,
+              backgroundImage: NetworkImage(callerPhoto),
+            ),
+          ),
+        if (callerPhoto == null || callerPhoto.isEmpty)
+          Hero(
+            tag: 'caller_photo_${call['sender_uid']}',
+            child: CircleAvatar(
+              radius: 75,
+              backgroundColor: Colors.purple.shade700,
+              child: const Icon(
+                Icons.person,
+                size: 80,
+                color: Colors.white,
+              ),
+            ),
+          ),
+            
+        const SizedBox(height: 32),
+        
+        Text(
+          callerName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ).animate()
+      .fadeIn(duration: 400.ms, curve: Curves.easeOutQuad)
+      .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.0, 1.0), duration: 500.ms, curve: Curves.easeOutExpo);
   }
   
   @override
@@ -65,263 +153,144 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
           // Get call data
           final call = callProvider.currentCall;
           final callState = callProvider.callState;
-          final callerName = call['sender_name'] ?? 'Unknown Caller';
-          final callerPhoto = call['sender_photo'];
           final duration = callProvider.callDurationText;
           
-          return GestureDetector(
-            onTap: _toggleControls,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background color
-                Container(
-                  color: Colors.black.withOpacity(0.95),
-                ),
-                
-                // Content
-                SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Top spacer
-                      const SizedBox(height: 20),
-                      
-                      // Middle content
-                      Column(
-                        children: [
-                          if (callerPhoto != null && callerPhoto.isNotEmpty)
-                            Hero(
-                              tag: 'caller_photo_${call['sender_uid']}',
-                              child: CircleAvatar(
-                                radius: 60,
-                                backgroundImage: NetworkImage(callerPhoto),
-                              ),
-                            ).animate()
-                              .scale(
-                                duration: 600.ms,
-                                curve: Curves.easeOutExpo,
-                                begin: const Offset(0.5, 0.5),
-                                end: const Offset(1, 1),
-                              ),
-                          if (callerPhoto == null || callerPhoto.isEmpty)
-                            Hero(
-                              tag: 'caller_photo_${call['sender_uid']}',
-                              child: CircleAvatar(
-                                radius: 60,
-                                backgroundColor: Colors.purple.shade700,
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 60,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ).animate()
-                              .scale(
-                                duration: 600.ms,
-                                curve: Curves.easeOutExpo,
-                                begin: const Offset(0.5, 0.5),
-                                end: const Offset(1, 1),
-                              ),
-                              
-                          const SizedBox(height: 24),
-                          
-                          Text(
-                            callerName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ).animate()
-                            .fadeIn(delay: 200.ms, duration: 400.ms)
-                            .slideY(begin: 0.2, end: 0),
-                            
-                          const SizedBox(height: 12),
-                          
-                          // Call status text
-                          Text(
-                            _getCallStatusText(callState),
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 16,
-                            ),
-                          ).animate()
-                            .fadeIn(delay: 300.ms, duration: 400.ms),
-                            
-                          const SizedBox(height: 40),
-                          
-                          // Call duration
-                          Text(
-                            duration,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 56,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 2,
-                            ),
-                            textAlign: TextAlign.center,
-                          ).animate()
-                            .fadeIn(delay: 400.ms, duration: 400.ms)
-                            .slideY(begin: 0.2, end: 0),
-                        ],
-                      ),
-                      
-                      // Bottom controls
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 50),
-                        child: Column(
-                          children: [
-                            // Control buttons that appear on tap
-                            AnimatedOpacity(
-                              opacity: _controlsVisible ? 1.0 : 0.0,
-                              duration: const Duration(milliseconds: 300),
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 30),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Video toggle button
-                                    _buildControlButton(
-                                      onTap: () {
-                                        HapticFeedback.mediumImpact();
-                                        callProvider.toggleVideo();
-                                      },
-                                      icon: callProvider.isVideoEnabled ? 
-                                        Icons.videocam : Icons.videocam_off,
-                                      backgroundColor: callProvider.isVideoEnabled ? 
-                                        Colors.green : Colors.red,
-                                      animationDelay: 0.ms,
-                                    ),
-                                    const SizedBox(width: 20),
-                                    
-                                    // Audio toggle button
-                                    _buildControlButton(
-                                      onTap: () {
-                                        HapticFeedback.mediumImpact();
-                                        callProvider.toggleMute();
-                                      },
-                                      icon: callProvider.isAudioMuted ? 
-                                        Icons.mic_off : Icons.mic,
-                                      backgroundColor: callProvider.isAudioMuted ? 
-                                        Colors.red : Colors.green,
-                                      animationDelay: 100.ms,
-                                    ),
-                                    const SizedBox(width: 20),
-                                    
-                                    // Flip camera button
-                                    _buildControlButton(
-                                      onTap: () {
-                                        HapticFeedback.mediumImpact();
-                                        callProvider.switchCamera();
-                                      },
-                                      icon: Icons.flip_camera_ios,
-                                      backgroundColor: Colors.blue,
-                                      animationDelay: 200.ms,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            
-                            // End call button - always visible
-                            SizedBox(
-                              width: 200,
-                              height: 50,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  HapticFeedback.mediumImpact();
-                                  callProvider.endCall();
-                                  Navigator.of(context).pop();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(25),
-                                  ),
-                                  elevation: 5,
-                                ),
-                                child: const Text(
-                                  'End Call',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ).animate()
-                              .fadeIn(delay: 500.ms, duration: 400.ms)
-                              .slideY(begin: 0.2, end: 0),
-                          ],
-                        ),
-                      ),
-                    ],
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background - solid black
+              Container(
+                color: Colors.black,
+              ),
+              
+              // Main content area
+              SafeArea(
+                child: _buildProfileView(callProvider),
+              ),
+              
+              // Invisible layer for gesture detection
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _toggleControls,
+                  behavior: HitTestBehavior.translucent,
+                  child: Container(
+                    color: Colors.transparent,
                   ),
                 ),
-              ],
-            ),
+              ),
+              
+              // Call duration display
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 0,
+                right: 0,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      duration,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ).animate()
+                      .fadeIn(delay: 400.ms, duration: 400.ms),
+                  ),
+                ),
+              ),
+              
+              // Call status text
+              Positioned(
+                bottom: 160,
+                left: 0,
+                right: 0,
+                child: Visibility(
+                  visible: callState == CallState.connecting,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 50),
+                    child: Text(
+                      _getCallStatusText(callState),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ).animate()
+                    .fadeIn(delay: 300.ms, duration: 400.ms)
+                    .slideY(begin: 0.1, end: 0, duration: 500.ms),
+                ),
+              ),
+              
+              // Bottom controls with enhanced animation
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: CallControlButtons(
+                  callProvider: callProvider,
+                  controlsVisible: _controlsVisible,
+                  onCallEnd: () => Navigator.of(context).pop(),
+                ).animate(
+                  target: _controlsVisible ? 1 : 0,
+                )
+                  .slide(
+                    begin: const Offset(0, 1),
+                    end: const Offset(0, 0),
+                    duration: 350.ms,
+                    curve: _controlsVisible ? Curves.easeOutQuint : Curves.easeInQuint,
+                  )
+                  .fade(
+                    begin: 0.4,
+                    end: 1.0,
+                    duration: 300.ms,
+                    curve: Curves.easeOut
+                  )
+                  .scale(
+                    begin: const Offset(0.95, 0.95),
+                    end: const Offset(1.0, 1.0),
+                    duration: 350.ms,
+                    curve: Curves.easeOutBack
+                  ),
+              ),
+            ],
           );
         },
       ),
     );
   }
   
-  Widget _buildControlButton({
-    required VoidCallback onTap,
-    required IconData icon,
-    required Color backgroundColor,
-    required Duration animationDelay,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: backgroundColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Icon(
-          icon, 
-          color: Colors.white, 
-          size: 24
-        ),
-      ).animate(
-        delay: animationDelay,
-      )
-        .scaleXY(
-          begin: 1.0,
-          end: 1.1,
-          duration: 1300.ms,
-          curve: Curves.easeInOut,
-        )
-        .then()
-        .scaleXY(
-          begin: 1.1,
-          end: 1.0,
-          duration: 1300.ms,
-          curve: Curves.easeInOut,
-        ),
-    );
-  }
-  
   String _getCallStatusText(CallState state) {
     switch (state) {
+      case CallState.connecting:
+        return 'Connecting...';
       case CallState.connected:
         return 'Connected';
+      case CallState.connectionFailed:
+        return 'Connection failed';
       case CallState.ended:
         return 'Call ended';
-      default:
-        return '';
+      case CallState.idle:
+        return 'Call ended';
     }
   }
 }

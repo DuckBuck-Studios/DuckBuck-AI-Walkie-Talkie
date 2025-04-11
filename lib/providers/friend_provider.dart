@@ -20,15 +20,13 @@ class FriendProvider with ChangeNotifier {
   StreamSubscription? _incomingRequestsSubscription;
   StreamSubscription? _outgoingRequestsSubscription;
   StreamSubscription? _blockedUsersSubscription;
-  Map<String, Stream<Map<String, dynamic>?>> _friendStreams = {};
-  Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStreamSubscriptions = {};
-  Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStatusSubscriptions = {};
-  bool _isInitialized = false;
-  bool _isLoading = false;
-  String? _searchUserError;
+  final Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStreamSubscriptions = {};
+  final Map<String, StreamSubscription<Map<String, dynamic>?>> _friendStatusSubscriptions = {};
+  final bool _isLoading = false;
   
   // Loading states for better UI feedback
   bool _isInitializing = false;
+  bool _isInitialized = false;
   String? _lastError;
   
   // Getters
@@ -37,6 +35,7 @@ class FriendProvider with ChangeNotifier {
   List<Map<String, dynamic>> get outgoingRequests => _outgoingRequests;
   List<Map<String, dynamic>> get blockedUsers => _blockedUsers;
   bool get isInitializing => _isInitializing;
+  bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
   String? get lastError => _lastError;
 
@@ -49,10 +48,12 @@ class FriendProvider with ChangeNotifier {
       
       final success = await _setupSubscriptions();
       _isInitializing = false;
+      _isInitialized = success;
       _safeNotifyListeners();
       return success;
     } catch (e) {
       _isInitializing = false;
+      _isInitialized = false;
       _lastError = "Failed to initialize: $e";
       _safeNotifyListeners();
       return false;

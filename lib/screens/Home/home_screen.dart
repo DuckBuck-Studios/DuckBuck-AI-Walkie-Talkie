@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart'; 
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_animate/flutter_animate.dart'; 
+import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/friend_provider.dart'; 
 import '../../providers/call_provider.dart';
 import '../Call/call_screen.dart';
@@ -22,9 +22,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
-  bool _isInitializing = true;
-  final PageController _pageController = PageController();
+  bool _isLoading = true;
+  late PageController _pageController;
   int _currentPage = 0;
+  String? _lastInteractedUserId;
   Map<String, dynamic>? _selectedFriend;
   final QRCodeScreen _qrCodeScreen = QRCodeScreen();
   bool _isUserMuted = false;
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late AnimationController _muteAnimationController;
   late AnimationController _pulseAnimationController;
   bool _isTogglingMute = false;
+  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -49,24 +51,112 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       duration: const Duration(milliseconds: 1500),
     );
     _pulseAnimationController.repeat(reverse: true);
-    _initializeDatabase();
-    _listenForCallInvitations();
+    
+    // Initialize with a dummy controller first
+    // We'll create the real one after we have determined the initial page
+    _pageController = PageController();
+    
+    // Initialize in a single step and listen for call invitations
+    _initialize();
   }
-
-  Future<void> _initializeDatabase() async {
+  
+  Future<void> _initialize() async {
     try {
-      debugPrint('HomeScreen: Initializing database');
-      await _initializeProvider();
+      // Load last interacted user ID from shared preferences
+      await _loadLastInteractedUser();
       
-      if (mounted) {
-        setState(() => _isInitializing = false);
-        debugPrint('HomeScreen: Initialization complete');
+      // Initialize FriendProvider only once
+      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      if (!friendProvider.isInitialized) {
+        await friendProvider.initialize();
       }
+      
+      // Listen for call invitations
+      _listenForCallInvitations();
+      
+      // Determine initial page based on friends list and last interacted user
+      await _determineInitialPage();
+      
+      // Mark as initialized to prevent double animations
+      setState(() {
+        _isInitialized = true;
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint('HomeScreen: Error initializing database: $e');
+      debugPrint('HomeScreen: Error during initialization: $e');
       if (mounted) {
-        setState(() => _isInitializing = false);
+        setState(() => _isLoading = false);
       }
+    }
+  }
+  
+  Future<void> _loadLastInteractedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _lastInteractedUserId = prefs.getString('last_interacted_user');
+      debugPrint('HomeScreen: Loaded last interacted user: $_lastInteractedUserId');
+    } catch (e) {
+      debugPrint('HomeScreen: Error loading last interacted user: $e');
+    }
+  }
+  
+  Future<void> _saveLastInteractedUser(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_interacted_user', userId);
+      _lastInteractedUserId = userId;
+      debugPrint('HomeScreen: Saved last interacted user: $userId');
+    } catch (e) {
+      debugPrint('HomeScreen: Error saving last interacted user: $e');
+    }
+  }
+  
+  Future<void> _determineInitialPage() async {
+    if (!mounted) return;
+    
+    final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+    final friends = friendProvider.friends;
+    
+    int initialPage = 0;
+    
+    // Default to navigation card (page 0) if no friends
+    if (friends.isEmpty) {
+      _currentPage = 0;
+      _pageController = PageController(initialPage: 0);
+      return;
+    }
+    
+    // If we have a last interacted user, find them in the friends list
+    if (_lastInteractedUserId != null) {
+      for (int i = 0; i < friends.length; i++) {
+        if (friends[i]['id'] == _lastInteractedUserId) {
+          // Add 1 because page 0 is navigation card
+          initialPage = i + 1;
+          _selectedFriend = friends[i];
+          break;
+        }
+      }
+    }
+    
+    // If no last interacted user or not found, default to first friend
+    if (initialPage == 0 && friends.isNotEmpty) {
+      initialPage = 1; // First friend
+      _selectedFriend = friends[0];
+    }
+
+    // Create a new PageController with the determined initial page
+    _pageController = PageController(initialPage: initialPage);
+    
+    // Update current page state
+    if (mounted) {
+      setState(() {
+        _currentPage = initialPage;
+      });
+    }
+    
+    // Set up mute status listener for the selected friend
+    if (_selectedFriend != null) {
+      _setupMuteStatusListener();
     }
   }
 
@@ -82,6 +172,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   @override
   void dispose() {
+    _pageController.dispose();
     _muteStatusSubscription?.cancel();
     _mutedByFriendSubscription?.cancel();
     _callInvitationSubscription?.cancel();
@@ -89,19 +180,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _pulseAnimationController.dispose();
     debugPrint('HomeScreen: Disposing');
     super.dispose();
-  }
-
-  Future<void> _initializeProvider() async {
-    if (!mounted) return;
-    
-    try {
-      debugPrint('HomeScreen: Initializing provider');
-      final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-      await friendProvider.initialize();
-      debugPrint('HomeScreen: Provider initialized');
-    } catch (e) {
-      debugPrint('HomeScreen: Error initializing provider: $e');
-    }
   }
 
   void _setupMuteStatusListener() {
@@ -149,6 +227,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     setState(() {
       _selectedFriend = friend;
     });
+    
+    // Save this as the last interacted user
+    if (friend['id'] != null) {
+      _saveLastInteractedUser(friend['id']);
+    }
+    
     _setupMuteStatusListener();
   }
 
@@ -163,6 +247,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
       return;
+    }
+
+    // Save this as the last interacted user when starting a call
+    if (_selectedFriend!['id'] != null) {
+      _saveLastInteractedUser(_selectedFriend!['id']);
     }
 
     _showOverlay();
@@ -288,6 +377,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final callProvider = Provider.of<CallProvider>(context, listen: false);
     final callData = callProvider.currentCall;
     
+    // Save this as the last interacted user when receiving a call
+    final senderUid = callData['sender_uid'];
+    if (senderUid != null) {
+      _saveLastInteractedUser(senderUid);
+    }
+    
     Navigator.of(context).push(CallScreenRoute(callData: callData));
   }
 
@@ -302,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       backgroundColor: Colors.black,
       body: Consumer<FriendProvider>(
         builder: (context, friendProvider, child) {
-          if (_isInitializing || friendProvider.isInitializing) {
+          if (_isLoading) {
             return const Center(
               child: CircularProgressIndicator(
                 color: Colors.white,
@@ -332,11 +427,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               PageView.builder(
                 controller: _pageController,
                 onPageChanged: (index) {
-                  HapticFeedback.selectionClick();
+                  // Only perform haptic feedback and extra operations if fully initialized
+                  if (_isInitialized) {
+                    HapticFeedback.selectionClick();
+                  }
+                  
                   setState(() {
                     _currentPage = index;
                     _selectedFriend = index == 0 ? null : friends[index - 1];
                   });
+                  
+                  // Only update last interacted user if fully initialized (not during startup)
+                  if (_isInitialized && index > 0 && friends.isNotEmpty) {
+                    final friendId = friends[index - 1]['id'];
+                    if (friendId != null) {
+                      _saveLastInteractedUser(friendId);
+                    }
+                  }
+                  
                   // Check mute status when changing pages
                   if (_selectedFriend != null) {
                     _setupMuteStatusListener();
@@ -362,28 +470,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   
                   return GestureDetector(
                     onTap: () => _onFriendSelected(friend),
-                    child: friend['photoURL'] != null
-                        ? CachedNetworkImage(
-                            imageUrl: friend['photoURL'],
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(
+                    child: Hero(
+                      tag: 'friend_${friend['id']}',
+                      child: friend['photoURL'] != null
+                          ? CachedNetworkImage(
+                              imageUrl: friend['photoURL'],
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => const Icon(
+                                Icons.person,
                                 color: Colors.white,
+                                size: 120,
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 120,
                               ),
                             ),
-                            errorWidget: (context, url, error) => const Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 120,
-                            ),
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 120,
-                            ),
-                          ),
+                    ),
                   );
                 },
               ),
@@ -488,9 +599,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   ),
                 ),
 
-              // Name and Status Container
+              // Name and Status Container - Use duration based on initialization state
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 500),
+                duration: Duration(milliseconds: _isInitialized ? 500 : 0),
                 curve: Curves.easeOutQuint,
                 left: 0,
                 right: 0,
@@ -522,10 +633,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 ),
               ),
 
-              // Curved Bottom Bar with animation
+              // Curved Bottom Bar with animation - Use duration based on initialization state
               if (_currentPage > 0 && friends.isNotEmpty && friends[_currentPage - 1]['id'] != null)
                 AnimatedPositioned(
-                  duration: const Duration(milliseconds: 500),
+                  duration: Duration(milliseconds: _isInitialized ? 500 : 0),
                   curve: Curves.easeOutQuint,
                   left: 0,
                   right: 0,

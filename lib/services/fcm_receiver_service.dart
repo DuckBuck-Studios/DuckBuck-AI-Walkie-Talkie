@@ -1,8 +1,7 @@
 import 'dart:async'; 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:flutter/material.dart'; 
 import 'agora_service.dart';
 
 /// FCMReceiverService handles incoming Firebase Cloud Messaging (FCM) notifications,
@@ -257,8 +256,7 @@ class FCMReceiverService {
       final success = await _agoraService.joinChannel(
         token: token,
         channelId: channelId,
-        uid: uid,
-        enableVideo: false,  // Start with video off
+        uid: uid, 
         enableAudio: true,   // Audio enabled but will be muted
       );
       
@@ -282,7 +280,6 @@ class FCMReceiverService {
           token: token,
           channelId: channelId,
           uid: uid,
-          enableVideo: false,
           enableAudio: true,
         );
         

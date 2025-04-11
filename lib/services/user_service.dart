@@ -4,8 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as path; 
 import '../models/user_model.dart'; 
-import '../config/app_config.dart';
-import 'package:flutter/foundation.dart';
+import '../config/app_config.dart'; 
 
 class UserService {
   final firestore.FirebaseFirestore _firestore = firestore.FirebaseFirestore.instance;

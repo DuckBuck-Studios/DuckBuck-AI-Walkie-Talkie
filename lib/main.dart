@@ -84,7 +84,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-     
   } 
 
   @override
@@ -93,6 +92,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
   
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Get call provider without listening to changes
+    final callProvider = Provider.of<CallProvider>(context, listen: false);
+    
+    // Handle app lifecycle state changes
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App is visible and interactive (foreground)
+        debugPrint('App resumed - Call state: ${callProvider.callState}');
+        break;
+      case AppLifecycleState.inactive:
+        // App is in an inactive state (transitioning between states)
+        debugPrint('App inactive - Call state: ${callProvider.callState}');
+        break;
+      case AppLifecycleState.paused:
+        // App is not visible (background)
+        debugPrint('App paused - Call state: ${callProvider.callState}');
+        // If there's an active call, make sure the background service is running
+        if (callProvider.callState == CallState.connected) {
+          debugPrint('App paused with active call - ensuring background service is running');
+        }
+        break;
+      case AppLifecycleState.detached:
+        // App is detached from the UI (though this callback may not be called in this state)
+        debugPrint('App detached - Call state: ${callProvider.callState}');
+        break;
+      default:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

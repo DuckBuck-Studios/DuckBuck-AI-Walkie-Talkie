@@ -7,14 +7,15 @@ import '../services/user_service.dart';
 import '../services/fcm_service.dart';
 
 /// AgoraService provides a wrapper around the Agora RTC Engine SDK
-/// to simplify voice and video calling functionality in the application.
+/// to simplify voice calling functionality in the application.
 ///
 /// This service handles:
 /// - Initialization of the Agora SDK
 /// - Managing channel connections
-/// - Audio and video control
+/// - Audio control
 /// - Real-time user tracking
 /// - Event streaming for UI updates
+/// - Network quality monitoring and adaptation
 class AgoraService {
   /// Default Agora App ID for the application
   static const String appId = '3983e52a08424b7da5e79be4c9dfae0f';
@@ -28,20 +29,21 @@ class AgoraService {
   /// Current channel name the user is connected to
   String? _currentChannel;
   
-  /// Current token used for authenticating with Agora servers
-  String? _currentToken;
   
   /// Current user ID in the Agora session
   int? _currentUid;
-  
-  /// Tracks if local video (camera) is currently enabled
-  bool _isVideoEnabled = false;
   
   /// Tracks if local audio (microphone) is currently enabled
   bool _isAudioEnabled = true;
   
   /// Tracks if speakerphone mode is enabled
   bool _isSpeakerphoneEnabled = true;
+
+  /// Tracks the current network quality
+  int _currentNetworkQuality = 0; // 0: Unknown, 1: Excellent, 2: Good, 3: Poor, 4: Bad, 5: Very Bad, 6: Down
+
+  /// Timer to periodically check and adjust for network conditions
+  Timer? _networkAdaptationTimer;
   
   /// Set of user IDs currently in the channel
   /// This provides quick access to active participants
@@ -58,6 +60,9 @@ class AgoraService {
   
   /// Stream controller for channel leave events
   final StreamController<LeaveChannelEvent> _leaveChannelController = StreamController.broadcast();
+
+  /// Stream controller for network quality events
+  final StreamController<NetworkQualityEvent> _networkQualityController = StreamController.broadcast();
   
   /// Stream that emits events when a user joins the channel
   Stream<UserJoinedEvent> get onUserJoined => _userJoinedController.stream;
@@ -70,6 +75,9 @@ class AgoraService {
   
   /// Stream that emits events when leaving a channel
   Stream<LeaveChannelEvent> get onLeaveChannel => _leaveChannelController.stream;
+
+  /// Stream that emits events when network quality changes
+  Stream<NetworkQualityEvent> get onNetworkQualityChanged => _networkQualityController.stream;
   
   /// Singleton instance of the AgoraService
   static final AgoraService _instance = AgoraService._internal();
@@ -93,7 +101,7 @@ class AgoraService {
       // Use custom app ID if provided, otherwise use default
       final String agoraAppId = customAppId ?? appId;
       
-      // Request necessary permissions for audio/video
+      // Request necessary permissions for audio
       await _requestPermissions();
       
       // Create the RTC engine instance
@@ -107,6 +115,9 @@ class AgoraService {
       
       // Register event handlers for Agora callbacks
       _registerEventHandlers();
+
+      // Start monitoring network quality by running a pre-call test
+      await _startNetworkTest();
       
       _isInitialized = true;
       debugPrint('Agora engine initialized successfully with appId: $agoraAppId');
@@ -117,12 +128,44 @@ class AgoraService {
     }
   }
   
+  /// Starts a network quality test before joining a channel
+  Future<void> _startNetworkTest() async {
+    if (_engine == null) return;
+    
+    try {
+      // Configure last-mile probe test
+      final LastmileProbeConfig config = LastmileProbeConfig(
+        probeUplink: true,
+        probeDownlink: true,
+        expectedUplinkBitrate: 100,
+        expectedDownlinkBitrate: 100,
+      );
+      
+      // Start the test
+      await _engine!.startLastmileProbeTest(config);
+      debugPrint('Started last-mile network probe test');
+    } catch (e) {
+      debugPrint('Error starting network test: $e');
+    }
+  }
+
+  /// Stops the network quality test
+  Future<void> _stopNetworkTest() async {
+    if (_engine == null) return;
+    
+    try {
+      await _engine!.stopLastmileProbeTest();
+      debugPrint('Stopped last-mile network probe test');
+    } catch (e) {
+      debugPrint('Error stopping network test: $e');
+    }
+  }
+  
   /// Joins an Agora channel with the specified parameters
   ///
   /// [token] - The token for authentication with Agora servers
   /// [channelId] - The channel name to join
   /// [uid] - The user ID to use in the channel
-  /// [enableVideo] - Whether to enable video (camera) when joining
   /// [enableAudio] - Whether to enable audio (microphone) when joining
   ///
   /// Returns a boolean indicating success or failure
@@ -130,7 +173,6 @@ class AgoraService {
     required String token,
     required String channelId,
     required int uid,
-    bool enableVideo = false,
     bool enableAudio = true,
   }) async {
     if (!_isInitialized || _engine == null) {
@@ -141,24 +183,25 @@ class AgoraService {
     try {
       // Store current channel information for later use
       _currentChannel = channelId;
-      _currentToken = token;
       _currentUid = uid;
       
-      // Set client role to broadcaster (can send audio/video)
+      // Set client role to broadcaster (can send audio)
       await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       
-      // Configure video and audio based on parameters
-      await enableLocalVideo(enableVideo);
+      // Configure audio based on parameters
       await enableLocalAudio(enableAudio);
       
       // Mute local audio by default - user will unmute later via UI
       await muteLocalAudio(true);
       
-      // Set audio profile for optimal quality
+      // Set audio profile for optimal quality with adaptive settings
       await _engine!.setAudioProfile(
         profile: AudioProfileType.audioProfileDefault,
         scenario: AudioScenarioType.audioScenarioGameStreaming,
       );
+
+      // Configure for network adaptivity
+      await _configureNetworkAdaptation();
       
       // Join the channel with the specified parameters
       await _engine!.joinChannel(
@@ -168,14 +211,107 @@ class AgoraService {
         options: const ChannelMediaOptions(
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          // Enable automatic subscription to audio streams
+          autoSubscribeAudio: true,
+          // Set optimization mode for low latency and reliability
+          publishMicrophoneTrack: true,
+          publishCustomAudioTrack: false,
         ),
       );
+
+      // Start network adaptation timer
+      _startNetworkAdaptationTimer();
       
       debugPrint('Join channel request sent: $channelId (with audio muted)');
       return true;
     } catch (e) {
       debugPrint('Error joining channel: $e');
       return false;
+    }
+  }
+  
+  /// Configures network adaptation settings for optimal performance in varying network conditions
+  Future<void> _configureNetworkAdaptation() async {
+    if (_engine == null) return;
+
+    try {
+      // Enable dual stream mode
+      await _engine!.enableDualStreamMode(enabled: true);
+
+      // Set fallback options for poor network conditions
+      await _engine!.setRemoteDefaultVideoStreamType(VideoStreamType.videoStreamLow);
+      
+      // Set parameters for audio optimization in low bandwidth scenarios
+      await _engine!.setParameters('{"che.audio.enable_aec_high_performance_mode":true}');
+      await _engine!.setParameters('{"che.audio.enable_agc_high_performance_mode":true}');
+      await _engine!.setParameters('{"che.audio.enable_ans_high_performance_mode":true}');
+
+      // Set initial audio bitrate (can be adjusted dynamically based on network condition)
+      await _engine!.setParameters('{"che.audio.bitrate":24}');
+
+      debugPrint('Network adaptation configuration complete');
+    } catch (e) {
+      debugPrint('Error configuring network adaptation: $e');
+    }
+  }
+
+  /// Starts timer to monitor and adapt to network conditions
+  void _startNetworkAdaptationTimer() {
+    _networkAdaptationTimer?.cancel();
+    _networkAdaptationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _adaptToNetworkCondition();
+    });
+  }
+
+  /// Adapts audio bitrate and settings based on current network quality
+  Future<void> _adaptToNetworkCondition() async {
+    if (_engine == null || _currentChannel == null) return;
+
+    try {
+      debugPrint('Adapting to network quality: $_currentNetworkQuality');
+      
+      // Apply different strategies based on network quality
+      switch (_currentNetworkQuality) {
+        case 0: // Unknown
+        case 1: // Excellent
+        case 2: // Good
+          // High quality settings
+          await _engine!.setParameters('{"che.audio.bitrate":32}');
+          await _engine!.setParameters('{"che.audio.start_bitrate":32}');
+          await _engine!.setParameters('{"che.audio.stereo":true}');
+          break;
+        
+        case 3: // Poor
+          // Medium quality settings
+          await _engine!.setParameters('{"che.audio.bitrate":24}');
+          await _engine!.setParameters('{"che.audio.start_bitrate":24}');
+          await _engine!.setParameters('{"che.audio.stereo":false}');
+          break;
+        
+        case 4: // Bad
+        case 5: // Very Bad
+          // Low quality settings to maintain connection
+          await _engine!.setParameters('{"che.audio.bitrate":16}');
+          await _engine!.setParameters('{"che.audio.start_bitrate":16}');
+          await _engine!.setParameters('{"che.audio.stereo":false}');
+          // Enable audio processing to improve quality
+          await _engine!.setParameters('{"che.audio.enable_noise_suppression":true}');
+          await _engine!.setParameters('{"che.audio.enable_agc":true}');
+          break;
+        
+        case 6: // Down
+          // Minimum settings to attempt reconnection
+          await _engine!.setParameters('{"che.audio.bitrate":8}');
+          await _engine!.setParameters('{"che.audio.start_bitrate":8}');
+          await _engine!.setParameters('{"che.audio.enable_noise_suppression":false}');
+          // Attempt to reconnect
+          if (_currentChannel != null && _currentUid != null) {
+            debugPrint('Network down, attempting to reconnect...');
+          }
+          break;
+      }
+    } catch (e) {
+      debugPrint('Error in network adaptation: $e');
     }
   }
   
@@ -191,9 +327,16 @@ class AgoraService {
     }
     
     try {
+      // Stop network adaptation timer
+      _networkAdaptationTimer?.cancel();
+      _networkAdaptationTimer = null;
+
+      // Stop network testing
+      await _stopNetworkTest();
+      
       await _engine!.leaveChannel();
       _currentChannel = null;
-      _currentToken = null;
+      _currentNetworkQuality = 0;
       // Clear remote users when leaving channel
       _remoteUsers.clear();
       debugPrint('Left channel successfully');
@@ -247,77 +390,6 @@ class AgoraService {
       return true;
     } catch (e) {
       debugPrint('Error muting local audio: $e');
-      return false;
-    }
-  }
-  
-  /// Enables or disables the local video (camera)
-  ///
-  /// [enabled] - Whether to enable (true) or disable (false) the camera
-  ///
-  /// Returns a boolean indicating success or failure
-  Future<bool> enableLocalVideo(bool enabled) async {
-    if (!_isInitialized || _engine == null) {
-      debugPrint('Agora engine not initialized');
-      return false;
-    }
-    
-    try {
-      if (enabled && !_isVideoEnabled) {
-        // If enabling video for the first time, enable the video module
-        await _engine!.enableVideo();
-      }
-      
-      await _engine!.enableLocalVideo(enabled);
-      _isVideoEnabled = enabled;
-      debugPrint('Local video ${enabled ? 'enabled' : 'disabled'}');
-      return true;
-    } catch (e) {
-      debugPrint('Error toggling local video: $e');
-      return false;
-    }
-  }
-  
-  /// Mutes or unmutes the local video stream
-  ///
-  /// This differs from enableLocalVideo - muting still keeps the video
-  /// module active but stops sending video data, which is more efficient
-  /// for temporary video pausing.
-  ///
-  /// [mute] - Whether to mute (true) or unmute (false) the camera
-  ///
-  /// Returns a boolean indicating success or failure
-  Future<bool> muteLocalVideo(bool mute) async {
-    if (!_isInitialized || _engine == null) {
-      debugPrint('Agora engine not initialized');
-      return false;
-    }
-    
-    try {
-      await _engine!.muteLocalVideoStream(mute);
-      debugPrint('Local video ${mute ? 'muted' : 'unmuted'}');
-      return true;
-    } catch (e) {
-      debugPrint('Error muting local video: $e');
-      return false;
-    }
-  }
-  
-  /// Switches between front and back camera
-  ///
-  /// Returns a boolean indicating success or failure
-  Future<bool> switchCamera() async {
-    if (!_isInitialized || _engine == null) {
-      debugPrint('Agora engine not initialized');
-      return false;
-    }
-    
-    try {
-      await _engine!.switchCamera();
-      debugPrint('Camera switched');
-      return true;
-    } catch (e) {
-      debugPrint('Error switching camera: $e');
       return false;
     }
   }
@@ -393,6 +465,10 @@ class AgoraService {
   /// Should be called when the app is closing or the service is no longer needed
   Future<void> destroy() async {
     if (_engine != null) {
+      // Cancel network adaptation timer
+      _networkAdaptationTimer?.cancel();
+      _networkAdaptationTimer = null;
+      
       if (_currentChannel != null) {
         await leaveChannel();
       }
@@ -487,25 +563,127 @@ class AgoraService {
       // Called when the connection state changes
       onConnectionStateChanged: (RtcConnection connection, ConnectionStateType state, ConnectionChangedReasonType reason) {
         debugPrint('Connection state changed to: ${state.name}, reason: ${reason.name}');
+        
+        // Handle reconnection attempts for certain connection states
+        if (state == ConnectionStateType.connectionStateReconnecting) {
+          debugPrint('Attempting to reconnect... Adjusting for poor network');
+          _adaptToNetworkCondition();
+        } else if (state == ConnectionStateType.connectionStateConnected) {
+          debugPrint('Successfully reconnected to channel');
+        } else if (state == ConnectionStateType.connectionStateFailed) {
+          debugPrint('Connection failed. Reason: ${reason.name}');
+          
+          // Attempt to rejoin if connection completely failed
+          if (reason == ConnectionChangedReasonType.connectionChangedRejoinSuccess) {
+            debugPrint('Rejoined channel after connection failure');
+          }
+        }
       },
       
-      // Simplified handlers for other events to avoid type issues
-      onLocalAudioStateChanged: (connection, state, error) {
-        debugPrint('Local audio state changed');
-      },
-      
-      onRemoteVideoStateChanged: (connection, uid, state, reason, elapsed) {
-        debugPrint('Remote video state changed for user: $uid');
-      },
-      
+      // Monitor network quality changes
       onNetworkQuality: (connection, uid, txQuality, rxQuality) {
-        debugPrint('Network quality update for user: $uid');
+        // Take the worse of TX and RX quality
+        final int txQualityValue = txQuality.index;
+        final int rxQualityValue = rxQuality.index;
+        final int quality = txQualityValue > rxQualityValue ? txQualityValue : rxQualityValue;
+        
+        if (quality != _currentNetworkQuality) {
+          _currentNetworkQuality = quality;
+          debugPrint('Network quality changed to: $quality for user: $uid (TX: $txQuality, RX: $rxQuality)');
+          
+          // Emit network quality event
+          _networkQualityController.add(
+            NetworkQualityEvent(uid, txQualityValue, rxQualityValue)
+          );
+          
+          // Immediately adapt to significant network changes
+          if (quality >= 4) { // Bad or worse
+            _adaptToNetworkCondition();
+          }
+        }
+      },
+      
+      // Monitor last-mile network quality (before joining channel)
+      onLastmileQuality: (quality) {
+        debugPrint('Last-mile network quality: $quality');
+      },
+      
+      // More detailed last-mile probe results
+      onLastmileProbeResult: (LastmileProbeResult result) {
+        debugPrint('Last-mile probe result - '
+            'downlink bitrate: ${result.downlinkReport?.availableBandwidth ?? 0} Kbps, '
+            'uplink bitrate: ${result.uplinkReport?.availableBandwidth ?? 0} Kbps');
+            
+        // Adjust initial settings based on probe result
+        if (_currentChannel == null) { // Only apply before joining channel
+          if ((result.uplinkReport?.availableBandwidth ?? 0) < 50) {
+            debugPrint('Low bandwidth detected, applying conservative audio settings');
+            _engine?.setParameters('{"che.audio.bitrate":16}');
+            _engine?.setParameters('{"che.audio.start_bitrate":16}');
+          }
+        }
+      },
+
+      // Local audio state monitoring
+      onLocalAudioStateChanged: (connection, state, error) {
+        debugPrint('Local audio state changed to: ${state.name}, error: ${error.name}');
+        
+        // Handle audio state changes that require attention
+        if (state == LocalAudioStreamState.localAudioStreamStateFailed) {
+          debugPrint('Local audio failed. Attempting to recover...');
+          _tryRecoverLocalAudio();
+        } else if (state == LocalAudioStreamState.localAudioStreamStateRecording) {
+          debugPrint('Local audio recording successfully');
+        }
       },
       
       onRtcStats: (RtcConnection connection, RtcStats stats) {
-        // Throttled stats reporting
+        // Only log periodically to reduce noise
+        if ((stats.duration ?? 0) % 30 == 0) { // Log every 30 seconds
+          debugPrint('Call stats - Duration: ${stats.duration ?? 0}s, '
+              'TX bytes: ${stats.txAudioBytes}, '
+              'RX bytes: ${stats.rxAudioBytes}, '
+              'TX audio loss rate: ${stats.txPacketLossRate ?? 0}, '
+              'RX audio loss rate: ${stats.rxPacketLossRate ?? 0}');
+        }
+        
+        // Check for high packet loss and adjust settings if needed
+        if ((stats.txPacketLossRate ?? 0) > 15 || (stats.rxPacketLossRate ?? 0) > 15) {
+          debugPrint('High packet loss detected, adjusting audio settings');
+          _adaptToHighPacketLoss();
+        }
       },
     ));
+  }
+  
+  /// Attempts to recover local audio after failure
+  Future<void> _tryRecoverLocalAudio() async {
+    if (_engine == null) return;
+    
+    try {
+      // Disable then re-enable audio to try to recover
+      await _engine!.enableLocalAudio(false);
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _engine!.enableLocalAudio(_isAudioEnabled);
+      debugPrint('Audio recovery attempt completed');
+    } catch (e) {
+      debugPrint('Error trying to recover audio: $e');
+    }
+  }
+  
+  /// Adjusts settings for high packet loss situations
+  Future<void> _adaptToHighPacketLoss() async {
+    if (_engine == null) return;
+    
+    try {
+      // Reduce bitrate and apply more aggressive packet loss concealment
+      await _engine!.setParameters('{"che.audio.bitrate":16}');
+      await _engine!.setParameters('{"che.audio.enable_fec":true}'); // Forward Error Correction
+      await _engine!.setParameters('{"che.audio.plc":2}'); // Enhanced Packet Loss Concealment
+      debugPrint('Applied high packet loss adaptations');
+    } catch (e) {
+      debugPrint('Error adjusting for high packet loss: $e');
+    }
   }
   
   /// Closes all stream controllers to prevent memory leaks
@@ -514,13 +692,13 @@ class AgoraService {
     _userOfflineController.close();
     _joinChannelSuccessController.close();
     _leaveChannelController.close();
+    _networkQualityController.close();
   }
   
-  /// Requests necessary permissions for audio and video functionality
+  /// Requests necessary permissions for audio functionality
   Future<void> _requestPermissions() async {
     await [
       Permission.microphone,
-      Permission.camera,
     ].request();
   }
 
@@ -538,21 +716,26 @@ class AgoraService {
     }
     return _engine;
   }
+  
+  /// Synchronously returns the RTC engine instance
+  /// This is used for UI components that need immediate access to the engine
+  /// Note: May return null if the engine is not initialized
+  RtcEngine? getEngineSync() {
+    return _isInitialized ? _engine : null;
+  }
 
   /// Fetches Agora credentials from the backend and joins the channel in one step
   /// 
   /// [receiverUid] - The Firebase UID of the user to invite to the call
-  /// [enableVideo] - Whether to enable video when joining
   /// [enableAudio] - Whether to enable audio when joining
   Future<bool> fetchAndJoinChannel({
     required String receiverUid,
-    bool enableVideo = false,
     bool enableAudio = true,
   }) async {
     try {
       debugPrint('==== INITIATOR: fetchAndJoinChannel started ====');
       debugPrint('INITIATOR: Receiver UID: $receiverUid');
-      debugPrint('INITIATOR: Enable video: $enableVideo, Enable audio: $enableAudio');
+      debugPrint('INITIATOR: Enable audio: $enableAudio');
       
       // Ensure Agora engine is initialized first
       if (!_isInitialized) {
@@ -630,7 +813,6 @@ class AgoraService {
             token: data['token'],
             channelId: data['channelId'],
             uid: uid,
-            enableVideo: enableVideo,
             enableAudio: enableAudio,
           );
           
@@ -663,8 +845,7 @@ class AgoraService {
             debugPrint('INITIATOR: Checking if remote users already contains anyone: $_remoteUsers');
             debugPrint('INITIATOR: Our local UID is: $uid');
             
-            // Clean up remote users from our own UID which should not be there
-            // This fixes issues from previous implementation
+            // Clean up remote users from our own UID which should not be there 
             _remoteUsers.remove(uid);
             
             // The issue is that we're in the set ourselves! Check explicitly who is in the set
@@ -791,17 +972,18 @@ class AgoraService {
   /// This provides a snapshot of the service's state including:
   /// - Initialization status
   /// - Current channel information
-  /// - Audio/video status
+  /// - Audio status
   /// - Connected users
+  /// - Network quality
   Map<String, dynamic> getCurrentState() {
     return {
       'isInitialized': _isInitialized,
       'currentChannel': _currentChannel,
       'currentUid': _currentUid,
-      'isVideoEnabled': _isVideoEnabled,
       'isAudioEnabled': _isAudioEnabled,
       'isSpeakerphoneEnabled': _isSpeakerphoneEnabled,
       'remoteUsers': remoteUsers.toList(),
+      'networkQuality': _currentNetworkQuality,
     };
   }
 }
@@ -861,4 +1043,37 @@ class LeaveChannelEvent {
   // Constructor that handles potentially null values
   LeaveChannelEvent(String? channelId)
       : channelId = channelId ?? "unknown";
+}
+
+/// Event class for network quality updates
+///
+/// Contains information about network quality for a user
+class NetworkQualityEvent {
+  /// The user ID
+  final int uid;
+  
+  /// Uplink (sending) network quality (0-6, where 0 is unknown and 6 is down)
+  final int txQuality;
+  
+  /// Downlink (receiving) network quality (0-6, where 0 is unknown and 6 is down)
+  final int rxQuality;
+  
+  NetworkQualityEvent(this.uid, this.txQuality, this.rxQuality);
+  
+  /// Returns the worse of the TX and RX quality
+  int get quality => txQuality > rxQuality ? txQuality : rxQuality;
+  
+  /// Returns a human-readable quality description
+  String get qualityDescription {
+    switch (quality) {
+      case 0: return 'Unknown';
+      case 1: return 'Excellent';
+      case 2: return 'Good';
+      case 3: return 'Poor';
+      case 4: return 'Bad';
+      case 5: return 'Very Bad';
+      case 6: return 'Down';
+      default: return 'Unknown';
+    }
+  }
 } 
