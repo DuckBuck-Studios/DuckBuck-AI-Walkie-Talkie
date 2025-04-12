@@ -1,10 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; 
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io';
-import '../../services/user_service.dart'; 
+import '../../app/services/user_service.dart'; 
 import '../Home/home_screen.dart';
 import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart' as auth;
+import '../../app/providers/auth_provider.dart' as auth;
 import 'package:lottie/lottie.dart'; 
 
 class ProfilePhotoPreviewScreen extends StatefulWidget {
@@ -133,7 +134,9 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> w
       }
     } catch (e) {
       String errorMessage = 'Failed to set profile photo: ${e.toString()}';
-      print('Error in _setProfilePhoto: $errorMessage');
+      if (kDebugMode) {
+        print('Error in _setProfilePhoto: $errorMessage');
+      }
       _showErrorMessage(errorMessage);
     } finally {
       if (mounted) {
@@ -147,7 +150,9 @@ class _ProfilePhotoPreviewScreenState extends State<ProfilePhotoPreviewScreen> w
   void _showErrorMessage(String message) {
     if (!mounted) return;
     
-    print('Showing error message: $message');
+    if (kDebugMode) {
+      print('Showing error message: $message');
+    }
     
     // Instead of using a SnackBar which can have positioning issues,
     // show a custom error message at the top of the screen

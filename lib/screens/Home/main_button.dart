@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
-import '../../../services/agora_service.dart';
+import '../../app/services/agora_service.dart';
 import 'package:provider/provider.dart';
-import '../../providers/call_provider.dart';
+import '../../app/providers/call_provider.dart';
 import '../../screens/Call/call_screen.dart';
 
 class CurvedBottomBar extends StatefulWidget {
@@ -37,7 +37,6 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
   late AnimationController _animationController;
   bool isPressed = false;
   Timer? _timer;
-  int _seconds = 0;
   final ValueNotifier<String> _timerText = ValueNotifier<String>("00:00");
 
   @override

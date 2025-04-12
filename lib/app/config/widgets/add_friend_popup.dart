@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,8 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart'; 
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import '../providers/friend_provider.dart';
-import '../services/friend_service.dart';
+import '../../providers/friend_provider.dart';
+import '../../services/friend_service.dart';
 import 'cool_button.dart';
 
 class AddFriendPopup extends StatefulWidget {
@@ -324,7 +325,9 @@ class _AddFriendPopupState extends State<AddFriendPopup> with SingleTickerProvid
       
       return userId;
     } catch (e) {
-      print("Error decrypting QR data: $e");
+      if (kDebugMode) {
+        print("Error decrypting QR data: $e");
+      }
       return null;
     }
   }
@@ -350,9 +353,9 @@ class SearchUserPopup extends StatefulWidget {
   final String? initialSearchId;
   
   const SearchUserPopup({
-    Key? key,
+    super.key,
     this.initialSearchId,
-  }) : super(key: key);
+  });
 
   @override
   State<SearchUserPopup> createState() => _SearchUserPopupState();

@@ -1,11 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
 import 'dart:async'; 
-import '../../../providers/friend_provider.dart';
-import '../../../widgets/animated_background.dart';
+import '../../../app/providers/friend_provider.dart';
+import '../../../app/widgets/animated_background.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
   final Function(BuildContext)? onBackPressed;
@@ -51,7 +52,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       final friendProvider = Provider.of<FriendProvider>(context, listen: false);
       
       // Debugging information
-      print("Loading blocked users, provider has ${friendProvider.blockedUsers.length} blocked users");
+      if (kDebugMode) {
+        print("Loading blocked users, provider has ${friendProvider.blockedUsers.length} blocked users");
+      }
       
       // Make sure the provider is initialized
       if (!friendProvider.isInitializing) {
@@ -62,7 +65,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           _isLoading = false;
         });
         
-        print("Blocked users loaded: ${_blockedUsers.length}");
+        if (kDebugMode) {
+          print("Blocked users loaded: ${_blockedUsers.length}");
+        }
         
         // Force a refresh if the list is empty - there might be a stream not set up yet
         if (_blockedUsers.isEmpty) {
@@ -82,9 +87,13 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                 _isLoading = false;
               });
             }
-            print("After re-init, blocked users count: ${_blockedUsers.length}");
+            if (kDebugMode) {
+              print("After re-init, blocked users count: ${_blockedUsers.length}");
+            }
           } catch (e) {
-            print("Error during provider initialization: $e");
+            if (kDebugMode) {
+              print("Error during provider initialization: $e");
+            }
             if (mounted) {
               setState(() {
                 _isLoading = false;
@@ -97,7 +106,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         }
       } else {
         // If still initializing, wait for it to complete with a timeout
-        print("Provider is initializing, waiting...");
+        if (kDebugMode) {
+          print("Provider is initializing, waiting...");
+        }
         
         try {
           // Wait for initialization with timeout
@@ -110,7 +121,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
             _loadBlockedUsers();
           }
         } catch (e) {
-          print("Initialization timeout: $e");
+          if (kDebugMode) {
+            print("Initialization timeout: $e");
+          }
           if (mounted) {
             setState(() {
               _isLoading = false;
@@ -122,7 +135,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         }
       }
     } catch (e) {
-      print("Error loading blocked users: $e");
+      if (kDebugMode) {
+        print("Error loading blocked users: $e");
+      }
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -180,7 +195,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
 
     if (!shouldUnblock) return;
     
-    print("Starting to unblock user: $userId, $displayName");
+    if (kDebugMode) {
+      print("Starting to unblock user: $userId, $displayName");
+    }
 
     // Show loading state
     setState(() => _isLoading = true);
@@ -212,14 +229,18 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     try {
       // Call the service to unblock the user with timeout
       final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-      print("Calling unblockUser on provider for userId: $userId");
+      if (kDebugMode) {
+        print("Calling unblockUser on provider for userId: $userId");
+      }
       
       final result = await friendProvider.unblockUser(userId)
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException('Network request timed out while trying to unblock user.');
       });
       
-      print("Unblock result: $result");
+      if (kDebugMode) {
+        print("Unblock result: $result");
+      }
 
       if (mounted) {
         if (result['success'] == true) {
@@ -264,7 +285,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         }
       }
     } catch (e) {
-      print("Error in unblockUser: $e");
+      if (kDebugMode) {
+        print("Error in unblockUser: $e");
+      }
       if (mounted) {
         // Handle specific timeout errors
         final errorMessage = e is TimeoutException
@@ -346,7 +369,6 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Widget _buildTopBar(BuildContext context) {
     // Get screen dimensions and safe area for responsive layout
     final double screenWidth = MediaQuery.of(context).size.width;
-    final EdgeInsets safePadding = MediaQuery.of(context).padding;
     final bool isSmallScreen = screenWidth < 360;
     
     return Container(

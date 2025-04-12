@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:io' show Platform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart'; 
 import 'package:url_launcher/url_launcher.dart';
@@ -61,7 +60,7 @@ class TermsAgreementWidget extends StatelessWidget {
   void _showTermsBottomSheet(BuildContext context, String type) async {
     try {
       // Load legal content
-      final String jsonPath = 'assets/legal/${type}.json';
+      final String jsonPath = 'assets/legal/$type.json';
       String jsonString = await DefaultAssetBundle.of(context).loadString(jsonPath);
       final Map<String, dynamic> data = json.decode(jsonString);
       

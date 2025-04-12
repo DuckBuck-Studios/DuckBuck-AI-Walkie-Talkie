@@ -1,4 +1,4 @@
-import 'package:duckbuck/providers/user_provider.dart';
+import 'package:duckbuck/app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -6,21 +6,21 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/foundation.dart' show kDebugMode; 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
-import 'providers/auth_provider.dart'; 
-import 'providers/friend_provider.dart';
+import 'app/providers/auth_provider.dart'; 
+import 'app/providers/friend_provider.dart';
 import 'screens/Authentication/welcome_screen.dart';
 import 'screens/onboarding/name_screen.dart';
 import 'screens/onboarding/dob_screen.dart';
 import 'screens/onboarding/gender_screen.dart';
 import 'screens/onboarding/profile_photo_screen.dart';
 import 'screens/Home/home_screen.dart'; 
-import 'widgets/animated_background.dart';
-import 'services/friend_service.dart';
-import 'config/app_config.dart';
+import 'app/widgets/animated_background.dart';
+import 'app/services/friend_service.dart';
+import 'app/config/app_config.dart';
 import 'screens/Home/setting/settings_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'providers/call_provider.dart';
-import 'services/fcm_receiver_service.dart';
+import 'app/providers/call_provider.dart';
+import 'app/services/fcm_receiver_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -72,7 +72,7 @@ void main() async {
 
 /// Main app widget
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();

@@ -20,22 +20,30 @@ class UserProvider with ChangeNotifier {
   
   // Initialize provider
   Future<void> initialize() async {
-    print("UserProvider: Initializing");
+    if (kDebugMode) {
+      print("UserProvider: Initializing");
+    }
     final currentUid = _userService.currentUserId;
     if (currentUid != null) {
-      print("UserProvider: Current user ID found: $currentUid");
+      if (kDebugMode) {
+        print("UserProvider: Current user ID found: $currentUid");
+      }
       await _setupUserListeners(currentUid);
       
       // Wait for initial user data to be fetched
       if (_currentUser == null) {
-        print("UserProvider: Waiting for initial user data");
+        if (kDebugMode) {
+          print("UserProvider: Waiting for initial user data");
+        }
         // Create a completer to wait for the first user data
         final completer = Completer<void>();
         late StreamSubscription subscription;
         
         subscription = _userService.getUserStreamById(currentUid).listen((userData) {
           if (userData != null && !completer.isCompleted) {
-            print("UserProvider: Initial user data received");
+            if (kDebugMode) {
+              print("UserProvider: Initial user data received");
+            }
             _currentUser = userData;
             completer.complete();
             subscription.cancel();
@@ -45,7 +53,9 @@ class UserProvider with ChangeNotifier {
         // Set a timeout just in case
         Future.delayed(const Duration(seconds: 5), () {
           if (!completer.isCompleted) {
-            print("UserProvider: Timeout waiting for user data");
+            if (kDebugMode) {
+              print("UserProvider: Timeout waiting for user data");
+            }
             completer.complete();
           }
         });
@@ -53,18 +63,26 @@ class UserProvider with ChangeNotifier {
         await completer.future;
       }
       
-      print("UserProvider: Initialization completed with user: ${_currentUser?.displayName ?? 'Unknown'}");
+      if (kDebugMode) {
+        print("UserProvider: Initialization completed with user: ${_currentUser?.displayName ?? 'Unknown'}");
+      }
     } else {
-      print("UserProvider: No current user ID found");
+      if (kDebugMode) {
+        print("UserProvider: No current user ID found");
+      }
     }
     
     // Listen for auth state changes
     auth.FirebaseAuth.instance.authStateChanges().listen((auth.User? user) {
       if (user != null && (currentUid == null || currentUid != user.uid)) {
-        print("UserProvider: Auth state changed, user logged in: ${user.uid}");
+        if (kDebugMode) {
+          print("UserProvider: Auth state changed, user logged in: ${user.uid}");
+        }
         _setupUserListeners(user.uid);
       } else if (user == null) {
-        print("UserProvider: Auth state changed, user logged out");
+        if (kDebugMode) {
+          print("UserProvider: Auth state changed, user logged out");
+        }
         logout();
       }
     });
@@ -129,7 +147,9 @@ class UserProvider with ChangeNotifier {
       }
       return false;
     } catch (e) {
-      print("UserProvider: Error refreshing user data: $e");
+      if (kDebugMode) {
+        print("UserProvider: Error refreshing user data: $e");
+      }
       return false;
     }
   }
@@ -140,11 +160,15 @@ class UserProvider with ChangeNotifier {
       // Get current user ID for logging purposes
       final currentUser = auth.FirebaseAuth.instance.currentUser;
       final String currentUserId = currentUser?.uid ?? 'unknown';
-      print('UserProvider: Attempting to delete account for user: $currentUserId');
+      if (kDebugMode) {
+        print('UserProvider: Attempting to delete account for user: $currentUserId');
+      }
       
       // Delete the user account via UserService
       await _userService.deleteUserAccount(currentUserId);
-      print('UserProvider: User data deleted successfully for user: $currentUserId');
+      if (kDebugMode) {
+        print('UserProvider: User data deleted successfully for user: $currentUserId');
+      }
       
       // Sign out regardless of the result to ensure session is terminated
       await auth.FirebaseAuth.instance.signOut();
@@ -152,18 +176,26 @@ class UserProvider with ChangeNotifier {
       // Clear FCM token if available
       await _clearFCMToken();
       
-      print('UserProvider: User signed out successfully after account deletion');
+      if (kDebugMode) {
+        print('UserProvider: User signed out successfully after account deletion');
+      }
       return true;
     } catch (e) {
-      print('UserProvider: Error during account deletion: $e');
+      if (kDebugMode) {
+        print('UserProvider: Error during account deletion: $e');
+      }
       
       // Try to sign out even if the deletion failed
       try {
         await auth.FirebaseAuth.instance.signOut();
         await _clearFCMToken();
-        print('UserProvider: User signed out after deletion failure');
+        if (kDebugMode) {
+          print('UserProvider: User signed out after deletion failure');
+        }
       } catch (signOutError) {
-        print('UserProvider: Error signing out after deletion failure: $signOutError');
+        if (kDebugMode) {
+          print('UserProvider: Error signing out after deletion failure: $signOutError');
+        }
       }
       
       return false;

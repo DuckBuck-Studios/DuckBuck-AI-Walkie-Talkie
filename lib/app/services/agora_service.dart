@@ -3,8 +3,8 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
-import '../services/user_service.dart';
-import '../services/fcm_service.dart';
+import 'user_service.dart';
+import 'fcm_service.dart';
 
 /// AgoraService provides a wrapper around the Agora RTC Engine SDK
 /// to simplify voice calling functionality in the application.
@@ -852,9 +852,9 @@ class AgoraService {
             final otherUsers = _remoteUsers.toList();
             
             // Log the detailed comparison for debugging
-            _remoteUsers.forEach((remoteId) {
+            for (var remoteId in _remoteUsers) {
               debugPrint('INITIATOR: Remote user in set: $remoteId');
-            });
+            }
             
             if (otherUsers.isNotEmpty) {
               debugPrint('INITIATOR: Remote user already joined with UID ${otherUsers.first}');

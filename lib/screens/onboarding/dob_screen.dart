@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
-import '../../providers/auth_provider.dart' as auth;
+import '../../app/providers/auth_provider.dart' as auth;
 import 'gender_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/cupertino.dart';

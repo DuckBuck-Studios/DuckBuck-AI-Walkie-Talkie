@@ -1,9 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart'; 
 import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
-import '../../providers/auth_provider.dart' as auth;
+import '../../app/providers/auth_provider.dart' as auth;
 import 'dob_screen.dart'; 
 
 class NameScreen extends StatefulWidget {
@@ -62,7 +63,9 @@ class _NameScreenState extends State<NameScreen> with SingleTickerProviderStateM
       // Update onboarding stage to dateOfBirth
       await authProvider.updateOnboardingStage(auth.OnboardingStage.dateOfBirth);
       
-      print('NameScreen: Saved name: ${_nameController.text.trim()}');
+      if (kDebugMode) {
+        print('NameScreen: Saved name: ${_nameController.text.trim()}');
+      }
       
       // Navigate to DOB screen with enhanced transition
       if (mounted) {
@@ -93,7 +96,9 @@ class _NameScreenState extends State<NameScreen> with SingleTickerProviderStateM
       }
     } catch (e) {
       _showErrorSnackBar('Unable to save your name. Please try again.');
-      print('NameScreen: Error saving name: $e');
+      if (kDebugMode) {
+        print('NameScreen: Error saving name: $e');
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

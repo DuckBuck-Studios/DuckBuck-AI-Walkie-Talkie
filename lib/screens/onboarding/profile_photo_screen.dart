@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import 'package:image_picker/image_picker.dart'; 
-import '../../providers/auth_provider.dart' as auth; 
+import '../../app/providers/auth_provider.dart' as auth; 
 import 'profile_photo_preview_screen.dart'; 
 
 class ProfilePhotoScreen extends StatefulWidget {

@@ -75,8 +75,10 @@ dependencies:
   calendar_view: ^1.4.0 
   wakelock_plus: ^1.2.11
   animated_icon_button: ^1.0.2
-  shared_preferences: ^2.5.3
-  live_activities: ^2.3.1
+  shared_preferences: ^2.5.3 
+  action_slider: ^0.8.0-beta.3
+  glassmorphism: ^3.0.0
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:

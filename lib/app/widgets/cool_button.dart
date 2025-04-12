@@ -36,7 +36,7 @@ class DuckBuckButton extends StatelessWidget {
   final TextStyle? textStyle;
 
   const DuckBuckButton({
-    Key? key,
+    super.key,
     required this.text,
     required this.onTap,
     this.color = kPrimaryButtonColor,
@@ -55,7 +55,7 @@ class DuckBuckButton extends StatelessWidget {
     this.icon,
     this.alignment = MainAxisAlignment.center,
     this.textStyle,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

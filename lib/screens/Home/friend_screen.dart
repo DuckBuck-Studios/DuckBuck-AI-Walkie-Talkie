@@ -5,10 +5,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart'; 
 import 'dart:io' show Platform;
-import '../../providers/friend_provider.dart';
-import '../../widgets/cool_button.dart';
-import '../../widgets/animated_background.dart';
-import '../../widgets/add_friend_popup.dart';
+import '../../app/providers/friend_provider.dart';
+import '../../app/widgets/cool_button.dart';
+import '../../app/widgets/animated_background.dart';
+import '../../app/widgets/add_friend_popup.dart';
 
 class FriendScreen extends StatefulWidget {
   final Function(BuildContext)? onBackPressed;
@@ -144,10 +144,7 @@ class _FriendScreenState extends State<FriendScreen> {
   }
 
   // Handle the back navigation
-  void _handleBackPress() {
-    print("FRIEND SCREEN BACK BUTTON PRESSED");
-    // Use the custom back handler if provided, otherwise just pop
-    // The transition is handled by HomeScreen with a fixed animation origin
+  void _handleBackPress() {  
     if (widget.onBackPressed != null) {
       widget.onBackPressed!(context);
     } else {
@@ -328,7 +325,7 @@ class _FriendScreenState extends State<FriendScreen> {
                     child: _isLoading
                         ? const Center(
                             child: CircularProgressIndicator(
-                              color: const Color(0xFFD4A76A),
+                              color: Color(0xFFD4A76A),
                             ),
                           )
                         : Consumer<FriendProvider>(
@@ -809,6 +806,7 @@ class _FriendScreenState extends State<FriendScreen> {
       if (result != null && result is Map<String, dynamic>) {
         if (result.containsKey('success') && result['success'] == true) {
           HapticFeedback.mediumImpact();
+          // ignore: use_build_context_synchronously
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['message'] ?? 'Friend request sent successfully'),
@@ -822,6 +820,7 @@ class _FriendScreenState extends State<FriendScreen> {
           );
         } else if (result.containsKey('error')) {
           HapticFeedback.vibrate(); // Stronger vibration for error
+          // ignore: use_build_context_synchronously
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['error']),
@@ -1295,18 +1294,6 @@ class _FriendScreenState extends State<FriendScreen> {
     );
   }
 
-  Future<bool> _sendFriendRequest(String userId) async {
-    final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-    final result = await friendProvider.sendFriendRequestWithValidation(userId);
-    final success = result['success'] == true;
-    
-    if (success) {
-      HapticFeedback.mediumImpact();
-    } else {
-      HapticFeedback.vibrate();
-    }
-    return success;
-  }
 
   Future<bool> _acceptFriendRequest(String userId) async {
     try {

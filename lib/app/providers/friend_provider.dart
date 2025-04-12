@@ -72,7 +72,9 @@ class FriendProvider with ChangeNotifier {
         _setupFriendStatusStreams(friends);
         _safeNotifyListeners();
       }, onError: (error) {
-        print("Error in friends stream: $error");
+        if (kDebugMode) {
+          print("Error in friends stream: $error");
+        }
         _lastError = "Error loading friends: $error";
         _safeNotifyListeners();
       });
@@ -82,7 +84,9 @@ class FriendProvider with ChangeNotifier {
         _incomingRequests = requests;
         _safeNotifyListeners();
       }, onError: (error) {
-        print("Error in incoming requests stream: $error");
+        if (kDebugMode) {
+          print("Error in incoming requests stream: $error");
+        }
         _lastError = "Error loading friend requests: $error";
         _safeNotifyListeners();
       });
@@ -92,7 +96,9 @@ class FriendProvider with ChangeNotifier {
         _outgoingRequests = requests;
         _safeNotifyListeners();
       }, onError: (error) {
-        print("Error in outgoing requests stream: $error");
+        if (kDebugMode) {
+          print("Error in outgoing requests stream: $error");
+        }
         _lastError = "Error loading outgoing requests: $error";
         _safeNotifyListeners();
       });
@@ -102,7 +108,9 @@ class FriendProvider with ChangeNotifier {
         _blockedUsers = users;
         _safeNotifyListeners();
       }, onError: (error) {
-        print("Error in blocked users stream: $error");
+        if (kDebugMode) {
+          print("Error in blocked users stream: $error");
+        }
         _lastError = "Error loading blocked users: $error";
         _safeNotifyListeners();
       });
@@ -117,7 +125,9 @@ class FriendProvider with ChangeNotifier {
 
   // Setup individual friend status streams
   void _setupFriendStatusStreams(List<Map<String, dynamic>> friends) {
-    print("FriendProvider: Setting up status streams for ${friends.length} friends");
+    if (kDebugMode) {
+      print("FriendProvider: Setting up status streams for ${friends.length} friends");
+    }
     
     // Cancel old status subscriptions
     for (var subscription in _friendStatusSubscriptions.values) {
@@ -129,13 +139,17 @@ class FriendProvider with ChangeNotifier {
     for (var friend in friends) {
       final friendId = friend['id'];
       if (friendId != null) {
-        print("FriendProvider: Setting up status stream for friend: $friendId");
+        if (kDebugMode) {
+          print("FriendProvider: Setting up status stream for friend: $friendId");
+        }
         
         // Get user status stream
         _friendStatusSubscriptions[friendId] = _friendService.getFriendStatusStream(friendId).listen(
           (statusData) async {
             if (statusData != null) {
-              print("FriendProvider: Received status update for friend $friendId: ${statusData['animation']}");
+              if (kDebugMode) {
+                print("FriendProvider: Received status update for friend $friendId: ${statusData['animation']}");
+              }
               
               // Also get the friend's privacy settings
               final privacySettings = await _getUserPrivacySettings(friendId);
@@ -154,7 +168,9 @@ class FriendProvider with ChangeNotifier {
             }
           },
           onError: (error) {
-            print("FriendProvider: Error in friend status stream for $friendId: $error");
+            if (kDebugMode) {
+              print("FriendProvider: Error in friend status stream for $friendId: $error");
+            }
           },
         );
       }
@@ -187,7 +203,9 @@ class FriendProvider with ChangeNotifier {
         'showSocialLinks': true,
       };
     } catch (e) {
-      print("FriendProvider: Error getting privacy settings for $userId: $e");
+      if (kDebugMode) {
+        print("FriendProvider: Error getting privacy settings for $userId: $e");
+      }
       // Default settings on error
       return {
         'showOnlineStatus': true,
@@ -199,7 +217,9 @@ class FriendProvider with ChangeNotifier {
 
   // Setup individual friend streams
   void _setupFriendStreams(List<Map<String, dynamic>> friends) {
-    print("FriendProvider: Setting up friend streams for ${friends.length} friends");
+    if (kDebugMode) {
+      print("FriendProvider: Setting up friend streams for ${friends.length} friends");
+    }
     
     // Cancel old subscriptions
     for (var subscription in _friendStreamSubscriptions.values) {
@@ -211,7 +231,9 @@ class FriendProvider with ChangeNotifier {
     for (var friend in friends) {
       final friendId = friend['id'];
       if (friendId != null) {
-        print("FriendProvider: Setting up stream for friend: $friendId");
+        if (kDebugMode) {
+          print("FriendProvider: Setting up stream for friend: $friendId");
+        }
         
         // Get friend's privacy settings
         _getUserPrivacySettings(friendId).then((privacySettings) {
@@ -230,7 +252,9 @@ class FriendProvider with ChangeNotifier {
         _friendStreamSubscriptions[friendId] = _friendService.getFriendStream(friendId).listen(
           (updatedFriend) {
             if (updatedFriend != null) {
-              print("FriendProvider: Received update for friend $friendId");
+              if (kDebugMode) {
+                print("FriendProvider: Received update for friend $friendId");
+              }
               final index = _friends.indexWhere((f) => f['id'] == friendId);
               if (index != -1) {
                 _friends[index] = {
@@ -242,7 +266,9 @@ class FriendProvider with ChangeNotifier {
             }
           },
           onError: (error) {
-            print("FriendProvider: Error in friend stream for $friendId: $error");
+            if (kDebugMode) {
+              print("FriendProvider: Error in friend stream for $friendId: $error");
+            }
           },
         );
         
@@ -254,20 +280,28 @@ class FriendProvider with ChangeNotifier {
 
   // Monitor friend status with enhanced error handling and retry logic
   Future<void> _monitorFriendStatus(String friendId) async {
-    print("FriendProvider: Starting status monitoring for friend: $friendId");
+    if (kDebugMode) {
+      print("FriendProvider: Starting status monitoring for friend: $friendId");
+    }
     try {
       final isStarted = await _friendService.monitorFriendStatus(friendId);
       if (isStarted) {
-        print("FriendProvider: Successfully started status monitoring for $friendId");
+        if (kDebugMode) {
+          print("FriendProvider: Successfully started status monitoring for $friendId");
+        }
       } else {
-        print("FriendProvider: Failed to start status monitoring for $friendId");
+        if (kDebugMode) {
+          print("FriendProvider: Failed to start status monitoring for $friendId");
+        }
         // Retry after a delay
         Future.delayed(const Duration(seconds: 5), () {
           _monitorFriendStatus(friendId);
         });
       }
     } catch (e) {
-      print("FriendProvider: Error monitoring status for $friendId: $e");
+      if (kDebugMode) {
+        print("FriendProvider: Error monitoring status for $friendId: $e");
+      }
       // Retry after a delay
       Future.delayed(const Duration(seconds: 5), () {
         _monitorFriendStatus(friendId);
@@ -277,7 +311,9 @@ class FriendProvider with ChangeNotifier {
 
   // Start monitoring friend statuses in real-time
   void startStatusMonitoring() {
-    print("FriendProvider: Starting status monitoring for all friends");
+    if (kDebugMode) {
+      print("FriendProvider: Starting status monitoring for all friends");
+    }
     
     // Cancel existing status monitoring
     for (var friend in _friends) {
@@ -540,7 +576,9 @@ class FriendProvider with ChangeNotifier {
     try {
       return await _friendService.isUserBlocked(targetUserId);
     } catch (e) {
-      print('Error checking if user is blocked: $e');
+      if (kDebugMode) {
+        print('Error checking if user is blocked: $e');
+      }
       return false;
     }
   }
@@ -550,7 +588,9 @@ class FriendProvider with ChangeNotifier {
     try {
       return await _friendService.isFriend(targetUserId);
     } catch (e) {
-      print('Error checking if user is friend: $e');
+      if (kDebugMode) {
+        print('Error checking if user is friend: $e');
+      }
       return false;
     }
   }
@@ -561,7 +601,9 @@ class FriendProvider with ChangeNotifier {
       final result = await sendFriendRequestWithValidation(targetUserId);
       return result['success'] == true;
     } catch (e) {
-      print('Error sending friend request: $e');
+      if (kDebugMode) {
+        print('Error sending friend request: $e');
+      }
       return false;
     }
   }
@@ -571,7 +613,9 @@ class FriendProvider with ChangeNotifier {
     try {
       return await _friendService.getFriendRequestStatus(targetUserId);
     } catch (e) {
-      print('Error getting friend request status: $e');
+      if (kDebugMode) {
+        print('Error getting friend request status: $e');
+      }
       return null;
     }
   }
@@ -624,7 +668,9 @@ class FriendProvider with ChangeNotifier {
   // Add a method to force refresh friends data
   Future<void> _refreshFriends() async {
     try {
-      print("FriendProvider: Manually refreshing friends data");
+      if (kDebugMode) {
+        print("FriendProvider: Manually refreshing friends data");
+      }
       // Get updated friends list directly from the service
       final updatedFriends = await _friendService.getFriends();
       
@@ -638,9 +684,13 @@ class FriendProvider with ChangeNotifier {
       // Notify listeners to update UI
       _safeNotifyListeners();
       
-      print("FriendProvider: Friends data refreshed, found ${updatedFriends.length} friends");
+      if (kDebugMode) {
+        print("FriendProvider: Friends data refreshed, found ${updatedFriends.length} friends");
+      }
     } catch (e) {
-      print("FriendProvider: Error refreshing friends data: $e");
+      if (kDebugMode) {
+        print("FriendProvider: Error refreshing friends data: $e");
+      }
     }
   }
 
@@ -649,7 +699,9 @@ class FriendProvider with ChangeNotifier {
     try {
       notifyListeners();
     } catch (e) {
-      print("FriendProvider: Error in notifyListeners: $e");
+      if (kDebugMode) {
+        print("FriendProvider: Error in notifyListeners: $e");
+      }
       // This usually happens when the widget is being disposed
     }
   }
@@ -664,15 +716,21 @@ class FriendProvider with ChangeNotifier {
   // Force refresh all friends data - including direct database check
   Future<void> forceRefreshFriends() async {
     try {
-      print("FriendProvider: FORCE REFRESHING friends data from database");
+      if (kDebugMode) {
+        print("FriendProvider: FORCE REFRESHING friends data from database");
+      }
       
       // First, manually check the friends collection directly
       final friendDocs = await _friendService.debugCheckFriendsCollection();
-      print("FriendProvider: Raw friends in database: ${friendDocs.length}");
+      if (kDebugMode) {
+        print("FriendProvider: Raw friends in database: ${friendDocs.length}");
+      }
       
       // Get updated friends through the regular method
       final updatedFriends = await _friendService.getFriends();
-      print("FriendProvider: Updated friends count: ${updatedFriends.length}");
+      if (kDebugMode) {
+        print("FriendProvider: Updated friends count: ${updatedFriends.length}");
+      }
       
       // Update the internal list with basic data
       _friends = updatedFriends;
@@ -688,7 +746,9 @@ class FriendProvider with ChangeNotifier {
               'privacySettings': privacySettings,
             };
           } catch (e) {
-            print("FriendProvider: Error getting privacy settings for $friendId during refresh: $e");
+            if (kDebugMode) {
+              print("FriendProvider: Error getting privacy settings for $friendId during refresh: $e");
+            }
           }
         }
       }
@@ -700,9 +760,13 @@ class FriendProvider with ChangeNotifier {
       // Notify listeners to update UI
       _safeNotifyListeners();
       
-      print("FriendProvider: Force refresh completed, found ${updatedFriends.length} friends");
+      if (kDebugMode) {
+        print("FriendProvider: Force refresh completed, found ${updatedFriends.length} friends");
+      }
     } catch (e) {
-      print("FriendProvider: Error during force refresh: $e");
+      if (kDebugMode) {
+        print("FriendProvider: Error during force refresh: $e");
+      }
     }
   }
 

@@ -1,11 +1,12 @@
 import 'package:duckbuck/screens/onboarding/profile_photo_screen.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart'; 
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
-import '../../providers/auth_provider.dart' as auth; 
+import '../../app/providers/auth_provider.dart' as auth; 
 
 class GenderScreen extends StatefulWidget {
   const GenderScreen({super.key});
@@ -96,7 +97,9 @@ class _GenderScreenState extends State<GenderScreen> with SingleTickerProviderSt
       await authProvider.updateOnboardingStage(auth.OnboardingStage.profilePhoto);
       
       // Log for debugging
-      print('GenderScreen: Saved gender: $gender');
+      if (kDebugMode) {
+        print('GenderScreen: Saved gender: $gender');
+      }
       
       // Navigate to Profile Photo screen if mounted
       if (mounted) {
@@ -128,7 +131,9 @@ class _GenderScreenState extends State<GenderScreen> with SingleTickerProviderSt
       }
     } catch (e) {
       // Handle error
-      print('GenderScreen: Error saving gender: $e');
+      if (kDebugMode) {
+        print('GenderScreen: Error saving gender: $e');
+      }
       _showErrorSnackBar('Unable to save your gender. Please try again.');
     } finally {
       // Reset loading state
@@ -377,7 +382,7 @@ class _GenderScreenState extends State<GenderScreen> with SingleTickerProviderSt
                                   delay: Duration(milliseconds: 600 + (index * 100)),
                                   duration: const Duration(milliseconds: 600),
                                 );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),

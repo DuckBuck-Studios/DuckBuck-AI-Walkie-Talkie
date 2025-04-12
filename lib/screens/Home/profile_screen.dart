@@ -1,10 +1,10 @@
  import 'package:flutter/material.dart'; 
 import 'package:provider/provider.dart';  
 import 'package:cached_network_image/cached_network_image.dart'; 
-import '../../providers/auth_provider.dart' as auth;
-import '../../providers/user_provider.dart';
-import '../../models/user_model.dart'; 
-import '../../widgets/animated_background.dart';
+import '../../app/providers/auth_provider.dart' as auth;
+import '../../app/providers/user_provider.dart';
+import '../../app/models/user_model.dart'; 
+import '../../app/widgets/animated_background.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Function(BuildContext)? onBackPressed;

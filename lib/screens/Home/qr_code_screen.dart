@@ -8,7 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../services/user_service.dart';
+import '../../app/services/user_service.dart';
 
 class QRCodeScreen {
   final GlobalKey qrKey = GlobalKey();

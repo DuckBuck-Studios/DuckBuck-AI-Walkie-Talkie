@@ -1,14 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart'; 
 import 'dart:io';
 import 'dart:ui';
 import 'dart:math' as math; 
-import '../../../providers/auth_provider.dart' as auth;
-import '../../../providers/user_provider.dart';
-import '../../../models/user_model.dart';
-import '../../../widgets/animated_background.dart';
-import '../../../widgets/phone_auth_popup.dart';
+import '../../../app/providers/auth_provider.dart' as auth;
+import '../../../app/providers/user_provider.dart';
+import '../../../app/models/user_model.dart';
+import '../../../app/widgets/animated_background.dart';
+import '../../../app/widgets/phone_auth_popup.dart';
 import '../../Authentication/welcome_screen.dart';
 import 'blocked_users_screen.dart'; 
 import 'package:url_launcher/url_launcher.dart'; 
@@ -267,7 +268,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         await userProvider.deleteAccount();
       }
     } catch (e) {
-      print('Error deleting account after navigation: $e');
+      if (kDebugMode) {
+        print('Error deleting account after navigation: $e');
+      }
     }
   }
   
@@ -605,7 +608,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               duration: 400.ms,
               curve: Curves.easeOutCubic,
             );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -688,197 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildProvidersList(BuildContext context, UserModel userModel) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5E8C7),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFD4A76A).withOpacity(0.15),
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Connected Accounts',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF8B4513),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...userModel.providers.map((provider) {
-            IconData providerIcon;
-            String providerName;
-            
-            switch (provider) {
-              case AuthProvider.google:
-                providerIcon = Icons.search;
-                providerName = 'Google';
-                break;
-              case AuthProvider.apple:
-                providerIcon = Icons.apple;
-                providerName = 'Apple';
-                break;
-              case AuthProvider.phone:
-                providerIcon = Icons.phone;
-                providerName = 'Phone';
-                break;
-              case AuthProvider.email:
-              default:
-                providerIcon = Icons.email;
-                providerName = 'Email';
-                break;
-            }
-            
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6C38D).withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      providerIcon,
-                      color: const Color(0xFF8B4513),
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    providerName,
-                    style: const TextStyle(
-                      color: Color(0xFF8B4513),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  const Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ).animate(autoPlay: true)
-              .fadeIn(delay: const Duration(milliseconds: 200))
-              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1));
-          }).toList(),
-        ],
-      ),
-    ).animate(autoPlay: true)
-      .fadeIn(delay: const Duration(milliseconds: 200))
-      .slideY(begin: 0.2, end: 0);
-  }
 
-  Widget _buildSubscriptionStatus(BuildContext context, UserModel userModel) {
-    final hasSubscription = userModel.subscriptions != null && 
-                            userModel.subscriptions!.isNotEmpty &&
-                            userModel.subscriptions!.values.any((sub) => 
-                              sub is Map && sub['isActive'] == true);
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: hasSubscription ? const Color(0xFFFFF8E1) : const Color(0xFFF5E8C7),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFD4A76A).withOpacity(0.15),
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: hasSubscription ? Border.all(
-          color: Colors.amber.shade300,
-          width: 1,
-        ) : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: hasSubscription 
-                      ? Colors.amber.withOpacity(0.2)
-                      : const Color(0xFFE6C38D).withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  hasSubscription ? Icons.star : Icons.star_border,
-                  color: hasSubscription ? Colors.amber.shade700 : const Color(0xFF8B4513),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                hasSubscription ? 'Premium Account' : 'Free Account',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: hasSubscription ? Colors.amber.shade800 : const Color(0xFF8B4513),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            hasSubscription 
-                ? 'Your premium subscription is active.' 
-                : 'Upgrade to premium to get more features!',
-            style: TextStyle(
-              fontSize: 14,
-              color: hasSubscription ? Colors.amber.shade800 : const Color(0xFF8B4513).withOpacity(0.7),
-            ),
-          ),
-          if (!hasSubscription) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              alignment: Alignment.center,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Show upgrade options dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Upgrade options coming soon!')),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD4A76A),
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text('Upgrade Now'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    ).animate(autoPlay: true)
-      .fadeIn(delay: const Duration(milliseconds: 300))
-      .slideY(begin: 0.2, end: 0);
-  }
 
   void _showPhoneAuthDialog(BuildContext context) {
     showDialog(
@@ -991,7 +804,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   void _showLegalBottomSheet(BuildContext context, String type) async {
     try {
       // Load legal content
-      final String jsonPath = 'assets/legal/${type}.json';
+      final String jsonPath = 'assets/legal/$type.json';
       String jsonString = await DefaultAssetBundle.of(context).loadString(jsonPath);
       final Map<String, dynamic> data = json.decode(jsonString);
       

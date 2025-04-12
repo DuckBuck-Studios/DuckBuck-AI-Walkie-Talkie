@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart'; 
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import '../../providers/call_provider.dart';
+import '../../app/providers/call_provider.dart';
 import 'call_control_buttons.dart';
 import 'dart:async';
 
@@ -151,7 +151,6 @@ class _CallScreenState extends State<CallScreen> with SingleTickerProviderStateM
       body: Consumer<CallProvider>(
         builder: (context, callProvider, child) {
           // Get call data
-          final call = callProvider.currentCall;
           final callState = callProvider.callState;
           final duration = callProvider.callDurationText;
           

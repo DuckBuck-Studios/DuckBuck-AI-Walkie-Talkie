@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path; 
 import '../models/user_model.dart'; 
 import '../config/app_config.dart'; 
@@ -177,11 +178,7 @@ class UserService {
   
   // Delete user account completely
   Future<bool> deleteUserAccount(String userId) async {
-    try {
-      // Add debug logging to understand the issue
-      print("DEBUG: Attempting to delete user account. Provided userId: $userId");
-      print("DEBUG: Current user ID from Firebase Auth: ${_auth.currentUser?.uid}");
-      print("DEBUG: Are IDs equal? ${userId == _auth.currentUser?.uid}");
+    try { 
       
       // Modify the check to be more lenient - as long as we have a current user,
       // allow deletion of the account without strict ID matching
@@ -250,7 +247,9 @@ class UserService {
           batch.delete(doc.reference);
         }
       } catch (e) {
-        print("Error getting friend relationships: $e");
+        if (kDebugMode) {
+          print("Error getting friend relationships: $e");
+        }
         // Continue with deleting the user document even if we couldn't get all relationships
       }
       
@@ -268,12 +267,16 @@ class UserService {
       } catch (e) {
         // If deleting the auth user fails, just log it but don't fail the whole operation
         // We've already deleted all the user data, which is the important part
-        print("Error deleting Firebase Auth user: $e");
+        if (kDebugMode) {
+          print("Error deleting Firebase Auth user: $e");
+        }
         // Sign out the user since we've deleted their data
         try {
           await _auth.signOut();
         } catch (signOutError) {
-          print("Error signing out: $signOutError");
+          if (kDebugMode) {
+            print("Error signing out: $signOutError");
+          }
         }
       }
       
@@ -285,7 +288,9 @@ class UserService {
       try {
         await _auth.signOut();
       } catch (signOutError) {
-        print("Error signing out after error: $signOutError");
+        if (kDebugMode) {
+          print("Error signing out after error: $signOutError");
+        }
       }
       
       return false;
@@ -481,13 +486,19 @@ class UserService {
   Future<void> clearFcmToken(String userId) async {
     try {
       // Update the user document to clear the FCM token
-      print("UserService: Clearing FCM token for user $userId");
+      if (kDebugMode) {
+        print("UserService: Clearing FCM token for user $userId");
+      }
       await _firestore.collection('users').doc(userId).update({
         'fcmToken': null,  // Set to null to indicate no active device
       });
-      print("UserService: FCM token cleared successfully");
+      if (kDebugMode) {
+        print("UserService: FCM token cleared successfully");
+      }
     } catch (e, stackTrace) {
-      print("UserService: Error clearing FCM token: $e");
+      if (kDebugMode) {
+        print("UserService: Error clearing FCM token: $e");
+      }
       _reportError(e, 'clearFcmToken', stackTrace: stackTrace);
     }
   }

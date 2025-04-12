@@ -1,30 +1,22 @@
 import 'dart:async';
-import 'package:flutter/material.dart'; 
+import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'live_activity/call_activity_service.dart';
 
-/// BackgroundCallService handles keeping calls active in the background
-/// and on iOS devices, shows Live Activity UI in Dynamic Island
+/// BackgroundCallService handles keeping calls active when app is in background
+/// This service uses wakelock to prevent device from sleeping during active calls
+/// No platform-specific implementations (like iOS Live Activity) are used
 class BackgroundCallService {
   // Singleton instance
   static final BackgroundCallService _instance = BackgroundCallService._internal();
   factory BackgroundCallService() => _instance;
-  BackgroundCallService._internal() {
-    // No need to check for existing activities on startup
-  }
+  BackgroundCallService._internal();
  
   bool _isBackgroundServiceRunning = false;
   Timer? _callDurationTimer;
   int _callDurationSeconds = 0;
   DateTime? _callStartTime;
   
-  // Call metadata
-  String? _currentCallerName;
-  String? _currentCallerAvatar;
-  bool _isAudioMuted = false;
-  
-  // Live Activity service for iOS
-  final CallActivityService _callActivityService = CallActivityService();
+  // Basic call metadata for background operation
 
   /// Returns whether the background service is running
   bool get isBackgroundServiceRunning => _isBackgroundServiceRunning;
@@ -52,27 +44,17 @@ class BackgroundCallService {
     }
 
     try {
-      // Store call metadata
-      _currentCallerName = callerName;
-      _currentCallerAvatar = callerAvatar;
-      _isAudioMuted = isAudioMuted;
+      // Store basic call metadata
       
       // Set initial duration for resuming calls
       _callDurationSeconds = initialDurationSeconds;
       _callStartTime = DateTime.now().subtract(Duration(seconds: initialDurationSeconds));
       
-      // Enable wakelock to keep the device awake
+      // Enable wakelock to keep the device awake during background operation
       await WakelockPlus.enable();
       
       // Start call duration timer
       _startCallDurationTimer();
-      
-      // Start Live Activity for iOS devices
-      await _callActivityService.startCallActivity(
-        callerName: callerName,
-        callerAvatar: callerAvatar,
-        isAudioMuted: isAudioMuted,
-      );
       
       _isBackgroundServiceRunning = true;
       debugPrint('BackgroundCallService: Background service started with ${initialDurationSeconds}s initial duration');
@@ -121,15 +103,9 @@ class BackgroundCallService {
       _callDurationSeconds = 0;
       
       // Reset call metadata
-      _currentCallerName = null;
-      _currentCallerAvatar = null;
-      _isAudioMuted = false;
       
       // Disable wakelock
       await WakelockPlus.disable();
-      
-      // End Live Activity for iOS devices
-      await _callActivityService.endCallActivity();
       
       _isBackgroundServiceRunning = false;
       debugPrint('BackgroundCallService: Background service stopped');
@@ -147,23 +123,13 @@ class BackgroundCallService {
     try {
       // Update local state with new values
       if (isAudioMuted != null) {
-        _isAudioMuted = isAudioMuted;
       }
       
       if (callerName != null) {
-        _currentCallerName = callerName;
       }
       
       if (callerAvatar != null) {
-        _currentCallerAvatar = callerAvatar;
       }
-      
-      // Update Live Activity with new attributes (iOS only)
-      await _callActivityService.updateCallActivity(
-        callerName: _currentCallerName,
-        callerAvatar: _currentCallerAvatar,
-        isAudioMuted: _isAudioMuted,
-      );
     } catch (e) {
       debugPrint('BackgroundCallService: Error updating call attributes - $e');
     }
@@ -173,6 +139,5 @@ class BackgroundCallService {
   void dispose() {
     _callDurationTimer?.cancel();
     _callDurationTimer = null;
-    _callActivityService.dispose();
   }
 }
