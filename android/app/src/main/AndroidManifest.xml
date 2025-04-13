@@ -28,6 +28,13 @@
             </intent-filter>
         </activity>
         
+        <!-- Foreground Call Service -->
+        <service
+            android:name=".service.ForegroundCallService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        
         <!-- Image Cropping Activity -->
         <activity
           android:name="com.yalantis.ucrop.UCropActivity"
@@ -53,9 +60,7 @@
     <!-- Background Service Permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Boot Completion Permission -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     
     <!-- Battery Optimization Permission -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

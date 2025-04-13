@@ -8,19 +8,22 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'app/providers/auth_provider.dart'; 
 import 'app/providers/friend_provider.dart';
-import 'screens/Authentication/welcome_screen.dart';
-import 'screens/onboarding/name_screen.dart';
-import 'screens/onboarding/dob_screen.dart';
-import 'screens/onboarding/gender_screen.dart';
-import 'screens/onboarding/profile_photo_screen.dart';
-import 'screens/Home/home_screen.dart'; 
+import 'app/screens/Authentication/welcome_screen.dart';
+import 'app/screens/onboarding/name_screen.dart';
+import 'app/screens/onboarding/dob_screen.dart';
+import 'app/screens/onboarding/gender_screen.dart';
+import 'app/screens/onboarding/profile_photo_screen.dart';
+import 'app/screens/Home/home_screen.dart'; 
 import 'app/widgets/animated_background.dart';
 import 'app/services/friend_service.dart';
-import 'app/config/app_config.dart';
-import 'screens/Home/setting/settings_screen.dart';
+import 'app/config/app_config.dart'; 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app/providers/call_provider.dart';
 import 'app/services/fcm_receiver_service.dart';
+import 'app/services/background_call_service.dart'; 
+
+// Global navigator key to enable navigation from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -79,12 +82,18 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver { 
+  final BackgroundCallService _backgroundCallService = BackgroundCallService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-  } 
+    
+    // Check for pending navigation from notifications after a short delay
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      _backgroundCallService.handlePendingCallNavigation(navigatorKey);
+    });
+  }
 
   @override
   void dispose() {
@@ -95,35 +104,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
-    // Get call provider without listening to changes
-    final callProvider = Provider.of<CallProvider>(context, listen: false);
-    
-    // Handle app lifecycle state changes
-    switch (state) {
-      case AppLifecycleState.resumed:
-        // App is visible and interactive (foreground)
-        debugPrint('App resumed - Call state: ${callProvider.callState}');
-        break;
-      case AppLifecycleState.inactive:
-        // App is in an inactive state (transitioning between states)
-        debugPrint('App inactive - Call state: ${callProvider.callState}');
-        break;
-      case AppLifecycleState.paused:
-        // App is not visible (background)
-        debugPrint('App paused - Call state: ${callProvider.callState}');
-        // If there's an active call, make sure the background service is running
-        if (callProvider.callState == CallState.connected) {
-          debugPrint('App paused with active call - ensuring background service is running');
-        }
-        break;
-      case AppLifecycleState.detached:
-        // App is detached from the UI (though this callback may not be called in this state)
-        debugPrint('App detached - Call state: ${callProvider.callState}');
-        break;
-      default:
-        break;
-    }
+    _backgroundCallService.handleAppLifecycleState(state, context, navigatorKey);
   }
 
   @override

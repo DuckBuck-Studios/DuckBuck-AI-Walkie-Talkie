@@ -88,9 +88,48 @@ class CallProvider extends ChangeNotifier {
       _userOfflineSubscription = _agoraService.onUserOffline.listen(_handleUserOffline);
       _joinChannelSuccessSubscription = _agoraService.onJoinChannelSuccess.listen(_handleJoinChannelSuccess);
       
+      // Check for pending navigation from background notification
+      checkPendingNavigation();
+      
       debugPrint('CallProvider: Initialized successfully');
     } catch (e) {
       debugPrint('CallProvider: Error initializing - $e');
+    }
+  }
+  
+  /// Check if we need to navigate to call screen from a notification
+  Future<void> checkPendingNavigation() async {
+    try {
+      final callData = await _backgroundCallService.checkPendingNavigation();
+      if (callData != null && callData.isNotEmpty) {
+        debugPrint('CallProvider: Found pending navigation from notification: $callData');
+        
+        // Check if this was for a call that might have ended while in background
+        if (callData['from_notification'] == true) {
+          // Get current state from Agora service
+          final agoraState = _agoraService.getCurrentState();
+          final bool hasActiveChannel = agoraState['currentChannel'] != null;
+          final bool hasRemoteUsers = _agoraService.remoteUsers.isNotEmpty;
+          
+          if (!hasActiveChannel || !hasRemoteUsers) {
+            // Call was likely ended by the other party while app was in background
+            debugPrint('CallProvider: Call appears to have ended while in background');
+            await _backgroundCallService.stopBackgroundService(showEndedNotification: true);
+            return;
+          }
+          
+          // If we have active channel and remote users, restore the call state
+          _currentCall = {
+            'sender_name': callData['sender_name'],
+            'sender_photo': callData['sender_photo'],
+            'sender_uid': callData['sender_uid'],
+          };
+          _updateCallState(CallState.connected);
+          _startCallTimer();
+        }
+      }
+    } catch (e) {
+      debugPrint('CallProvider: Error checking pending navigation - $e');
     }
   }
   
@@ -146,13 +185,16 @@ class CallProvider extends ChangeNotifier {
       // Get caller information from current call data
       final callerName = _currentCall['sender_name'] ?? 'Unknown Caller';
       final callerAvatar = _currentCall['sender_photo'];
+      final senderUid = _currentCall['sender_uid'];
       
-      // Start background service with current mute state
+      // Start background service with current mute state and handle remote call ending
       final success = await _backgroundCallService.startBackgroundService(
         callerName: callerName,
         callerAvatar: callerAvatar,
+        senderUid: senderUid,
         initialDurationSeconds: _callDurationSeconds,
         isAudioMuted: _isAudioMuted,
+        onRemoteCallEnded: _handleRemoteCallEnded,
       );
       debugPrint('CallProvider: Background service ${success ? 'started' : 'failed to start'}');
     } catch (e) {
@@ -160,10 +202,57 @@ class CallProvider extends ChangeNotifier {
     }
   }
   
+  /// Handle when a remote user ends the call while our app is in the background
+  void _handleRemoteCallEnded() {
+    debugPrint('CallProvider: Remote call end detected from background');
+    
+    // Update the call state to ended
+    _updateCallState(CallState.ended);
+    
+    // Clean up other resources
+    _callTimer?.cancel();
+    _callTimer = null;
+    _callDurationSeconds = 0;
+    _updateCallDurationText();
+    
+    // Reset remote user ID
+    _remoteUid = null;
+    
+    // Reset state with a small delay to allow animations to complete
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _updateCallState(CallState.idle);
+      _currentCall = {};
+      _connectionErrorMessage = "";
+    });
+    
+    // Leave the Agora channel
+    _agoraService.leaveChannel();
+  }
+  
+  /// Update the background service when call attributes change
+  Future<void> _updateBackgroundService() async {
+    if (_backgroundCallService.isBackgroundServiceRunning) {
+      try {
+        final callerName = _currentCall['sender_name'] ?? 'Unknown Caller';
+        final callerAvatar = _currentCall['sender_photo'];
+        final senderUid = _currentCall['sender_uid'];
+        
+        await _backgroundCallService.updateCallAttributes(
+          callerName: callerName,
+          callerAvatar: callerAvatar,
+          senderUid: senderUid,
+          isAudioMuted: _isAudioMuted,
+        );
+      } catch (e) {
+        debugPrint('CallProvider: Error updating background service - $e');
+      }
+    }
+  }
+  
   /// Stop the background service
   Future<void> _stopBackgroundService() async {
     try {
-      await _backgroundCallService.stopBackgroundService();
+      await _backgroundCallService.stopBackgroundService(showEndedNotification: true);
       debugPrint('CallProvider: Background service stopped');
     } catch (e) {
       debugPrint('CallProvider: Error stopping background service - $e');
@@ -195,6 +284,12 @@ class CallProvider extends ChangeNotifier {
       final remoteUsers = _agoraService.remoteUsers;
       if (remoteUsers.isEmpty) {
         debugPrint('CallProvider: No more remote users, ending call');
+        
+        // If background service is running, mark call as ended by remote
+        if (_backgroundCallService.isBackgroundServiceRunning) {
+          _backgroundCallService.markCallEndedByRemote();
+        }
+        
         endCall();
       }
     }
@@ -234,6 +329,9 @@ class CallProvider extends ChangeNotifier {
     try {
       await _agoraService.muteLocalAudio(!_isAudioMuted);
       _isAudioMuted = !_isAudioMuted;
+      
+      // Update background service with new mute state
+      _updateBackgroundService();
       
       notifyListeners();
       debugPrint('CallProvider: Microphone ${_isAudioMuted ? 'muted' : 'unmuted'}');
@@ -333,7 +431,7 @@ class CallProvider extends ChangeNotifier {
       debugPrint('CallProvider: Ending call');
       await _agoraService.leaveChannel();
       
-      // Stop background service
+      // Stop background service and show ended notification
       await _stopBackgroundService();
       
       _updateCallState(CallState.ended);

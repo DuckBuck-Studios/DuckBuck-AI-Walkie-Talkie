@@ -48,6 +48,9 @@ dependencies {
     implementation("io.agora.rtc:full-sdk:4.2.2")
     // Add Firebase Cloud Messaging dependency
     implementation("com.google.firebase:firebase-messaging:23.1.2")
+    // Add Glide for image loading
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
 }
 
 flutter {

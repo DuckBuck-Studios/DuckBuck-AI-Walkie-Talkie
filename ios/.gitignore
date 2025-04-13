@@ -1,3 +1,4 @@
+# Xcode related
 **/dgph
 *.mode1v3
 *.mode2v3
@@ -10,11 +11,15 @@
 **/.vagrant/
 **/DerivedData/
 Icon?
-**/Pods/
-**/.symlinks/
-profile
 xcuserdata
 **/.generated/
+
+# CocoaPods
+**/Pods/
+**/.symlinks/
+Podfile.lock
+
+# Flutter iOS specific
 Flutter/App.framework
 Flutter/Flutter.framework
 Flutter/Flutter.podspec
@@ -27,7 +32,12 @@ Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 Runner/GeneratedPluginRegistrant.*
 
-# Exceptions to above rules.
+# Build related
+profile
+build/
+DerivedData/
+
+# Exceptions to above rules
 !default.mode1v3
 !default.mode2v3
 !default.pbxuser
