@@ -7,7 +7,7 @@ import '../../providers/auth_provider.dart' as auth;
 import '../../providers/user_provider.dart';
 import '../Authentication/welcome_screen.dart';
 
-class NavigationCard extends StatelessWidget {
+class NavigationCard extends StatefulWidget {
   final VoidCallback onNavigateToProfile;
   final VoidCallback onNavigateToFriends;
   final VoidCallback onNavigateToSettings;
@@ -20,6 +20,59 @@ class NavigationCard extends StatelessWidget {
     required this.onNavigateToSettings,
     required this.onShowQRCode,
   });
+
+  @override
+  State<NavigationCard> createState() => _NavigationCardState();
+}
+
+class _NavigationCardState extends State<NavigationCard> with SingleTickerProviderStateMixin {
+  late AnimationController _cardAnimationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+  
+  // Flag to track if animation has played
+  bool _hasAnimated = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize animation controller
+    _cardAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    
+    _scaleAnimation = Tween<double>(
+      begin: 0.8, 
+      end: 1.0
+    ).animate(CurvedAnimation(
+      parent: _cardAnimationController,
+      curve: Curves.easeOutQuint,
+    ));
+    
+    _opacityAnimation = Tween<double>(
+      begin: 0.0, 
+      end: 1.0
+    ).animate(CurvedAnimation(
+      parent: _cardAnimationController,
+      curve: Curves.easeOutQuint,
+    ));
+    
+    // Start animation after frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hasAnimated) {
+        _cardAnimationController.forward();
+        _hasAnimated = true;
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _cardAnimationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,15 +88,13 @@ class NavigationCard extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 600),
-          tween: Tween<double>(begin: 0.0, end: 1.0),
-          curve: Curves.easeOutQuint,
-          builder: (context, value, child) {
+        child: AnimatedBuilder(
+          animation: _cardAnimationController,
+          builder: (context, child) {
             return Transform.scale(
-              scale: 0.8 + (0.2 * value),
+              scale: _scaleAnimation.value,
               child: Opacity(
-                opacity: value,
+                opacity: _opacityAnimation.value,
                 child: child,
               ),
             );
@@ -85,7 +136,7 @@ class NavigationCard extends StatelessWidget {
                     Color(0xFF8E24AA),
                     Color(0xFF6A1B9A),
                   ],
-                  onTap: onNavigateToProfile,
+                  onTap: widget.onNavigateToProfile,
                   iconBuilder: (color) => Consumer<auth.AuthProvider>(
                     builder: (context, authProvider, child) {
                       return authProvider.userModel?.photoURL != null
@@ -162,7 +213,7 @@ class NavigationCard extends StatelessWidget {
                     Color(0xFF26A69A),
                     Color(0xFF00796B),
                   ],
-                  onTap: onNavigateToFriends,
+                  onTap: widget.onNavigateToFriends,
                 ),
                 
                 const SizedBox(height: 15),
@@ -176,7 +227,7 @@ class NavigationCard extends StatelessWidget {
                     Color(0xFFFF7043),
                     Color(0xFFE64A19),
                   ],
-                  onTap: onNavigateToSettings,
+                  onTap: widget.onNavigateToSettings,
                 ),
                 
                 const SizedBox(height: 15),
@@ -192,7 +243,7 @@ class NavigationCard extends StatelessWidget {
                   ],
                   onTap: () {
                     HapticFeedback.selectionClick();
-                    onShowQRCode(context);
+                    widget.onShowQRCode(context);
                   },
                 ),
                 
@@ -282,110 +333,123 @@ class NavigationCard extends StatelessWidget {
     required VoidCallback onTap,
     Widget Function(Color iconColor)? iconBuilder,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
-          splashColor: gradient[0].withOpacity(0.3),
-          highlightColor: gradient[1].withOpacity(0.1),
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: gradient,
-              ),
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: gradient[1].withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 4),
+    // Delay based on option position
+    final delay = Duration(milliseconds: 
+      title == "Profile" ? 100 :
+      title == "Friends" ? 200 :
+      title == "Settings" ? 300 :
+      title == "QR Code" ? 400 : 500
+    );
+    
+    return Animate(
+      // Only animate if the parent animation has started
+      effects: _cardAnimationController.value > 0 ? [
+        SlideEffect(
+          begin: const Offset(-0.2, 0),
+          end: Offset.zero,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutQuint,
+          delay: delay,
+        ),
+        FadeEffect(
+          duration: const Duration(milliseconds: 400),
+          delay: delay,
+        ),
+      ] : [],
+      child: Container(
+        key: ValueKey('nav_option_${title.toLowerCase()}'),
+        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(15),
+            splashColor: gradient[0].withOpacity(0.3),
+            highlightColor: gradient[1].withOpacity(0.1),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradient,
                 ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Row(
-                children: [
-                  // Icon or custom widget
-                  iconBuilder != null 
-                    ? iconBuilder(Colors.white)
-                    : Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.2),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: Icon(
-                          icon,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                      ),
-                  const SizedBox(width: 15),
-                  // Text content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Arrow icon
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.white,
-                      size: 14,
-                    ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: gradient[1].withOpacity(0.5),
+                    blurRadius: 10,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 4),
                   ),
                 ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(15),
+                child: Row(
+                  children: [
+                    // Icon or custom widget
+                    iconBuilder != null 
+                      ? iconBuilder(Colors.white)
+                      : Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withOpacity(0.2),
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            icon,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                    const SizedBox(width: 15),
+                    // Text content
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Arrow icon
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ).animate(
-      delay: Duration(milliseconds: (title == "Profile" ? 100 : 
-              title == "Friends" ? 200 : 
-              title == "Settings" ? 300 : 
-              title == "QR Code" ? 400 : 500)),
-    ).slideX(
-      begin: -0.2,
-      end: 0,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutQuint,
-    ).fadeIn(
-      duration: const Duration(milliseconds: 400),
     );
   }
-} 
+}

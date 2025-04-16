@@ -212,6 +212,11 @@ class MainActivity : FlutterActivity() {
     ) {
         if (!isCallServiceRunning) return
         
+        // Log the call ended flag for debugging
+        if (isCallEnded == true) {
+            Log.d(TAG, "Call ended by remote user. Updating service with callerName: $callerName")
+        }
+        
         // Update service with new call information
         val serviceIntent = Intent(this, ForegroundCallService::class.java).apply {
             action = ForegroundCallService.ACTION_UPDATE_CALL_INFO
@@ -234,11 +239,30 @@ class MainActivity : FlutterActivity() {
             
             if (isCallEnded != null) {
                 putExtra(ForegroundCallService.EXTRA_CALL_ENDED, isCallEnded)
+                
+                // For call ended events, make sure we include all necessary information
+                if (isCallEnded) {
+                    // If we don't have caller name, use existing name from service
+                    if (callerName == null) {
+                        putExtra(ForegroundCallService.EXTRA_CALLER_NAME, "Unknown")
+                    }
+                }
             }
         }
         
         // Update service
-        startService(serviceIntent)
+        try {
+            startService(serviceIntent)
+            
+            // If call ended, mark service as stopped after a delay
+            if (isCallEnded == true) {
+                handler.postDelayed({
+                    isCallServiceRunning = false
+                }, 3000)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating call attributes: ${e.message}")
+        }
     }
     
     private fun formatDuration(durationSeconds: Int): String {
@@ -257,4 +281,4 @@ class MainActivity : FlutterActivity() {
         }
         wakeLock = null
     }
-} 
+}

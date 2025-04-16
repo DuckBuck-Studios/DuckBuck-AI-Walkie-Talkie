@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart'; 
-import 'package:cached_network_image/cached_network_image.dart'; 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';  
 import '../../providers/friend_provider.dart'; 
 import '../../providers/call_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/auth_provider.dart' as auth;
 import '../Call/call_screen.dart';
+import '../Authentication/welcome_screen.dart';
 import 'main_button.dart';
 import 'profile_screen.dart';
 import 'friend_screen.dart';
@@ -25,7 +27,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   bool _isLoading = true;
   late PageController _pageController;
   int _currentPage = 0;
-  String? _lastInteractedUserId;
   Map<String, dynamic>? _selectedFriend;
   final QRCodeScreen _qrCodeScreen = QRCodeScreen();
   bool _isUserMuted = false;
@@ -37,11 +38,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late AnimationController _pulseAnimationController;
   bool _isTogglingMute = false;
   bool _isInitialized = false;
+  // Cache the NavigationCard for access to menu options
+  late final NavigationCard _navigationCard;
+  // Track if we've loaded friends data
+  bool _hasFriends = false;
 
   @override
   void initState() {
     super.initState();
     debugPrint('HomeScreen: Initializing');
+    
+    // Initialize animation controllers
     _muteAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -52,111 +59,85 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
     _pulseAnimationController.repeat(reverse: true);
     
-    // Initialize with a dummy controller first
-    // We'll create the real one after we have determined the initial page
-    _pageController = PageController();
+    // Create cached navigation card
+    _navigationCard = NavigationCard(
+      onNavigateToProfile: _navigateToProfile,
+      onNavigateToFriends: _navigateToFriends,
+      onNavigateToSettings: _navigateToSettings,
+      onShowQRCode: (ctx) {
+        HapticFeedback.selectionClick();
+        _qrCodeScreen.showQRCode(ctx);
+      },
+    );
     
-    // Initialize in a single step and listen for call invitations
-    _initialize();
+    // Do synchronous initialization right away to prevent flash
+    _initializeSync();
+    
+    // Then do async initialization
+    _initializeAsync();
   }
   
-  Future<void> _initialize() async {
-    try {
-      // Load last interacted user ID from shared preferences
-      await _loadLastInteractedUser();
+  // Do synchronous initialization first to prevent UI flash
+  void _initializeSync() {
+    final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+    final friends = friendProvider.friends;
+    
+    _hasFriends = friends.isNotEmpty;
+    
+    if (_hasFriends) {
+      // Set the first friend as selected immediately
+      _selectedFriend = friends[0];
+      _currentPage = 1; // Start at index 1 (first friend) since index 0 is NavigationCard
       
-      // Initialize FriendProvider only once
+      // Initialize with correct initial page
+      _pageController = PageController(initialPage: 1, keepPage: true);
+    } else {
+      // No friends yet, just initialize controller
+      _pageController = PageController(keepPage: true);
+    }
+  }
+  
+  // Continue with async initialization afterwards
+  Future<void> _initializeAsync() async {
+    try {
+      // Initialize FriendProvider
       final friendProvider = Provider.of<FriendProvider>(context, listen: false);
+      
+      // Only initialize if not already initialized
       if (!friendProvider.isInitialized) {
         await friendProvider.initialize();
+        
+        // Update friends status after initialization
+        if (mounted) {
+          setState(() {
+            _hasFriends = friendProvider.friends.isNotEmpty;
+            if (_hasFriends && _selectedFriend == null) {
+              _selectedFriend = friendProvider.friends[0];
+            }
+          });
+        }
       }
       
-      // Listen for call invitations
+      // Set up call invitation listener
       _listenForCallInvitations();
       
-      // Determine initial page based on friends list and last interacted user
-      await _determineInitialPage();
+      // Set up mute status listener for the selected friend
+      if (_selectedFriend != null) {
+        _setupMuteStatusListener();
+      }
       
-      // Mark as initialized to prevent double animations
-      setState(() {
-        _isInitialized = true;
-        _isLoading = false;
-      });
+      // Mark initialization as complete
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('HomeScreen: Error during initialization: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-  
-  Future<void> _loadLastInteractedUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _lastInteractedUserId = prefs.getString('last_interacted_user');
-      debugPrint('HomeScreen: Loaded last interacted user: $_lastInteractedUserId');
-    } catch (e) {
-      debugPrint('HomeScreen: Error loading last interacted user: $e');
-    }
-  }
-  
-  Future<void> _saveLastInteractedUser(String userId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_interacted_user', userId);
-      _lastInteractedUserId = userId;
-      debugPrint('HomeScreen: Saved last interacted user: $userId');
-    } catch (e) {
-      debugPrint('HomeScreen: Error saving last interacted user: $e');
-    }
-  }
-  
-  Future<void> _determineInitialPage() async {
-    if (!mounted) return;
-    
-    final friendProvider = Provider.of<FriendProvider>(context, listen: false);
-    final friends = friendProvider.friends;
-    
-    int initialPage = 0;
-    
-    // Default to navigation card (page 0) if no friends
-    if (friends.isEmpty) {
-      _currentPage = 0;
-      _pageController = PageController(initialPage: 0);
-      return;
-    }
-    
-    // If we have a last interacted user, find them in the friends list
-    if (_lastInteractedUserId != null) {
-      for (int i = 0; i < friends.length; i++) {
-        if (friends[i]['id'] == _lastInteractedUserId) {
-          // Add 1 because page 0 is navigation card
-          initialPage = i + 1;
-          _selectedFriend = friends[i];
-          break;
-        }
-      }
-    }
-    
-    // If no last interacted user or not found, default to first friend
-    if (initialPage == 0 && friends.isNotEmpty) {
-      initialPage = 1; // First friend
-      _selectedFriend = friends[0];
-    }
-
-    // Create a new PageController with the determined initial page
-    _pageController = PageController(initialPage: initialPage);
-    
-    // Update current page state
-    if (mounted) {
-      setState(() {
-        _currentPage = initialPage;
-      });
-    }
-    
-    // Set up mute status listener for the selected friend
-    if (_selectedFriend != null) {
-      _setupMuteStatusListener();
     }
   }
 
@@ -228,11 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _selectedFriend = friend;
     });
     
-    // Save this as the last interacted user
-    if (friend['id'] != null) {
-      _saveLastInteractedUser(friend['id']);
-    }
-    
+    // Set up mute status listener for the selected friend
     _setupMuteStatusListener();
   }
 
@@ -247,11 +224,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
       return;
-    }
-
-    // Save this as the last interacted user when starting a call
-    if (_selectedFriend!['id'] != null) {
-      _saveLastInteractedUser(_selectedFriend!['id']);
     }
 
     _showOverlay();
@@ -377,12 +349,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final callProvider = Provider.of<CallProvider>(context, listen: false);
     final callData = callProvider.currentCall;
     
-    // Save this as the last interacted user when receiving a call
-    final senderUid = callData['sender_uid'];
-    if (senderUid != null) {
-      _saveLastInteractedUser(senderUid);
-    }
-    
     Navigator.of(context).push(CallScreenRoute(callData: callData));
   }
 
@@ -397,6 +363,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       backgroundColor: Colors.black,
       body: Consumer<FriendProvider>(
         builder: (context, friendProvider, child) {
+          // Show loading indicator only for initial load
           if (_isLoading) {
             return const Center(
               child: CircularProgressIndicator(
@@ -406,28 +373,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           }
 
           final friends = friendProvider.friends;
+          final hasFriends = friends.isNotEmpty;
           
-          // If no friends, just show the NavigationCard
-          if (friends.isEmpty) {
-            return NavigationCard(
-              onNavigateToProfile: _navigateToProfile,
-              onNavigateToFriends: _navigateToFriends,
-              onNavigateToSettings: _navigateToSettings,
-              onShowQRCode: (ctx) {
-                HapticFeedback.selectionClick();
-                _qrCodeScreen.showQRCode(ctx);
-              },
+          // Update _hasFriends if it's changed
+          if (hasFriends != _hasFriends) {
+            _hasFriends = hasFriends;
+            if (hasFriends && _selectedFriend == null) {
+              _selectedFriend = friends[0];
+            }
+          }
+          
+          // If no friends, show the NavigationCard with add button
+          if (!hasFriends) {
+            return Stack(
+              children: [
+                _navigationCard,
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 10,
+                  right: 10,
+                  child: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.white, size: 32),
+                    onPressed: _navigateToFriends,
+                    tooltip: 'Add Friends',
+                  ),
+                ),
+              ],
             );
           }
 
           return Stack(
             fit: StackFit.expand,
             children: [
-              // PageView for swiping through friends
+              // PageView for swiping through friends (with NavigationCard)
               PageView.builder(
                 controller: _pageController,
                 onPageChanged: (index) {
-                  // Only perform haptic feedback and extra operations if fully initialized
+                  // Only perform haptic feedback if fully initialized
                   if (_isInitialized) {
                     HapticFeedback.selectionClick();
                   }
@@ -436,14 +417,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     _currentPage = index;
                     _selectedFriend = index == 0 ? null : friends[index - 1];
                   });
-                  
-                  // Only update last interacted user if fully initialized (not during startup)
-                  if (_isInitialized && index > 0 && friends.isNotEmpty) {
-                    final friendId = friends[index - 1]['id'];
-                    if (friendId != null) {
-                      _saveLastInteractedUser(friendId);
-                    }
-                  }
                   
                   // Check mute status when changing pages
                   if (_selectedFriend != null) {
@@ -454,19 +427,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 itemCount: friends.length + 1,
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    return NavigationCard(
-                      onNavigateToProfile: _navigateToProfile,
-                      onNavigateToFriends: _navigateToFriends,
-                      onNavigateToSettings: _navigateToSettings,
-                      onShowQRCode: (ctx) {
-                        HapticFeedback.selectionClick();
-                        _qrCodeScreen.showQRCode(ctx);
-                      },
-                    );
+                    return _navigationCard;
                   }
                   
-                  final friendIndex = index - 1;
-                  final friend = friends[friendIndex];
+                  final friend = friends[index - 1];
                   
                   return GestureDetector(
                     onTap: () => _onFriendSelected(friend),
@@ -500,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
 
               // Mute Button - Only show if not on navigation card
-              if (_currentPage > 0)
+              if (_currentPage > 0 && _selectedFriend != null)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 10,
                   left: 0,
@@ -599,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   ),
                 ),
 
-              // Name and Status Container - Use duration based on initialization state
+              // Name and Status Container
               AnimatedPositioned(
                 duration: Duration(milliseconds: _isInitialized ? 500 : 0),
                 curve: Curves.easeOutQuint,
@@ -633,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 ),
               ),
 
-              // Curved Bottom Bar with animation - Use duration based on initialization state
+              // Curved Bottom Bar with animation
               if (_currentPage > 0 && friends.isNotEmpty && friends[_currentPage - 1]['id'] != null)
                 AnimatedPositioned(
                   duration: Duration(milliseconds: _isInitialized ? 500 : 0),
@@ -654,5 +618,181 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         },
       ),
     );
+  }
+  
+  void _showNavigationMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD4A76A).withOpacity(0.3),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 5,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+                // Use the same navigation options as in NavigationCard
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
+                      _buildMenuOption(
+                        title: "Profile",
+                        icon: Icons.person,
+                        onTap: _navigateToProfile,
+                      ),
+                      _buildMenuOption(
+                        title: "Friends",
+                        icon: Icons.people,
+                        onTap: _navigateToFriends,
+                      ),
+                      _buildMenuOption(
+                        title: "Settings",
+                        icon: Icons.settings,
+                        onTap: _navigateToSettings,
+                      ),
+                      _buildMenuOption(
+                        title: "QR Code",
+                        icon: Icons.qr_code,
+                        onTap: () {
+                          Navigator.pop(context);
+                          HapticFeedback.selectionClick();
+                          _qrCodeScreen.showQRCode(context);
+                        },
+                      ),
+                      _buildMenuOption(
+                        title: "Sign Out",
+                        icon: Icons.logout,
+                        onTap: () {
+                          Navigator.pop(context);
+                          _signOut(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildMenuOption({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(0.1),
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white,
+        ),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.arrow_forward_ios,
+        color: Colors.white54,
+        size: 16,
+      ),
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
+    );
+  }
+  
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4A76A)),
+          ),
+        ),
+      );
+
+      // Get the providers
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final authProvider = Provider.of<auth.AuthProvider>(context, listen: false);
+      
+      // Set user as offline and clear FCM token
+      await userProvider.logout();
+      
+      // Sign out from Firebase Auth
+      await authProvider.signOut();
+
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Force navigation to welcome screen with logged out flag
+      if (context.mounted) {
+        // Clear the entire navigation stack and push welcome screen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const WelcomeScreen(loggedOut: true)),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if it's still showing
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error signing out: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
