@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart'; 
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
@@ -6,6 +8,7 @@ import '../../services/agora_service.dart';
 import 'package:provider/provider.dart';
 import '../../providers/call_provider.dart';
 import '../Call/call_screen.dart';
+import 'package:vibration/vibration.dart'; // Base vibration package
 
 class CurvedBottomBar extends StatefulWidget {
   final VoidCallback? onButtonPressed;
@@ -38,7 +41,11 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
   bool isPressed = false;
   Timer? _timer;
   final ValueNotifier<String> _timerText = ValueNotifier<String>("00:00");
-
+  StreamSubscription? _userJoinedSubscription;
+  StreamSubscription? _userOfflineSubscription;
+  StreamSubscription? _joinChannelSubscription;
+  StreamSubscription? _leaveChannelSubscription;
+  
   @override
   void initState() {
     super.initState();
@@ -53,7 +60,124 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
     _animationController.dispose();
     _timer?.cancel();
     _timerText.dispose();
+    _unsubscribeFromAgoraEvents();
     super.dispose();
+  }
+
+  // Subscribe to Agora events to detect remote user joining/leaving
+  void _subscribeToAgoraEvents(AgoraService agoraService) {
+    _unsubscribeFromAgoraEvents(); // Ensure we're not duplicating subscriptions
+    
+    // Listen for remote user joined event
+    _userJoinedSubscription = agoraService.onUserJoined.listen((event) {
+      debugPrint('MAIN_BUTTON: Remote user joined: ${event.uid}');
+      // Play success vibration when remote user joins
+      _playSuccessVibration();
+    });
+    
+    // Listen for remote user left event
+    _userOfflineSubscription = agoraService.onUserOffline.listen((event) {
+      debugPrint('MAIN_BUTTON: Remote user left: ${event.uid}');
+      // Play error vibration when remote user leaves
+      _playErrorVibration();
+    });
+    
+    // Listen for local user joined channel event
+    _joinChannelSubscription = agoraService.onJoinChannelSuccess.listen((event) {
+      debugPrint('MAIN_BUTTON: Successfully joined channel: ${event.channelId}');
+      // Play vibration when joining channel successfully
+      _playJoinChannelVibration();
+    });
+    
+    // Listen for leave channel event
+    _leaveChannelSubscription = agoraService.onLeaveChannel.listen((event) {
+      debugPrint('MAIN_BUTTON: Left channel: ${event.channelId}');
+      // Play error vibration when leaving channel
+      _playErrorVibration();
+    });
+  }
+  
+  // Unsubscribe from Agora events
+  void _unsubscribeFromAgoraEvents() {
+    _userJoinedSubscription?.cancel();
+    _userOfflineSubscription?.cancel();
+    _joinChannelSubscription?.cancel();
+    _leaveChannelSubscription?.cancel();
+    
+    _userJoinedSubscription = null;
+    _userOfflineSubscription = null;
+    _joinChannelSubscription = null;
+    _leaveChannelSubscription = null;
+  }
+
+  // Simple, reliable vibration
+  void _vibrate({required int duration, int amplitude = 255}) {
+    if (Platform.isIOS) {
+      HapticFeedback.heavyImpact();
+    } else {
+      Vibration.vibrate(duration: duration, amplitude: amplitude);
+    }
+  }
+
+  // Vibration when joining channel - medium intensity, medium duration
+  void _playJoinChannelVibration() async {
+    if (Platform.isIOS) {
+      // For iOS, use a pattern of haptic impacts
+      HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(milliseconds: 200));
+      HapticFeedback.mediumImpact();
+    } else {
+      // For Android, use the vibration API
+      bool? hasAmplitudeControl = await Vibration.hasAmplitudeControl();
+      if (hasAmplitudeControl == true) {
+        Vibration.vibrate(
+          pattern: [0, 150, 100, 150],
+          intensities: [0, 200, 0, 200],
+        );
+      } else {
+        Vibration.vibrate(pattern: [0, 150, 100, 150]);
+      }
+    }
+  }
+
+  // Success vibration - a short double-pulse
+  void _playSuccessVibration() async {
+    if (Platform.isIOS) {
+      HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(milliseconds: 150));
+      HapticFeedback.heavyImpact();
+    } else {
+      bool? hasAmplitudeControl = await Vibration.hasAmplitudeControl();
+      if (hasAmplitudeControl == true) {
+        Vibration.vibrate(
+          pattern: [0, 100, 50, 100],
+          intensities: [0, 255, 0, 255],
+        );
+      } else {
+        Vibration.vibrate(pattern: [0, 100, 50, 100]);
+      }
+    }
+  }
+  
+  // Error vibration - three quick pulses
+  void _playErrorVibration() async {
+    if (Platform.isIOS) {
+      HapticFeedback.heavyImpact();
+      await Future.delayed(const Duration(milliseconds: 100));
+      HapticFeedback.heavyImpact();
+      await Future.delayed(const Duration(milliseconds: 100));
+      HapticFeedback.heavyImpact();
+    } else {
+      bool? hasAmplitudeControl = await Vibration.hasAmplitudeControl();
+      if (hasAmplitudeControl == true) {
+        Vibration.vibrate(
+          pattern: [0, 80, 40, 80, 40, 80],
+          intensities: [0, 255, 0, 255, 0, 255],
+        );
+      } else {
+        Vibration.vibrate(pattern: [0, 80, 40, 80, 40, 80]);
+      }
+    }
   }
 
   void _showCallScreen() async {
@@ -63,11 +187,18 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
     
     if (widget.friendUid.isEmpty) {
       debugPrint('MAIN_BUTTON ERROR: Friend UID is empty, cannot initiate call');
+      _playErrorVibration();
       return;
     }
     
+    // Initial vibration when long-pressing the button
+    _vibrate(duration: 300);
+    
     debugPrint('MAIN_BUTTON: Creating AgoraService instance');
     final agoraService = AgoraService();
+    
+    // Subscribe to Agora events before joining channel
+    _subscribeToAgoraEvents(agoraService);
     
     debugPrint('MAIN_BUTTON: About to call fetchAndJoinChannel with receiverUid: ${widget.friendUid}');
     
@@ -79,6 +210,8 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
     
     if (!success) {
       debugPrint('MAIN_BUTTON ERROR: Failed to join channel for friend: ${widget.friendUid}');
+      _playErrorVibration(); // Play error vibration
+      _unsubscribeFromAgoraEvents(); // Clean up subscriptions
       return;
     }
     
@@ -107,6 +240,7 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
       ).then((_) {
         // When returning from call screen, ensure call is ended
         callProvider.endCall();
+        _unsubscribeFromAgoraEvents(); // Clean up subscriptions
       });
     }
   }
@@ -148,6 +282,10 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
         // Check if there's an active call
         final bool isInCall = callProvider.callState == CallState.connected || 
                               callProvider.callState == CallState.connecting;
+
+        // If call state changes and is now connected, stop vibration
+        if (callProvider.callState == CallState.connected) { 
+        }
 
     return SizedBox(
       height: bottomBarHeight,
@@ -290,4 +428,4 @@ class _CurvedBottomBarState extends State<CurvedBottomBar> with SingleTickerProv
       },
     );
   }
-} 
+}
