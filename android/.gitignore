@@ -1,36 +1,10 @@
-# Gradle files
-.gradle/
 gradle-wrapper.jar
+/.gradle
+/captures/
 /gradlew
 /gradlew.bat
 /local.properties
-/.gradle
-/captures/
-.cxx/
-
-# Android Studio generated
-*.iml
-.idea/
-/build/
-/app/build/
-/app/release/
-/app/debug/
-/app/profile/
-
-# Generated files
 GeneratedPluginRegistrant.java
-/local.properties
-
-# Keystore files
-/key.properties
-**/*.keystore
-**/*.jks
-
-# Google Services
-/app/google-services.json
-
-# Native build
-.externalNativeBuild/
 .cxx/
 
 # Remember to never publicly share your keystore.
