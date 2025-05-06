@@ -36,7 +36,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.duckbuck.app.duckbuck"
+        applicationId = "com.duckbuck.app"
         minSdk = 27
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
