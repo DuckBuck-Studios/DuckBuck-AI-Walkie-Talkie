@@ -80,24 +80,44 @@ class UserRepository {
   Future<(UserModel, bool)> signInWithGoogle() async {
     final credential = await authService.signInWithGoogle();
     final user = UserModel.fromFirebaseUser(credential.user!);
-
-    // Check if user exists in Firestore and create if needed
-    // Returns true if this is a new user
-    final isNewUser = await _createOrUpdateUserData(user);
-
-    return (user, isNewUser);
+    
+    // Check if this is actually a new sign-in to Firebase Auth
+    final isNewToFirebase = credential.additionalUserInfo?.isNewUser ?? false;
+    print('🔍 USER REPO: Firebase reports isNewUser: $isNewToFirebase for Google sign-in');
+    
+    // If Firebase says this is a new user, definitely treat as new
+    if (isNewToFirebase) {
+      print('🔍 USER REPO: Creating new user document for Google user as reported by Firebase');
+      await _createUserData(user);
+      return (user, true);
+    }
+    
+    // Otherwise, check if user exists in Firestore and create if needed
+    final isNewToFirestore = await _createOrUpdateUserData(user);
+    
+    return (user, isNewToFirestore);
   }
 
   /// Sign in with Apple
   Future<(UserModel, bool)> signInWithApple() async {
     final credential = await authService.signInWithApple();
     final user = UserModel.fromFirebaseUser(credential.user!);
-
-    // Check if user exists in Firestore and create if needed
-    // Returns true if this is a new user
-    final isNewUser = await _createOrUpdateUserData(user);
-
-    return (user, isNewUser);
+    
+    // Check if this is actually a new sign-in to Firebase Auth
+    final isNewToFirebase = credential.additionalUserInfo?.isNewUser ?? false;
+    print('🔍 USER REPO: Firebase reports isNewUser: $isNewToFirebase for Apple sign-in');
+    
+    // If Firebase says this is a new user, definitely treat as new
+    if (isNewToFirebase) {
+      print('🔍 USER REPO: Creating new user document for Apple user as reported by Firebase');
+      await _createUserData(user);
+      return (user, true);
+    }
+    
+    // Otherwise, check if user exists in Firestore and create if needed
+    final isNewToFirestore = await _createOrUpdateUserData(user);
+    
+    return (user, isNewToFirestore);
   }
 
   /// Initiate phone auth verification
@@ -205,11 +225,18 @@ class UserRepository {
   /// Create user record in Firestore
   Future<void> _createUserData(UserModel user) async {
     try {
+      // Extract the provider ID from user metadata if available
+      final providerId = user.metadata?['providerId'] as String? ?? 'unknown';
+      
       await _firestore.collection(_userCollection).doc(user.uid).set({
         ...user.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'isNewUser': true, // Explicitly mark as a new user
+        'authProvider': providerId, // Store the auth provider used for signup
       });
+      
+      print('🔍 USER REPO: Created new user with auth provider: $providerId');
     } catch (e) {
       throw Exception('Failed to create user data: ${e.toString()}');
     }
@@ -275,21 +302,42 @@ class UserRepository {
     }
   }
 
-  /// Check if a user is new (doesn't exist in Firestore)
+  /// Check if a user is new (doesn't exist in Firestore or has isNewUser flag)
   Future<bool> checkIfUserIsNew(String uid) async {
     try {
       print('🔍 USER REPO: Checking if user $uid exists in Firestore');
       final doc = await _firestore.collection(_userCollection).doc(uid).get();
 
-      final exists = doc.exists;
-      print('🔍 USER REPO: User document exists in Firestore? $exists');
+      // If document doesn't exist, user is definitely new
+      if (!doc.exists) {
+        print('🔍 USER REPO: User document does NOT exist in Firestore - user is new');
+        return true;
+      }
 
-      // If document doesn't exist, user is new
-      return !exists;
+      // If document exists but has isNewUser flag set to true, also consider as new
+      final data = doc.data();
+      final isMarkedAsNew = data != null && data['isNewUser'] == true;
+      
+      print('🔍 USER REPO: User document exists, isNewUser flag: $isMarkedAsNew');
+      return isMarkedAsNew;
     } catch (e) {
       print('❌ USER REPO ERROR: ${e.toString()}');
       // In case of error, default to treating the user as new to ensure profile completion
       return true;
+    }
+  }
+
+  /// Mark user as no longer new (completes onboarding)
+  Future<void> markUserOnboardingComplete(String uid) async {
+    try {
+      print('🔍 USER REPO: Marking user $uid onboarding as complete');
+      await _firestore.collection(_userCollection).doc(uid).update({
+        'isNewUser': FieldValue.delete(), // Remove the isNewUser field entirely
+        'onboardingCompletedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('❌ USER REPO ERROR: ${e.toString()}');
+      throw Exception('Failed to mark user onboarding as complete: ${e.toString()}');
     }
   }
 }

@@ -141,6 +141,14 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       return;
     }
 
+    // Validate photo (now required)
+    if (_selectedImage == null) {
+      setState(() {
+        _errorMessage = 'Please select a profile photo';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -166,14 +174,15 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         photoURL: photoURL,
       );
 
+      // IMPORTANT: Mark user onboarding as complete (removes isNewUser flag)
+      await authProvider.markUserOnboardingComplete();
+      debugPrint('✅ User onboarding marked as complete');
+
       // Track analytics event
       _analyticsService.logEvent(
         name: 'profile_completed',
         parameters: {
-          'has_photo':
-              _selectedImage != null
-                  ? 'yes'
-                  : 'no', // Convert boolean to string
+          'has_photo': 'yes', // Always yes now since photo is required
           'display_name_length': displayName.length,
         },
       );
@@ -233,7 +242,9 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       child: Scaffold(
         backgroundColor: AppColors.backgroundBlack,
         appBar: AppBar(
-          title: Text(_currentStep == 0 ? 'Your Name' : 'Profile Photo'),
+          title: Text(_currentStep == 0 ? 'Your Name' : 'Profile Photo')
+                 .animate(onPlay: (controller) => controller.repeat())
+                 .shimmer(duration: 3000.ms, color: Colors.white.withOpacity(0.9)),
           backgroundColor: AppColors.surfaceBlack,
           automaticallyImplyLeading:
               _currentStep > 0, // Show back button only on photo step
@@ -247,12 +258,33 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
           elevation: 0,
         ),
         body: SafeArea(
-          child:
-              _isLoading
-                  ? _buildLoadingState()
-                  : _currentStep == 0
-                  ? _buildNameStep()
-                  : _buildPhotoStep(),
+          child: _isLoading
+              ? _buildLoadingState()
+              : AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  child: _currentStep == 0
+                      ? _buildNameStep()
+                      : _buildPhotoStep(),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: _currentStep == 0 
+                              ? const Offset(-1, 0) 
+                              : const Offset(1, 0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                ),
         ),
       ),
     );
@@ -292,14 +324,17 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
-            ).animate().fadeIn(duration: 400.ms),
+            ).animate(onPlay: (controller) => controller.repeat())
+              .shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.8)),
 
             const SizedBox(height: 12),
 
             Text(
               'This will be displayed to other users in the app.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
-            ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+            ).animate().fadeIn(duration: 500.ms, delay: 200.ms)
+              .then(delay: 200.ms) // pause
+              .slideY(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
 
             const SizedBox(height: 40),
 
@@ -335,14 +370,16 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (_) => _nextStep(),
               autofocus: true,
-            ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
+            ).animate().fadeIn(duration: 500.ms, delay: 300.ms)
+              .then(delay: 200.ms)
+              .shimmer(duration: 800.ms, color: AppColors.accentBlue.withOpacity(0.5)),
 
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               Text(
                 _errorMessage!,
                 style: TextStyle(color: Colors.red[300], fontSize: 14),
-              ),
+              ).animate().shake(duration: 300.ms),
             ],
 
             const Spacer(),
@@ -366,7 +403,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+            ).animate().fadeIn(duration: 400.ms, delay: 400.ms)
+              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1), duration: 500.ms),
           ],
         ),
       ),
@@ -392,7 +430,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
-            ).animate().fadeIn(duration: 400.ms),
+            ).animate(onPlay: (controller) => controller.repeat())
+              .shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.8)),
 
             const SizedBox(height: 12),
 
@@ -400,15 +439,28 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
               'Choose a photo to personalize your profile',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
               textAlign: TextAlign.center,
-            ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+            ).animate().fadeIn(duration: 500.ms, delay: 200.ms)
+              .then(delay: 200.ms) // pause
+              .slideY(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
 
             const SizedBox(height: 40),
 
             // Profile image preview
-            _buildProfileImagePreview().animate().fadeIn(
-              duration: 400.ms,
-              delay: 200.ms,
-            ),
+            _buildProfileImagePreview()
+              .animate()
+              .scale(
+                begin: const Offset(0.8, 0.8),
+                end: const Offset(1, 1), 
+                duration: 800.ms,
+                curve: Curves.elasticOut
+              )
+              .rotate(duration: 500.ms, begin: -0.1, end: 0)
+              .then(delay: 200.ms)
+              .shimmer(
+                duration: 1500.ms, 
+                color: AppColors.accentBlue.withOpacity(0.8),
+                size: _selectedImage == null ? 5 : 0, // only shimmer if no image selected
+              ),
 
             const SizedBox(height: 40),
 
@@ -432,7 +484,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(duration: 400.ms, delay: 300.ms)
+                  .slideX(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.easeOut),
 
                 const SizedBox(width: 16),
 
@@ -452,69 +505,61 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(duration: 400.ms, delay: 400.ms)
+                  .slideX(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOut),
               ],
-            ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+            ),
 
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
               Text(
                 _errorMessage!,
                 style: TextStyle(color: Colors.red[300], fontSize: 14),
-              ),
+              ).animate().shake(duration: 300.ms),
             ],
 
-            // Instead of using Spacer() which can cause overflow,
-            // use a fixed height SizedBox with enough space
+            // Info text explaining that photo is required
+            if (_selectedImage == null) ...[
+              const SizedBox(height: 24),
+              Text(
+                'A profile photo is required to complete setup',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                textAlign: TextAlign.center,
+              ).animate(onPlay: (controller) => controller.repeat())
+                .fadeIn(duration: 400.ms)
+                .then(delay: 1000.ms) 
+            ],
+
             const SizedBox(height: 40),
 
-            // Action buttons
-            Column(
-              children: [
-                // Continue button
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _selectedImage != null ? _completeProfile : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accentBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                      disabledBackgroundColor: AppColors.accentBlue.withOpacity(
-                        0.5,
-                      ),
-                    ),
-                    child: const Text(
-                      'Complete Profile',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+            // Action button - removed skip button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _selectedImage != null ? _completeProfile : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentBlue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                  disabledBackgroundColor: AppColors.accentBlue.withOpacity(0.5),
+                ),
+                child: const Text(
+                  'Complete Profile',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
+            ).animate().fadeIn(duration: 400.ms, delay: 500.ms)
+              .slideY(begin: 0.2, end: 0, duration: 500.ms),
 
-                const SizedBox(height: 16),
-
-                // Skip button
-                TextButton(
-                  onPressed: _skipPhoto,
-                  child: Text(
-                    'Skip for now',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                // Add some padding at the bottom to ensure there's space on all screens
-                const SizedBox(height: 20),
-              ],
-            ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
+            // Add some padding at the bottom to ensure there's space on all screens
+            const SizedBox(height: 24),
           ],
         ),
       ),

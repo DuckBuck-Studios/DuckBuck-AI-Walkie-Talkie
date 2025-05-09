@@ -33,6 +33,7 @@ class UserModel {
       metadata: {
         'creationTime': user.metadata.creationTime?.millisecondsSinceEpoch,
         'lastSignInTime': user.metadata.lastSignInTime?.millisecondsSinceEpoch,
+        'providerId': user.providerData.isNotEmpty ? user.providerData.first.providerId : null,
       },
     );
   }

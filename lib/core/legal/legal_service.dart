@@ -5,13 +5,19 @@ import 'package:flutter/services.dart';
 class LegalSection {
   final String title;
   final String content;
+  final String? animationKey; // Optional animation key for custom animations
 
-  LegalSection({required this.title, required this.content});
+  LegalSection({
+    required this.title, 
+    required this.content, 
+    this.animationKey,
+  });
 
   factory LegalSection.fromJson(Map<String, dynamic> json) {
     return LegalSection(
       title: json['title'] as String,
       content: json['content'] as String,
+      animationKey: json['animationKey'] as String?,
     );
   }
 }
@@ -22,12 +28,14 @@ class LegalDocument {
   final String lastUpdated;
   final String title;
   final List<LegalSection> sections;
+  final String? animationType; // Animation type preference for this document
 
   LegalDocument({
     required this.version,
     required this.lastUpdated,
     required this.title,
     required this.sections,
+    this.animationType,
   });
 
   factory LegalDocument.fromJson(Map<String, dynamic> json) {
@@ -35,6 +43,7 @@ class LegalDocument {
       version: json['version'] as String,
       lastUpdated: json['lastUpdated'] as String,
       title: json['title'] as String,
+      animationType: json['animationType'] as String?,
       sections:
           (json['sections'] as List)
               .map(
@@ -60,6 +69,9 @@ class LegalService {
   }
 
   Future<LegalDocument> _loadLegalDocument(String path) async {
+    // Add artificial delay in debug mode to show animations
+    await Future.delayed(const Duration(milliseconds: 800));
+    
     final jsonString = await rootBundle.loadString(path);
     final Map<String, dynamic> jsonMap = json.decode(jsonString);
     return LegalDocument.fromJson(jsonMap);

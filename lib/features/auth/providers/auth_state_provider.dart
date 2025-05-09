@@ -353,4 +353,20 @@ class AuthStateProvider extends ChangeNotifier {
   Future<bool> checkIfUserIsNew(String uid) {
     return _userRepository.checkIfUserIsNew(uid);
   }
+
+  /// Mark user's onboarding as complete (removes isNewUser flag)
+  Future<void> markUserOnboardingComplete() async {
+    if (_currentUser == null) {
+      throw Exception('No user is currently signed in');
+    }
+    
+    try {
+      await _userRepository.markUserOnboardingComplete(_currentUser!.uid);
+      debugPrint('🔐 AUTH PROVIDER: User onboarding marked as complete');
+    } catch (e) {
+      _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER ERROR: Failed to mark onboarding complete: $e');
+      rethrow;
+    }
+  }
 }

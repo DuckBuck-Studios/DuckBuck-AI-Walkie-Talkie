@@ -87,6 +87,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   /// Handle Google authentication
   Future<void> _handleGoogleAuth() async {
     debugPrint('🔍 SIGNUP SCREEN: Google auth button pressed');
+    // Don't force profile completion - properly check if user is new
     await _handleAuthentication(AuthMethod.google);
   }
 
@@ -139,9 +140,10 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     String? password,
     String? phoneNumber,
     bool requireEmailVerification = false,
+    bool forceProfileCompletion = false, // New parameter to force profile completion
   }) async {
     debugPrint(
-      '🔍 SIGNUP SCREEN: Starting authentication process for method: $method',
+      '🔍 SIGNUP SCREEN: Starting authentication process for method: $method, forceProfileCompletion: $forceProfileCompletion',
     );
 
     setState(() {
@@ -177,8 +179,15 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
             // Track signup/login event with analytics
             _analyticsService.logLogin(loginMethod: 'google');
 
-            // Proceed to profile completion if needed
-            _showProfileCompletionIfNeeded(user, isNewUser);
+            // For Google authentication, we can force the profile completion if requested
+            // This is useful for testing or when we want to ensure a user completes their profile
+            if (forceProfileCompletion) {
+              debugPrint('🔍 SIGNUP SCREEN: Forcing profile completion for Google user');
+              _showProfileCompletionIfNeeded(user, true); // Force isNewUser to true
+            } else {
+              // Proceed to profile completion if needed
+              _showProfileCompletionIfNeeded(user, isNewUser);
+            }
           } catch (e) {
             debugPrint(
               '🔍 SIGNUP SCREEN: Google sign-in failed with error: $e',
@@ -334,10 +343,14 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     // Get user information
     final displayName = user.displayName;
     final photoURL = user.photoURL;
+    
+    // Log authentication method if available
+    final authProvider = user.metadata?['providerId'] as String? ?? 'unknown';
+    print('🔍 PROFILE CHECK: Auth provider: $authProvider');
 
     // Only use metadata to determine if new user when explicit isNewUser flag wasn't provided
     // THIS IS THE FIX: Don't override the explicit isNewUser flag from Firestore
-    if (!isNewUser && isNewUser == false && user.metadata != null) {
+    if (!isNewUser && user.metadata != null) {
       final creationTime = user.metadata?['creationTime'] as int?;
       final lastSignInTime = user.metadata?['lastSignInTime'] as int?;
 
@@ -365,11 +378,10 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     String reason = "";
 
     if (isNewUser) {
-      // For new users:
-      // 1. Show profile completion if they're completely new (even if they have name/photo from auth provider)
-      // 2. This gives them a chance to customize their profile on first registration
+      // For new users: ALWAYS show profile completion regardless of whether they have info from providers
+      // This ensures all new users go through the profile setup flow
       needsProfileCompletion = true;
-      reason = "New user registration";
+      reason = "New user registration - mandatory profile setup";
     } else {
       // For existing users:
       // Only show profile completion if essential information is missing
