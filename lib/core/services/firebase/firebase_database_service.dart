@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 /// Service for handling Firebase Firestore operations
 class FirebaseDatabaseService {
@@ -9,26 +10,28 @@ class FirebaseDatabaseService {
   FirebaseDatabaseService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? _configureFirestore();
 
-  /// Configure Firestore with custom settings
-  static FirebaseFirestore _configureFirestore() {
-    // Get the default Firebase app
+  /// Configure Firestore with custom settings and connect to "duckbuck" database
+  static FirebaseFirestore _configureFirestore() {    
+    // Access the Firebase app instance
     final app = Firebase.app();
-
-    // Create a FirebaseFirestoreSettings object with the custom database ID
+    
+    // Create FirebaseFirestoreSettings object with persistence enabled
     final settings = Settings(
-      // Do NOT specify databaseId here as it's not supported this way
       persistenceEnabled: true,
     );
 
-    // Get the Firestore instance and then configure it with settings
+    // Get Firestore instance with specific database ID
     final instance = FirebaseFirestore.instanceFor(
       app: app,
-      databaseId: 'duckbuck',
+      databaseId: 'duckbuck', // Connect to "duckbuck" database
     );
 
     // Apply the settings to the instance
     instance.settings = settings;
-
+    
+    // Log connection confirmation
+    debugPrint('🔥 FIREBASE: Connected to Firestore database: duckbuck');
+    
     return instance;
   }
 

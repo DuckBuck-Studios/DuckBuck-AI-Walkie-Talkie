@@ -10,30 +10,74 @@ import 'core/services/service_locator.dart';
 import 'features/auth/providers/auth_state_provider.dart';
 import 'core/services/firebase/firebase_app_check_service.dart'; 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    // Initialize Firebase with error handling
+    try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      debugPrint('Firebase initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to initialize Firebase: $e');
+      // Allow app to continue even if Firebase fails, with limited functionality
+    }
 
-  // Initialize Firebase App Check
-  final appCheckService = FirebaseAppCheckService();
-  await appCheckService.initialize();
+    // Initialize Firebase App Check with error handling
+    try {
+      final appCheckService = FirebaseAppCheckService();
+      await appCheckService.initialize();
+      debugPrint('Firebase App Check initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to initialize Firebase App Check: $e');
+      // App can still function without App Check, but with reduced security
+    }
 
-  // Initialize shared preferences
-  await PreferencesService.instance.init();
+    // Initialize shared preferences
+    try {
+      await PreferencesService.instance.init();
+      debugPrint('Preferences service initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to initialize Preferences: $e');
+      // Critical error - app depends on preferences
+      rethrow;
+    }
 
-  // Setup service locator
-  await setupServiceLocator();
+    // Setup service locator
+    try {
+      await setupServiceLocator();
+      debugPrint('Service locator initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to setup service locator: $e');
+      // Critical error - app depends on services
+      rethrow;
+    }
 
-  // Removed deep link service initialization
+    // Configure system UI overlay for consistent appearance
+    AppTheme.configureSystemUIOverlay();
 
-  // Configure system UI overlay for consistent appearance
-  AppTheme.configureSystemUIOverlay();
-
-  // Ensure authentication state is in sync
-  await _syncAuthState();
-
-  runApp(const MyApp());
+    // Ensure authentication state is in sync
+    try {
+      await _syncAuthState();
+      debugPrint('Auth state synchronized successfully');
+    } catch (e) {
+      debugPrint('Error syncing auth state: $e');
+      // Handle but continue execution
+    }
+    
+    runApp(const MyApp());
+  } catch (e) {
+    debugPrint('Critical error during app initialization: $e');
+    // Show some kind of error UI or gracefully exit
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Failed to initialize app: $e'),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Sync authentication state between Firebase and SharedPreferences

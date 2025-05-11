@@ -67,13 +67,13 @@ class AppTheme {
 
       // AppBar theme
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.primaryBlack,
+        backgroundColor: Colors.black,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,
-          systemNavigationBarColor: AppColors.primaryBlack,
+          systemNavigationBarColor: Colors.black,
           systemNavigationBarIconBrightness: Brightness.light,
         ),
       ),
@@ -81,8 +81,8 @@ class AppTheme {
       // Button themes
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accentBlue,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.accentBlue, // Green accent
+          foregroundColor: Colors.black, // Black text on green buttons
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -90,8 +90,8 @@ class AppTheme {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.textSecondary),
+          foregroundColor: AppColors.accentBlue, // Green text
+          side: const BorderSide(color: AppColors.accentBlue), // Green border
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -99,7 +99,7 @@ class AppTheme {
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.accentBlue,
+          foregroundColor: AppColors.accentBlue, // Green text
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -107,7 +107,7 @@ class AppTheme {
 
       // Card theme
       cardTheme: CardTheme(
-        color: AppColors.surfaceBlack,
+        color: Colors.black, // Pure black
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         clipBehavior: Clip.antiAlias,
@@ -116,22 +116,22 @@ class AppTheme {
       // Input decoration theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.whiteOpacity10,
+        fillColor: Colors.black, // Pure black background
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.accentBlue, width: 1), // Green border
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.accentBlue, width: 1), // Green border
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.accentBlue, width: 1),
+          borderSide: const BorderSide(color: AppColors.accentBlue, width: 2), // Thicker green border when focused
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -141,8 +141,8 @@ class AppTheme {
 
       // Bottom navigation bar theme
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.surfaceBlack,
-        selectedItemColor: AppColors.accentBlue,
+        backgroundColor: Colors.black, // Pure black
+        selectedItemColor: AppColors.accentBlue, // Green accent
         unselectedItemColor: AppColors.textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
@@ -150,7 +150,7 @@ class AppTheme {
 
       // Dialog theme
       dialogTheme: DialogTheme(
-        backgroundColor: AppColors.surfaceBlack,
+        backgroundColor: Colors.black, // Pure black
         elevation: 24,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
@@ -163,7 +163,7 @@ class AppTheme {
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: AppColors.primaryBlack,
+        systemNavigationBarColor: Colors.black, // Pure black
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );

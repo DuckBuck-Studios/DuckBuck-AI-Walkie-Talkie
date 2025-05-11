@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/firebase/firebase_storage_service.dart';
@@ -23,13 +23,14 @@ class ProfileCompletionScreen extends StatefulWidget {
 
 class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   // Step tracking
-  int _currentStep = 0; // 0 = name, 1 = photo
+  int _currentStep = 0; // 0 = photo, 1 = name
 
   // Form controllers and state
   final _nameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   File? _selectedImage;
   bool _isLoading = false;
+  bool _isFullscreenPreview = false;
   String? _errorMessage;
 
   // Services
@@ -54,16 +55,16 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     super.dispose();
   }
 
-  // Move to the next step
+  // Move to the next step with animation
   void _nextStep() {
     if (_currentStep == 0) {
-      // Validate name before proceeding
-      if (_formKey.currentState!.validate()) {
-        setState(() {
-          _currentStep = 1;
-        });
-        HapticFeedback.mediumImpact();
-      }
+      // Add haptic feedback
+      HapticFeedback.mediumImpact();
+      
+      // Move from photo to name step with animation
+      setState(() {
+        _currentStep = 1;
+      });
     } else if (_currentStep == 1) {
       // Complete profile
       _completeProfile();
@@ -75,6 +76,16 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     if (_currentStep > 0) {
       setState(() {
         _currentStep--;
+      });
+      HapticFeedback.mediumImpact();
+    }
+  }
+  
+  // Toggle fullscreen preview
+  void _toggleFullscreenPreview() {
+    if (_selectedImage != null) {
+      setState(() {
+        _isFullscreenPreview = !_isFullscreenPreview;
       });
       HapticFeedback.mediumImpact();
     }
@@ -135,15 +146,16 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     // Validate name
     if (_nameController.text.trim().isEmpty) {
       setState(() {
-        _currentStep = 0;
+        _currentStep = 1;
         _errorMessage = 'Please enter your name';
       });
       return;
     }
 
-    // Validate photo (now required)
+    // Validate photo (now mandatory)
     if (_selectedImage == null) {
       setState(() {
+        _currentStep = 0;
         _errorMessage = 'Please select a profile photo';
       });
       return;
@@ -182,17 +194,24 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       _analyticsService.logEvent(
         name: 'profile_completed',
         parameters: {
-          'has_photo': 'yes', // Always yes now since photo is required
+          'has_photo': _selectedImage != null ? 'yes' : 'no',
           'display_name_length': displayName.length,
         },
       );
 
-      // Navigate to home screen
+      // Navigate to home screen with animation
       if (mounted) {
-        AppRoutes.navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          AppRoutes.home,
-          (route) => false,
-        );
+        // First animate the current screen
+        Future.delayed(const Duration(milliseconds: 300), () {
+          // Then navigate to home
+          AppRoutes.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            AppRoutes.home,
+            (route) => false,
+            arguments: {
+              'animated': true, // Let the home screen know to animate in
+            },
+          );
+        });
       }
     } catch (e) {
       debugPrint('Error completing profile: $e');
@@ -227,12 +246,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       debugPrint('Error uploading profile image: $e');
       rethrow;
     }
-  }
-
-  // Skip photo selection
-  void _skipPhoto() {
-    _completeProfile();
-  }
+  } 
 
   @override
   Widget build(BuildContext context) {
@@ -240,51 +254,49 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       // Prevent back button navigation
       onWillPop: () async => false,
       child: Scaffold(
-        backgroundColor: AppColors.backgroundBlack,
+        backgroundColor: Colors.black, // Pure black background
         appBar: AppBar(
-          title: Text(_currentStep == 0 ? 'Your Name' : 'Profile Photo')
-                 .animate(onPlay: (controller) => controller.repeat())
-                 .shimmer(duration: 3000.ms, color: Colors.white.withOpacity(0.9)),
-          backgroundColor: AppColors.surfaceBlack,
-          automaticallyImplyLeading:
-              _currentStep > 0, // Show back button only on photo step
-          leading:
-              _currentStep > 0
-                  ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: _previousStep,
-                  )
-                  : null,
+          backgroundColor: Colors.black,
+          automaticallyImplyLeading: _currentStep > 0, // Show back button only on name step
+          leading: _currentStep > 0
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: _previousStep,
+                )
+              : null,
           elevation: 0,
+          toolbarHeight: 0, // Minimize app bar height
         ),
         body: SafeArea(
           child: _isLoading
               ? _buildLoadingState()
-              : AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 500),
-                  child: _currentStep == 0
-                      ? _buildNameStep()
-                      : _buildPhotoStep(),
-                  transitionBuilder: (child, animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: _currentStep == 0 
-                              ? const Offset(-1, 0) 
-                              : const Offset(1, 0),
-                          end: Offset.zero,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
+              : _isFullscreenPreview && _selectedImage != null
+                  ? _buildFullscreenPreview()
+                  : AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 500),
+                      child: _currentStep == 0
+                          ? _buildPhotoStep()
+                          : _buildNameStep(),
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: _currentStep == 0 
+                                  ? const Offset(-1, 0) 
+                                  : const Offset(1, 0),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutQuart,
+                              ),
+                            ),
+                            child: child,
                           ),
-                        ),
-                        child: child,
-                      ),
-                    );
-                  },
-                ),
+                        );
+                      },
+                    ).animate().fadeIn(duration: 300.ms),
         ),
       ),
     );
@@ -296,336 +308,654 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(color: AppColors.accentBlue),
+          CircularProgressIndicator(color: AppColors.accentBlue),
           const SizedBox(height: 24),
           Text(
             'Setting up your profile...',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 18),
+            style: TextStyle(color: Colors.white, fontSize: 18),
           ),
         ],
       ),
     );
   }
 
-  // Step 1: Name input
+  // Step 2: Name input (now second)
   Widget _buildNameStep() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
+    return Container(
+      color: Colors.black,
       child: Form(
         key: _formKey,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Text(
-              'What should we call you?',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ).animate(onPlay: (controller) => controller.repeat())
-              .shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.8)),
-
-            const SizedBox(height: 12),
-
-            Text(
-              'This will be displayed to other users in the app.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
-            ).animate().fadeIn(duration: 500.ms, delay: 200.ms)
-              .then(delay: 200.ms) // pause
-              .slideY(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
-
-            const SizedBox(height: 40),
-
-            // Name input field
-            TextFormField(
-              controller: _nameController,
-              style: TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Your Name',
-                hintText: 'Enter your name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.borderColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.accentBlue, width: 2),
-                ),
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-                hintStyle: TextStyle(color: AppColors.textTertiary),
-                filled: true,
-                fillColor: AppColors.surfaceBlack,
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter your name';
-                }
-                return null;
-              },
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) => _nextStep(),
-              autofocus: true,
-            ).animate().fadeIn(duration: 500.ms, delay: 300.ms)
-              .then(delay: 200.ms)
-              .shimmer(duration: 800.ms, color: AppColors.accentBlue.withOpacity(0.5)),
-
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                style: TextStyle(color: Colors.red[300], fontSize: 14),
-              ).animate().shake(duration: 300.ms),
-            ],
-
-            const Spacer(),
-
-            // Continue button
-            SizedBox(
+            // Top section with profile photo
+            Container(
               width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _nextStep,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accentBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 30),
+              color: Colors.black,
+              child: Column(
+                children: [
+                  // Profile photo with green circle
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Green circle
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.accentBlue, // Green circle
+                            width: 3,
+                          ),
+                        ),
+                      ),
+                      
+                      // Profile photo
+                      Container(
+                        width: 110,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.4),
+                            width: 1,
+                          ),
+                          image: _selectedImage != null
+                              ? DecorationImage(
+                                  image: FileImage(_selectedImage!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: _selectedImage == null
+                            ? Icon(
+                                Icons.person,
+                                size: 50,
+                                color: Colors.grey[600],
+                              )
+                            : null,
+                      ),
+                    ],
                   ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Continue',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Change photo button
+                  TextButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.photo_camera_rounded, size: 16),
+                    label: Text(
+                      _selectedImage != null ? 'Change Photo' : 'Add Photo',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.accentBlue, // Green text
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Main content with name input
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 30),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Text(
+                      'What should we call you?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            
+                    const SizedBox(height: 16),
+            
+                    Text(
+                      'This name will be displayed to other users in the app.',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 16,
+                      ),
+                    ),
+            
+                    const SizedBox(height: 40),
+            
+                    // Name input field
+                    TextFormField(
+                      controller: _nameController,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Your Name',
+                        hintText: 'Enter your full name',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: AppColors.accentBlue.withOpacity(0.5), // Green border
+                            width: 1.5,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: AppColors.accentBlue, // Green border when focused
+                            width: 2,
+                          ),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.person_outline_rounded,
+                          color: AppColors.accentBlue.withOpacity(0.8),
+                        ),
+                        suffixIcon: _nameController.text.isNotEmpty
+                            ? Icon(
+                                Icons.check_circle,
+                                color: AppColors.accentBlue,
+                              )
+                            : null,
+                        labelStyle: TextStyle(
+                          color: Colors.grey[400],
+                        ),
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                        ),
+                        filled: true,
+                        fillColor: Colors.black,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 20,
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your name';
+                        }
+                        return null;
+                      },
+                      onChanged: (value) {
+                        setState(() {
+                          if (_errorMessage != null && _errorMessage!.contains('name')) {
+                            _errorMessage = null;
+                          }
+                        });
+                      },
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _completeProfile(),
+                      autofocus: true,
+                    ),
+                  ],
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms, delay: 400.ms)
-              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1), duration: 500.ms),
+            ),
+            
+            // Bottom section with complete button
+            Container(
+              padding: const EdgeInsets.all(24.0),
+              color: Colors.black,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_errorMessage != null) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red[300], size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(color: Colors.red[300], fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+            
+                  // Complete button with green accent
+                  SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton(
+                      onPressed: _completeProfile,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentBlue, // Green button
+                        foregroundColor: Colors.black, // Black text
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Complete Profile',
+                            style: TextStyle(
+                              fontSize: 18, 
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Step 2: Photo selection
+  // Step 1: Photo selection (now first)
   Widget _buildPhotoStep() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      // Wrap the Column with SingleChildScrollView to handle overflow
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Header
-            Text(
-              'Add a profile photo',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ).animate(onPlay: (controller) => controller.repeat())
-              .shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.8)),
-
-            const SizedBox(height: 12),
-
-            Text(
-              'Choose a photo to personalize your profile',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
-              textAlign: TextAlign.center,
-            ).animate().fadeIn(duration: 500.ms, delay: 200.ms)
-              .then(delay: 200.ms) // pause
-              .slideY(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
-
-            const SizedBox(height: 40),
-
-            // Profile image preview
-            _buildProfileImagePreview()
-              .animate()
-              .scale(
-                begin: const Offset(0.8, 0.8),
-                end: const Offset(1, 1), 
-                duration: 800.ms,
-                curve: Curves.elasticOut
-              )
-              .rotate(duration: 500.ms, begin: -0.1, end: 0)
-              .then(delay: 200.ms)
-              .shimmer(
-                duration: 1500.ms, 
-                color: AppColors.accentBlue.withOpacity(0.8),
-                size: _selectedImage == null ? 5 : 0, // only shimmer if no image selected
-              ),
-
-            const SizedBox(height: 40),
-
-            // Photo selection buttons
-            Row(
+    return Container(
+      color: Colors.black, // Pure black background
+      child: Column(
+        children: [
+          const SizedBox(height: 60),
+          
+          // Welcome header
+          Text(
+            'Welcome to DuckBuck',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 60),
+          
+          // Profile image preview with green circle
+          Expanded(
+            child: _buildProfileImagePreview(),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Photo selection buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Gallery button
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _pickImage,
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('Gallery'),
+                    icon: const Icon(Icons.photo_library_rounded, size: 24),
+                    label: const Text('Gallery', 
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.surfaceBlack,
-                      foregroundColor: AppColors.textPrimary,
+                      backgroundColor: Colors.black, // Black button
+                      foregroundColor: Colors.white, // White text
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: AppColors.borderColor),
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: AppColors.accentBlue, // Green border
+                          width: 1.5,
+                        ),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-                ).animate().fadeIn(duration: 400.ms, delay: 300.ms)
-                  .slideX(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.easeOut),
-
+                ),
+                
                 const SizedBox(width: 16),
-
+                
                 // Camera button
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _takePhoto,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Camera'),
+                    icon: const Icon(Icons.camera_alt_rounded, size: 24),
+                    label: const Text('Camera',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.surfaceBlack,
-                      foregroundColor: AppColors.textPrimary,
+                      backgroundColor: Colors.black, // Black button
+                      foregroundColor: Colors.white, // White text
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: AppColors.borderColor),
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: AppColors.accentBlue, // Green border
+                          width: 1.5,
+                        ),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-                ).animate().fadeIn(duration: 400.ms, delay: 400.ms)
-                  .slideX(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOut),
+                ),
               ],
             ),
-
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                style: TextStyle(color: Colors.red[300], fontSize: 14),
-              ).animate().shake(duration: 300.ms),
-            ],
-
-            // Info text explaining that photo is required
-            if (_selectedImage == null) ...[
-              const SizedBox(height: 24),
-              Text(
-                'A profile photo is required to complete setup',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                textAlign: TextAlign.center,
-              ).animate(onPlay: (controller) => controller.repeat())
-                .fadeIn(duration: 400.ms)
-                .then(delay: 1000.ms) 
-            ],
-
-            const SizedBox(height: 40),
-
-            // Action button - removed skip button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _selectedImage != null ? _completeProfile : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accentBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                  disabledBackgroundColor: AppColors.accentBlue.withOpacity(0.5),
+          ),
+          
+          // Error message
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
                 ),
-                child: const Text(
-                  'Complete Profile',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red[300], size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Colors.red[300], fontSize: 14),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms, delay: 500.ms)
-              .slideY(begin: 0.2, end: 0, duration: 500.ms),
-
-            // Add some padding at the bottom to ensure there's space on all screens
-            const SizedBox(height: 24),
-          ],
-        ),
+            ),
+          
+          // Continue button
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 60,
+              child: ElevatedButton(
+                onPressed: _selectedImage != null ? _nextStep : null, // Button disabled if no photo
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentBlue, // Green button
+                  foregroundColor: Colors.black, // Black text
+                  disabledBackgroundColor: AppColors.accentBlue.withOpacity(0.4),
+                  disabledForegroundColor: Colors.black.withOpacity(0.6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Continue',
+                      style: TextStyle(
+                        fontSize: 18, 
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 20,
+                      color: _selectedImage != null 
+                          ? Colors.black 
+                          : Colors.black.withOpacity(0.6),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // Profile image preview widget
+  // Profile image preview with green circle
   Widget _buildProfileImagePreview() {
     return Center(
       child: Stack(
+        alignment: Alignment.center,
         children: [
-          // Profile image container
+          // Green circle
           Container(
-            width: 160,
-            height: 160,
+            width: 240,
+            height: 240,
             decoration: BoxDecoration(
-              color: AppColors.surfaceBlack,
               shape: BoxShape.circle,
               border: Border.all(
-                color:
-                    _selectedImage != null
-                        ? AppColors.accentBlue
-                        : AppColors.borderColor,
-                width: 2,
+                color: AppColors.accentBlue, // Green circle
+                width: 3,
               ),
-              image:
-                  _selectedImage != null
-                      ? DecorationImage(
+            ),
+          ),
+            
+          // Profile image container
+          GestureDetector(
+            onTap: _selectedImage != null ? _toggleFullscreenPreview : _pickImage,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentBlue.withOpacity(0.3), // Green glow
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.4),
+                  width: 2,
+                ),
+                image: _selectedImage != null
+                    ? DecorationImage(
                         image: FileImage(_selectedImage!),
                         fit: BoxFit.cover,
                       )
-                      : null,
-            ),
-            child:
-                _selectedImage == null
-                    ? Icon(
-                      Icons.person,
-                      size: 80,
-                      color: AppColors.textTertiary,
-                    )
                     : null,
+              ),
+              child: _selectedImage == null
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_a_photo_rounded,
+                          size: 60,
+                          color: AppColors.accentBlue.withOpacity(0.8), // Green icon
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Add Photo',
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    )
+                  : null,
+            ),
           ),
 
-          // Edit button overlay
-          if (_selectedImage != null)
+          // Photo required indicator
+          if (_selectedImage == null)
             Positioned(
-              right: 0,
               bottom: 0,
               child: Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.accentBlue,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.white),
-                  onPressed: _pickImage,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.accentBlue.withOpacity(0.5), // Green border
+                    width: 1,
                   ),
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppColors.accentBlue, // Green icon
+                      size: 16, 
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'A profile photo is required',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+  
+  // Fullscreen image preview
+  Widget _buildFullscreenPreview() {
+    return GestureDetector(
+      onTap: _toggleFullscreenPreview,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Black background
+          Container(
+            color: Colors.black,
+          ),
+          
+          // Image with border
+          Container(
+            margin: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: AppColors.accentBlue.withOpacity(0.5), // Green border
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Image.file(
+                _selectedImage!,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          
+          // Top bar with title and controls
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              color: Colors.black,
+              child: SafeArea(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Profile Photo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        // Edit button
+                        IconButton(
+                          icon: Icon(Icons.edit, color: AppColors.accentBlue, size: 24), // Green icon
+                          onPressed: () {
+                            _toggleFullscreenPreview();
+                            _pickImage();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        // Close button
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                          onPressed: _toggleFullscreenPreview,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // Bottom bar with accept button
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              color: Colors.black,
+              child: SafeArea(
+                top: false,
+                child: Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _toggleFullscreenPreview,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Accept Photo'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentBlue, // Green button
+                      foregroundColor: Colors.black, // Black text
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
