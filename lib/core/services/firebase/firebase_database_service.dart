@@ -147,8 +147,8 @@ class FirebaseDatabaseService {
     return collectionRef.snapshots();
   }
 
-  /// Query documents in a collection
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> queryDocuments({
+  /// Query documents in a collection by a builder function
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> queryDocumentsWithBuilder({
     required String collection,
     required Query<Map<String, dynamic>> Function(
       CollectionReference<Map<String, dynamic>> query,
@@ -163,6 +163,223 @@ class FirebaseDatabaseService {
       return querySnapshot.docs;
     } catch (e) {
       throw Exception('Failed to query documents: ${e.toString()}');
+    }
+  }
+  
+  /// Query documents in a collection by field conditions
+  Future<List<Map<String, dynamic>>> queryDocuments({
+    required String collection,
+    String? field,
+    dynamic isEqualTo,
+    dynamic isNotEqualTo,
+    dynamic isLessThan,
+    dynamic isLessThanOrEqualTo,
+    dynamic isGreaterThan,
+    dynamic isGreaterThanOrEqualTo,
+    dynamic arrayContains,
+    List<dynamic>? arrayContainsAny,
+    List<dynamic>? whereIn,
+    List<dynamic>? whereNotIn,
+    String? orderBy,
+    bool descending = false,
+    int? limit,
+    List<Map<String, dynamic>>? conditions,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore.collection(collection);
+      
+      // Apply field conditions if provided
+      if (field != null) {
+        if (isEqualTo != null) {
+          query = query.where(field, isEqualTo: isEqualTo);
+        }
+        if (isNotEqualTo != null) {
+          query = query.where(field, isNotEqualTo: isNotEqualTo);
+        }
+        if (isLessThan != null) {
+          query = query.where(field, isLessThan: isLessThan);
+        }
+        if (isLessThanOrEqualTo != null) {
+          query = query.where(field, isLessThanOrEqualTo: isLessThanOrEqualTo);
+        }
+        if (isGreaterThan != null) {
+          query = query.where(field, isGreaterThan: isGreaterThan);
+        }
+        if (isGreaterThanOrEqualTo != null) {
+          query = query.where(field, isGreaterThanOrEqualTo: isGreaterThanOrEqualTo);
+        }
+        if (arrayContains != null) {
+          query = query.where(field, arrayContains: arrayContains);
+        }
+        if (arrayContainsAny != null) {
+          query = query.where(field, arrayContainsAny: arrayContainsAny);
+        }
+        if (whereIn != null) {
+          query = query.where(field, whereIn: whereIn);
+        }
+        if (whereNotIn != null) {
+          query = query.where(field, whereNotIn: whereNotIn);
+        }
+      }
+      
+      // Apply additional conditions if provided
+      if (conditions != null) {
+        for (final condition in conditions) {
+          final field = condition['field'] as String;
+          final operator = condition['operator'] as String;
+          final value = condition['value'];
+          
+          switch (operator) {
+            case '==':
+              query = query.where(field, isEqualTo: value);
+              break;
+            case '!=':
+              query = query.where(field, isNotEqualTo: value);
+              break;
+            case '<':
+              query = query.where(field, isLessThan: value);
+              break;
+            case '<=':
+              query = query.where(field, isLessThanOrEqualTo: value);
+              break;
+            case '>':
+              query = query.where(field, isGreaterThan: value);
+              break;
+            case '>=':
+              query = query.where(field, isGreaterThanOrEqualTo: value);
+              break;
+            case 'array-contains':
+              query = query.where(field, arrayContains: value);
+              break;
+            case 'array-contains-any':
+              query = query.where(field, arrayContainsAny: value as List<dynamic>);
+              break;
+            case 'in':
+              query = query.where(field, whereIn: value as List<dynamic>);
+              break;
+            case 'not-in':
+              query = query.where(field, whereNotIn: value as List<dynamic>);
+              break;
+          }
+        }
+      }
+      
+      // Apply ordering if provided
+      if (orderBy != null) {
+        query = query.orderBy(orderBy, descending: descending);
+      }
+      
+      // Apply limit if provided
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+      
+      final querySnapshot = await query.get();
+      
+      // Return documents with their IDs included
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to query documents: ${e.toString()}');
+    }
+  }
+
+  /// Query documents with pagination support
+  Future<List<Map<String, dynamic>>> queryDocumentsWithPagination({
+    required String collection,
+    String? field,
+    dynamic isEqualTo,
+    String? orderBy,
+    bool descending = false,
+    int? limit,
+    String? startAfterDocument,
+    List<Map<String, dynamic>>? conditions,
+  }) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore.collection(collection);
+      
+      // Apply field conditions if provided
+      if (field != null && isEqualTo != null) {
+        query = query.where(field, isEqualTo: isEqualTo);
+      }
+      
+      // Apply additional conditions if provided
+      if (conditions != null) {
+        for (final condition in conditions) {
+          final field = condition['field'] as String;
+          final operator = condition['operator'] as String;
+          final value = condition['value'];
+          
+          switch (operator) {
+            case '==':
+              query = query.where(field, isEqualTo: value);
+              break;
+            case '!=':
+              query = query.where(field, isNotEqualTo: value);
+              break;
+            case '<':
+              query = query.where(field, isLessThan: value);
+              break;
+            case '<=':
+              query = query.where(field, isLessThanOrEqualTo: value);
+              break;
+            case '>':
+              query = query.where(field, isGreaterThan: value);
+              break;
+            case '>=':
+              query = query.where(field, isGreaterThanOrEqualTo: value);
+              break;
+            case 'array-contains':
+              query = query.where(field, arrayContains: value);
+              break;
+            case 'array-contains-any':
+              query = query.where(field, arrayContainsAny: value as List<dynamic>);
+              break;
+            case 'in':
+              query = query.where(field, whereIn: value as List<dynamic>);
+              break;
+            case 'not-in':
+              query = query.where(field, whereNotIn: value as List<dynamic>);
+              break;
+          }
+        }
+      }
+      
+      // Apply ordering if provided
+      if (orderBy != null) {
+        query = query.orderBy(orderBy, descending: descending);
+      }
+      
+      // Apply startAfter for pagination
+      if (startAfterDocument != null) {
+        final docSnapshot = await _firestore
+            .collection(collection)
+            .doc(startAfterDocument)
+            .get();
+            
+        if (docSnapshot.exists) {
+          query = query.startAfterDocument(docSnapshot);
+        }
+      }
+      
+      // Apply limit if provided
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+      
+      final querySnapshot = await query.get();
+      
+      // Return documents with their IDs included
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to query documents with pagination: ${e.toString()}');
     }
   }
 
