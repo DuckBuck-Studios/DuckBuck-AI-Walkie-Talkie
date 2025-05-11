@@ -78,24 +78,56 @@ class PreferencesService {
 
   /// Clear all preferences (used during logout)
   Future<void> clearAll() async {
-    // Clear all auth-related data
-    await _prefs.remove(_isLoggedInKey);
-    await _prefs.remove(_hasCompletedOnboardingKey);
-    await _prefs.remove(_hasSeenWelcomeKey);
-    await _prefs.remove(_currentOnboardingStepKey);
-    await _prefs.remove(_passwordlessEmailKey);
+    try {
+      // Define the keys to reset with their default values
+      final Map<String, dynamic> defaultValues = {
+        _isLoggedInKey: false,
+        _hasCompletedOnboardingKey: false,
+        _currentOnboardingStepKey: 0,
+        // Maintain welcome screen as seen to avoid showing it to returning users
+        _hasSeenWelcomeKey: _prefs.getBool(_hasSeenWelcomeKey) ?? false,
+      };
 
-    // Set default values to ensure clean state
-    await _prefs.setBool(_isLoggedInKey, false);
-    await _prefs.setBool(_hasCompletedOnboardingKey, false);
-
-    // Optionally keep welcome screen as seen to avoid showing it again
-    // Comment this line if you want users to see welcome screen after logout
-    // await _prefs.setBool(_hasSeenWelcomeKey, true);
-
-    // Reset onboarding step to beginning
-    await _prefs.setInt(_currentOnboardingStepKey, 0);
-
-    debugPrint('All auth-related preferences have been cleared');
+      // Clear email for passwordless sign-in completely
+      await _prefs.remove(_passwordlessEmailKey);
+      
+      // Apply default values in a batch
+      for (final entry in defaultValues.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        
+        if (value is bool) {
+          await _prefs.setBool(key, value);
+        } else if (value is int) {
+          await _prefs.setInt(key, value);
+        } else if (value is String) {
+          await _prefs.setString(key, value);
+        }
+      }
+      
+      debugPrint('All auth-related preferences have been reset to defaults');
+    } catch (e) {
+      debugPrint('Error while clearing preferences: $e');
+      // Attempt a more aggressive clear if the standard approach fails
+      try {
+        final keysToRemove = [
+          _isLoggedInKey,
+          _hasCompletedOnboardingKey,
+          _currentOnboardingStepKey,
+          _passwordlessEmailKey
+        ];
+        
+        for (final key in keysToRemove) {
+          await _prefs.remove(key);
+        }
+        
+        // Always set logged in to false as a minimum fallback
+        await _prefs.setBool(_isLoggedInKey, false);
+        
+        debugPrint('Preferences cleared using fallback method');
+      } catch (fallbackError) {
+        debugPrint('Critical error clearing preferences: $fallbackError');
+      }
+    }
   }
 }

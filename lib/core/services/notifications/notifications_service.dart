@@ -19,123 +19,123 @@ class NotificationsService {
   }) : _firebaseMessaging = firebaseMessaging ?? FirebaseMessaging.instance,
        _databaseService = databaseService;
 
-  /// Initialize notification settings and request permissions
+  /// Initialize FCM token generation
   Future<void> initialize() async {
     try {
-      // Request notification permissions
+      debugPrint('🔔 NOTIFICATION SERVICE: Initializing token generation only...');
+      
+      // Request minimal permissions needed for token generation
       final settings = await _firebaseMessaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
+        alert: false,
+        badge: false,
+        sound: false,
         provisional: false,
+        announcement: false,
+        carPlay: false,
+        criticalAlert: false,
       );
 
       debugPrint(
-        'Notification authorization status: ${settings.authorizationStatus}',
+        '🔔 NOTIFICATION SERVICE: Permission status: ${settings.authorizationStatus}',
       );
-
-      // Configure FCM in foreground
-      await FirebaseMessaging.instance
-          .setForegroundNotificationPresentationOptions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+      
+      // Test if we can get a token (don't save it yet, just check availability)
+      try {
+        final testToken = await _firebaseMessaging.getToken();
+        if (testToken != null) {
+          debugPrint('✅ NOTIFICATION SERVICE: FCM token is available');
+        } else {
+          debugPrint('⚠️ NOTIFICATION SERVICE WARNING: FCM token is null during initialization');
+        }
+      } catch (tokenError) {
+        debugPrint('⚠️ NOTIFICATION SERVICE WARNING: Failed to get test FCM token: $tokenError');
+      }
+      
+      debugPrint('✅ NOTIFICATION SERVICE: Initialization complete');
     } catch (e) {
-      debugPrint('Failed to initialize notifications: $e');
+      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to initialize notifications: $e');
+      debugPrint('❌ NOTIFICATION SERVICE ERROR: Stack trace: ${StackTrace.current}');
     }
   }
 
-  /// Register FCM token for the current user
+  /// Register FCM token for the current user - token generation only
   ///
   /// This should be called after successful user authentication
   Future<void> registerToken(String userId) async {
     try {
+      debugPrint('🔔 NOTIFICATION SERVICE: Generating FCM token for user: $userId');
+      
+      // Force token refresh to ensure we get the latest
+      await _firebaseMessaging.deleteToken();
       final token = await _firebaseMessaging.getToken();
-
-      if (token != null) {
-        // Store the token in the user's document
-        await _databaseService.setDocument(
-          collection: 'users',
-          documentId: userId,
-          data: {
-            'fcmTokens': {
-              token: {
-                'createdAt': DateTime.now().toIso8601String(),
-                'platform': _getPlatformName(),
-                'lastActiveAt': DateTime.now().toIso8601String(),
-              },
-            },
-          },
-          merge: true,
-        );
-
-        debugPrint('FCM Token registered for user: $userId');
+      
+      if (token == null) {
+        debugPrint('⚠️ NOTIFICATION SERVICE: Failed to generate FCM token - token is null');
+        return;
       }
-    } catch (e) {
-      debugPrint('Failed to register FCM token: $e');
-    }
-
-    // Listen for token refreshes
-    _firebaseMessaging.onTokenRefresh.listen((newToken) {
-      _updateToken(userId, newToken);
-    });
-  }
-
-  /// Update FCM token when refreshed
-  Future<void> _updateToken(String userId, String newToken) async {
-    try {
-      await _databaseService.setDocument(
-        collection: 'users',
-        documentId: userId,
-        data: {
-          'fcmTokens': {
-            newToken: {
-              'updatedAt': DateTime.now().toIso8601String(),
-              'platform': _getPlatformName(),
-              'lastActiveAt': DateTime.now().toIso8601String(),
-            },
+      
+      // Only log a substring of the token for security
+      String tokenPreview = token.length > 15 ? '${token.substring(0, 15)}...' : token;
+      debugPrint('🔔 NOTIFICATION SERVICE: FCM token generated: $tokenPreview');
+      
+      // Store the token in the user's document with minimal data
+      final Map<String, dynamic> tokenData = {
+        'fcmTokens': {
+          token: {
+            'createdAt': DateTime.now().toIso8601String(),
+            'platform': _getPlatformName(),
           },
         },
-        merge: true,
-      );
-
-      debugPrint('FCM Token updated for user: $userId');
-    } catch (e) {
-      debugPrint('Failed to update FCM token: $e');
-    }
-  }
-
-  /// Remove FCM token when user logs out
-  Future<void> removeToken(String userId) async {
-    try {
-      final token = await _firebaseMessaging.getToken();
-
-      if (token != null) {
-        // Get current tokens
-        final userDoc = await _databaseService.getDocument(
-          collection: 'users',
-          documentId: userId,
-        );
-
-        if (userDoc != null && userDoc.containsKey('fcmTokens')) {
-          final Map<String, dynamic> tokens = Map.from(userDoc['fcmTokens']);
-
-          // Remove this token
-          tokens.remove(token);
-
-          // Update the document
-          await _databaseService.updateDocument(
+      };
+      
+      debugPrint('🔔 NOTIFICATION SERVICE: Saving token to Firestore...');
+      
+      // Retry mechanism for saving token
+      bool saved = false;
+      int attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!saved && attempts < maxAttempts) {
+        attempts++;
+        try {
+          await _databaseService.setDocument(
             collection: 'users',
             documentId: userId,
-            data: {'fcmTokens': tokens},
+            data: tokenData,
+            merge: true,
           );
-
-          debugPrint('FCM Token removed for user: $userId');
+          saved = true;
+          debugPrint('✅ NOTIFICATION SERVICE: FCM token saved for user: $userId (attempt $attempts)');
+        } catch (e) {
+          if (attempts < maxAttempts) {
+            debugPrint('⚠️ NOTIFICATION SERVICE: Retrying token save after error (attempt $attempts): $e');
+            await Future.delayed(Duration(seconds: 1 * attempts));
+          } else {
+            rethrow;
+          }
         }
       }
     } catch (e) {
-      debugPrint('Failed to remove FCM token: $e');
+      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to save FCM token: $e');
+      debugPrint('❌ NOTIFICATION SERVICE ERROR: Stack trace: ${StackTrace.current}');
+    }
+    
+    // No listeners for token refresh are needed
+  }
+
+  // Token refresh handling removed as requested
+
+  /// Delete FCM token when user logs out 
+  Future<void> removeToken(String userId) async {
+    try {
+      debugPrint('🔔 NOTIFICATION SERVICE: Deleting FCM token for user: $userId');
+      
+      // Simply delete the token from Firebase Messaging
+      await _firebaseMessaging.deleteToken();
+      
+      debugPrint('✅ NOTIFICATION SERVICE: FCM token deleted locally for user: $userId');
+    } catch (e) {
+      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to delete FCM token: $e');
     }
   }
 
