@@ -50,23 +50,22 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAeHYq6_2NyJFaB4dlA1vHBynuJqTVGOd4',
-    appId: '1:713893090592:android:0d9fa7aa7a60ba86357345',
-    messagingSenderId: '713893090592',
-    projectId: 'duckbuck-studios',
-    databaseURL: 'https://duckbuck-studios-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'duckbuck-studios.firebasestorage.app',
+    apiKey: 'AIzaSyAEiTysCNzhhclVl9sLfG296GRlkD2wXwk',
+    appId: '1:917171712740:android:1fa676a09409f91283f2f1',
+    messagingSenderId: '917171712740',
+    projectId: 'duckbuck-studios-test',
+    storageBucket: 'duckbuck-studios-test.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBsBDnyCLp5Mi6-dmURw6kPbrrcNIvwsQQ',
-    appId: '1:713893090592:ios:907b32fb1d407120357345',
-    messagingSenderId: '713893090592',
-    projectId: 'duckbuck-studios',
-    databaseURL: 'https://duckbuck-studios-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'duckbuck-studios.firebasestorage.app',
-    androidClientId: '713893090592-j0a49u5ncltebnr81qraeroch27rtk4n.apps.googleusercontent.com',
-    iosClientId: '713893090592-m2uaf1sq4pr961jra1r5o5noetcjmvjt.apps.googleusercontent.com',
+    apiKey: 'AIzaSyAyxJ87DZNDm67kb_a6wJvGkann5BqpGNY',
+    appId: '1:917171712740:ios:30b757acf5e78ccf83f2f1',
+    messagingSenderId: '917171712740',
+    projectId: 'duckbuck-studios-test',
+    storageBucket: 'duckbuck-studios-test.firebasestorage.app',
+    androidClientId: '917171712740-dfm9bp2iuooovajnb0kslg6jo5pcui8m.apps.googleusercontent.com',
+    iosClientId: '917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5.apps.googleusercontent.com',
     iosBundleId: 'com.duckbuck.app',
   );
+
 }
