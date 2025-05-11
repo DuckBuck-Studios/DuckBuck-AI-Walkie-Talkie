@@ -52,6 +52,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
+<<<<<<< Updated upstream
     apiKey: 'AIzaSyDF0O59dLvsX7cRqmd_JSTI6axn69GojMc',
     appId: '1:297951233838:android:b0eb75c32afb1e32581cbf',
     messagingSenderId: '297951233838',
@@ -95,4 +96,24 @@ class DefaultFirebaseOptions {
     measurementId: 'G-Q44RKB8K6F',
   );
 
+=======
+    apiKey: 'AIzaSyAEiTysCNzhhclVl9sLfG296GRlkD2wXwk',
+    appId: '1:917171712740:android:1fa676a09409f91283f2f1',
+    messagingSenderId: '917171712740',
+    projectId: 'duckbuck-studios-test',
+    storageBucket: 'duckbuck-studios-test.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAyxJ87DZNDm67kb_a6wJvGkann5BqpGNY',
+    appId: '1:917171712740:ios:30b757acf5e78ccf83f2f1',
+    messagingSenderId: '917171712740',
+    projectId: 'duckbuck-studios-test',
+    storageBucket: 'duckbuck-studios-test.firebasestorage.app',
+    androidClientId: '917171712740-qkh4qg27ticfduvr3gilgaui6qrmmmua.apps.googleusercontent.com',
+    iosClientId: '917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5.apps.googleusercontent.com',
+    iosBundleId: 'com.duckbuck.app',
+  );
+
+>>>>>>> Stashed changes
 }

@@ -1,20 +1,31 @@
 {
   "project_info": {
+<<<<<<< Updated upstream
     "project_number": "297951233838",
     "firebase_url": "https://duckbuck-a2943-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "duckbuck-a2943",
     "storage_bucket": "duckbuck-a2943.firebasestorage.app"
+=======
+    "project_number": "917171712740",
+    "project_id": "duckbuck-studios-test",
+    "storage_bucket": "duckbuck-studios-test.firebasestorage.app"
+>>>>>>> Stashed changes
   },
   "client": [
     {
       "client_info": {
+<<<<<<< Updated upstream
         "mobilesdk_app_id": "1:297951233838:android:b0eb75c32afb1e32581cbf",
+=======
+        "mobilesdk_app_id": "1:917171712740:android:1fa676a09409f91283f2f1",
+>>>>>>> Stashed changes
         "android_client_info": {
           "package_name": "com.example.duckbuck"
         }
       },
       "oauth_client": [
         {
+<<<<<<< Updated upstream
           "client_id": "297951233838-rdg33cduc08tktak8ecfol5dkticbpp3.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -24,18 +35,34 @@
         },
         {
           "client_id": "297951233838-v5r6vb66u2v8q474ik2jma9ban8k3l4f.apps.googleusercontent.com",
+=======
+          "client_id": "917171712740-qkh4qg27ticfduvr3gilgaui6qrmmmua.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.duckbuck.app",
+            "certificate_hash": "750d7f5e0b7abb0b18e548e93b7d6fabf1132c60"
+          }
+        },
+        {
+          "client_id": "917171712740-vd0erfkbq7q958o27u0kp14mqcggl8da.apps.googleusercontent.com",
+>>>>>>> Stashed changes
           "client_type": 3
         }
       ],
       "api_key": [
         {
+<<<<<<< Updated upstream
           "current_key": "AIzaSyDF0O59dLvsX7cRqmd_JSTI6axn69GojMc"
+=======
+          "current_key": "AIzaSyAEiTysCNzhhclVl9sLfG296GRlkD2wXwk"
+>>>>>>> Stashed changes
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
+<<<<<<< Updated upstream
               "client_id": "297951233838-v5r6vb66u2v8q474ik2jma9ban8k3l4f.apps.googleusercontent.com",
               "client_type": 3
             },
@@ -80,6 +107,16 @@
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.test"
+=======
+              "client_id": "917171712740-vd0erfkbq7q958o27u0kp14mqcggl8da.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.duckbuck.app"
+>>>>>>> Stashed changes
               }
             }
           ]

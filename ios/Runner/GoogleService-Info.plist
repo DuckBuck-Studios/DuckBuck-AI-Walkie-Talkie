@@ -3,6 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
+<<<<<<< Updated upstream
 	<string>297951233838-s63repuurh8rf12f4jkbleq7ipied51h.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
 	<string>com.googleusercontent.apps.297951233838-s63repuurh8rf12f4jkbleq7ipied51h</string>
@@ -12,14 +13,31 @@
 	<string>AIzaSyAg3SUEk3QYYV-8u_dQBuAHBggZ0ED6e9c</string>
 	<key>GCM_SENDER_ID</key>
 	<string>297951233838</string>
+=======
+	<string>917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>917171712740-qkh4qg27ticfduvr3gilgaui6qrmmmua.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAyxJ87DZNDm67kb_a6wJvGkann5BqpGNY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>917171712740</string>
+>>>>>>> Stashed changes
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.example.duckbuck</string>
 	<key>PROJECT_ID</key>
+<<<<<<< Updated upstream
 	<string>duckbuck-a2943</string>
 	<key>STORAGE_BUCKET</key>
 	<string>duckbuck-a2943.firebasestorage.app</string>
+=======
+	<string>duckbuck-studios-test</string>
+	<key>STORAGE_BUCKET</key>
+	<string>duckbuck-studios-test.firebasestorage.app</string>
+>>>>>>> Stashed changes
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -31,8 +49,12 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
+<<<<<<< Updated upstream
 	<string>1:297951233838:ios:5b82861a21ff5e22581cbf</string>
 	<key>DATABASE_URL</key>
 	<string>https://duckbuck-a2943-default-rtdb.asia-southeast1.firebasedatabase.app</string>
+=======
+	<string>1:917171712740:ios:30b757acf5e78ccf83f2f1</string>
+>>>>>>> Stashed changes
 </dict>
 </plist>
