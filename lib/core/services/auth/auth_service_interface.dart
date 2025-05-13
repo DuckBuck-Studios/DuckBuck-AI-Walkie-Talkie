@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../exceptions/auth_exceptions.dart';
 
 /// Interface defining the authentication service capabilities.
 abstract class AuthServiceInterface {
@@ -7,19 +8,6 @@ abstract class AuthServiceInterface {
 
   /// Stream of authentication state changes
   Stream<User?> get authStateChanges;
-
-  /// Sign in with email and password
-  Future<UserCredential> signInWithEmailPassword(
-    String email,
-    String password, {
-    bool requireEmailVerification = false,
-  });
-
-  /// Create a new account with email and password
-  Future<UserCredential> createAccountWithEmailPassword(
-    String email,
-    String password,
-  );
 
   /// Sign in with Google account
   Future<UserCredential> signInWithGoogle();
@@ -31,7 +19,7 @@ abstract class AuthServiceInterface {
   Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required void Function(PhoneAuthCredential) verificationCompleted,
-    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(AuthException) verificationFailed,
     required void Function(String, int?) codeSent,
     required void Function(String) codeAutoRetrievalTimeout,
   });
@@ -50,15 +38,6 @@ abstract class AuthServiceInterface {
   /// Sign out the current user
   Future<void> signOut();
 
-  /// Send password reset email
-  Future<void> sendPasswordResetEmail(String email);
-
-  /// Delete the current user account
-  Future<void> deleteAccount();
-
   /// Update user profile information
   Future<void> updateProfile({String? displayName, String? photoURL});
-
-  /// Update user email address
-  Future<void> updateEmail(String newEmail);
 }

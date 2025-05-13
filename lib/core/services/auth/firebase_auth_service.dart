@@ -1,11 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'auth_service_interface.dart';
-import 'auth_exception_handler.dart';
 import 'package:flutter/material.dart';
+import '../../exceptions/auth_exceptions.dart';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 
 /// Firebase implementation of the auth service interface
 class FirebaseAuthService implements AuthServiceInterface {
@@ -28,244 +31,183 @@ class FirebaseAuthService implements AuthServiceInterface {
   @override
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
 
-  @override
-  Future<UserCredential> signInWithEmailPassword(
-    String email,
-    String password, {
-    bool requireEmailVerification = false,
-  }) async {
-    try {
-      // Sign in with Firebase Authentication
-      final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+  /// Convert FirebaseAuthException to our AuthException
+  AuthException _handleException(FirebaseAuthException e) {
+    String code;
+    String message = e.message ?? 'An unknown error occurred';
 
-      // Check if email verification is required and the email is not verified
-      if (requireEmailVerification &&
-          userCredential.user != null &&
-          !userCredential.user!.emailVerified) {
-        // Send verification email
-        await userCredential.user!.sendEmailVerification();
-        // Sign out the user since verification is required
-        await _firebaseAuth.signOut();
-        throw FirebaseAuthException(
-          code: 'email-not-verified',
-          message:
-              'Please verify your email address. A verification link has been sent.',
-        );
-      }
-
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
+    switch (e.code) {
+      case 'invalid-email':
+        code = AuthErrorCodes.invalidCredential;
+        message = 'The email address is not valid.';
+        break;
+      case 'wrong-password':
+        code = AuthErrorCodes.wrongPassword;
+        message = 'Your password is incorrect.';
+        break;
+      case 'user-not-found':
+        code = AuthErrorCodes.userNotFound;
+        message = 'No user found with this email address.';
+        break;
+      case 'user-disabled':
+        code = AuthErrorCodes.userDisabled;
+        message = 'This user account has been disabled.';
+        break;
+      case 'too-many-requests':
+        code = AuthErrorCodes.tooManyRequests;
+        message = 'Too many requests. Try again later.';
+        break;
+      case 'operation-not-allowed':
+        code = AuthErrorCodes.operationNotAllowed;
+        message = 'This sign in method is not allowed.';
+        break;
+      case 'invalid-verification-code':
+        code = AuthErrorCodes.invalidVerificationCode;
+        message = 'The verification code is invalid.';
+        break;
+      case 'invalid-verification-id':
+        code = AuthErrorCodes.invalidVerificationId;
+        message = 'The verification ID is invalid.';
+        break;
+      case 'account-exists-with-different-credential':
+        code = AuthErrorCodes.accountExistsWithDifferentCredential;
+        message = 'An account already exists with the same email but different sign-in credentials.';
+        break;
+      case 'network-request-failed':
+        code = AuthErrorCodes.networkError;
+        message = 'Network error. Please check your connection and try again.';
+        break;
+      default:
+        code = AuthErrorCodes.unknown;
+        break;
     }
+
+    return AuthException(code, message, e);
   }
 
-  @override
-  Future<UserCredential> createAccountWithEmailPassword(
-    String email,
-    String password,
-  ) async {
-    try {
-      return await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-    } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
-    }
-  }
+  // Email/password authentication removed as per new requirements
+
+  // Create account with email/password removed as per new requirements
 
   @override
   Future<UserCredential> signInWithGoogle() async {
-    debugPrint('📱 GOOGLE AUTH: Starting Google sign-in process...');
-
     try {
-      // Check if a user is already signed in with Google
-      final currentGoogleUser = await _googleSignIn.isSignedIn();
-      debugPrint('📱 GOOGLE AUTH: User already signed in? $currentGoogleUser');
+      if (kIsWeb) {
+        // Web platform sign-in
+        final authProvider = GoogleAuthProvider();
+        return await _firebaseAuth.signInWithPopup(authProvider);
+      } else {
+        // Mobile platform sign-in
+        final googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) {
+          throw AuthException(
+            AuthErrorCodes.socialAuthCancelled,
+            'Google sign-in was cancelled by the user',
+          );
+        }
 
-      if (currentGoogleUser) {
-        debugPrint('📱 GOOGLE AUTH: Signing out previous Google session...');
-        await _googleSignIn.disconnect();
-        await _googleSignIn.signOut();
+        try {
+          final googleAuth = await googleUser.authentication;
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+
+          return await _firebaseAuth.signInWithCredential(credential);
+        } catch (e) {
+          debugPrint('Error during Google sign-in: ${e.toString()}');
+          
+          if (e is FirebaseAuthException) {
+            throw _handleException(e);
+          }
+          
+          throw AuthException(
+            AuthErrorCodes.googleSignInFailed,
+            'Failed to sign in with Google',
+            e,
+          );
+        }
       }
-
-      // Begin interactive sign in process
-      debugPrint('📱 GOOGLE AUTH: Launching Google sign-in UI...');
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-
-      // If the user canceled the sign-in flow
-      if (googleUser == null) {
-        debugPrint('📱 GOOGLE AUTH: Sign-in process was canceled by user');
-        throw Exception('Google sign in was canceled by the user');
-      }
-
-      debugPrint('📱 GOOGLE AUTH: Sign-in successful for: ${googleUser.email}');
-
-      // Obtain the auth details from the request
-      debugPrint('📱 GOOGLE AUTH: Getting authentication details...');
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential
-      debugPrint('📱 GOOGLE AUTH: Creating Firebase credential...');
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      debugPrint('📱 GOOGLE AUTH: Signing in to Firebase...');
-      final userCredential = await _firebaseAuth.signInWithCredential(
-        credential,
-      );
-      debugPrint(
-        '📱 GOOGLE AUTH: Firebase sign-in complete for: ${userCredential.user?.email}',
-      );
-
-      return userCredential;
     } catch (e) {
-      // Properly handle and log the error
-      debugPrint('❌ GOOGLE AUTH ERROR: ${e.toString()}');
-
-      if (e is Exception && e.toString().contains('canceled by the user')) {
-        // This is a user cancellation, not an error
-        debugPrint(
-          '📱 GOOGLE AUTH: User deliberately canceled the sign-in process',
-        );
-        throw Exception('Google sign in was canceled');
+      debugPrint('Google sign-in error: ${e.toString()}');
+      
+      if (e is FirebaseAuthException) {
+        throw _handleException(e);
+      } else if (e is AuthException) {
+        throw e;
       }
-
-      // Attempt to recover by clearing any cached state
-      try {
-        debugPrint('📱 GOOGLE AUTH: Attempting recovery by clearing state...');
-        await _googleSignIn.disconnect();
-        await _googleSignIn.signOut();
-      } catch (recoveryError) {
-        debugPrint('📱 GOOGLE AUTH: Recovery attempt failed: $recoveryError');
-      }
-
-      throw Exception('Failed to sign in with Google: ${e.toString()}');
+      
+      throw AuthException(
+        AuthErrorCodes.googleSignInFailed,
+        'Google sign-in failed',
+        e,
+      );
     }
   }
 
   @override
   Future<UserCredential> signInWithApple() async {
-    debugPrint('🍎 APPLE AUTH: Starting Apple sign-in process...');
-
     try {
-      if (kIsWeb) {
-        // Sign in with Apple on Web
-        debugPrint('🍎 APPLE AUTH: Using web sign-in flow');
-        final provider = AppleAuthProvider();
-        return await _firebaseAuth.signInWithPopup(provider);
-      } else if (Platform.isIOS || Platform.isMacOS) {
-        debugPrint('🍎 APPLE AUTH: Using native iOS/macOS sign-in flow');
-
-        try {
-          // Check Apple Sign In availability
-          debugPrint('🍎 APPLE AUTH: Checking Apple Sign In availability...');
-          final isAvailable = await SignInWithApple.isAvailable();
-
-          if (!isAvailable) {
-            debugPrint(
-              '❌ APPLE AUTH ERROR: Apple Sign In is not available on this device',
-            );
-            throw Exception('Apple Sign In is not available on this device');
-          }
-
-          debugPrint('🍎 APPLE AUTH: Apple Sign In available, proceeding...');
-
-          // Request credential for the currently signed in Apple account
-          debugPrint('🍎 APPLE AUTH: Requesting Apple ID credential...');
-          final appleCredential = await SignInWithApple.getAppleIDCredential(
-            scopes: [
-              AppleIDAuthorizationScopes.email,
-              AppleIDAuthorizationScopes.fullName,
-            ],
+      if (Platform.isIOS) {
+        // Check if Apple Sign-In is available on the device
+        final appleSignInAvailable = await SignInWithApple.isAvailable();
+        if (!appleSignInAvailable) {
+          throw AuthException(
+            AuthErrorCodes.operationNotAllowed,
+            'Apple Sign-In is not available on this device.',
           );
-
-          debugPrint('🍎 APPLE AUTH: Successfully got Apple ID credential');
-          debugPrint(
-            '🍎 APPLE AUTH: Email provided by Apple: ${appleCredential.email ?? "Not provided"}',
-          );
-          debugPrint(
-            '🍎 APPLE AUTH: Name provided: ${appleCredential.givenName ?? ""} ${appleCredential.familyName ?? ""}',
-          );
-
-          // Check if we got the token
-          if (appleCredential.identityToken == null) {
-            debugPrint('❌ APPLE AUTH ERROR: No identity token returned');
-            throw Exception('Apple Sign In failed: No identity token returned');
-          }
-
-          // Create an OAuthCredential from the credential returned by Apple
-          debugPrint(
-            '🍎 APPLE AUTH: Creating Firebase credential from Apple response',
-          );
-          final oauthCredential = OAuthProvider('apple.com').credential(
-            idToken: appleCredential.identityToken!,
-            accessToken: appleCredential.authorizationCode,
-          );
-
-          // Sign in to Firebase with the Apple OAuthCredential
-          debugPrint('🍎 APPLE AUTH: Signing in to Firebase...');
-          final userCredential = await _firebaseAuth.signInWithCredential(
-            oauthCredential,
-          );
-
-          // Update user display name if this is a new user and name was provided
-          if (userCredential.additionalUserInfo?.isNewUser == true &&
-              (appleCredential.givenName != null ||
-                  appleCredential.familyName != null)) {
-            String? displayName;
-            if (appleCredential.givenName != null ||
-                appleCredential.familyName != null) {
-              displayName = [
-                appleCredential.givenName,
-                appleCredential.familyName,
-              ].where((name) => name != null && name.isNotEmpty).join(' ');
-            }
-
-            if (displayName != null && displayName.isNotEmpty) {
-              debugPrint(
-                '🍎 APPLE AUTH: Updating user profile with name: $displayName',
-              );
-              await userCredential.user?.updateDisplayName(displayName);
-            }
-          }
-
-          debugPrint(
-            '🍎 APPLE AUTH: Firebase sign-in complete for user: ${userCredential.user?.email ?? "unknown"}',
-          );
-
-          return userCredential;
-        } catch (e) {
-          debugPrint('❌ APPLE AUTH ERROR: ${e.toString()}');
-
-          if (e.toString().contains('canceled') ||
-              e.toString().contains('cancelled')) {
-            debugPrint(
-              '🍎 APPLE AUTH: User deliberately canceled the sign-in process',
-            );
-            throw Exception('Apple sign in was canceled by the user');
-          }
-
-          rethrow;
         }
-      } else {
-        debugPrint(
-          '❌ APPLE AUTH ERROR: Platform not supported (${Platform.operatingSystem})',
-        );
-        throw Exception(
-          'Apple Sign In is not supported on ${Platform.operatingSystem}',
-        );
       }
+
+      // Generate a random string to prevent CSRF attacks
+      final rawNonce = generateNonce();
+      final nonce = sha256ofString(rawNonce);
+
+      // Request credentials
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+
+      // Create Firebase credential
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        rawNonce: rawNonce,
+      );
+
+      // Sign in to Firebase with the Apple credentials
+      return await _firebaseAuth.signInWithCredential(oauthCredential);
     } catch (e) {
-      debugPrint('❌ APPLE AUTH ERROR: ${e.toString()}');
-      throw Exception('Failed to sign in with Apple: ${e.toString()}');
+      debugPrint('Apple sign-in error: ${e.toString()}');
+      
+      if (e is SignInWithAppleAuthorizationException) {
+        if (e.code == AuthorizationErrorCode.canceled) {
+          throw AuthException(
+            AuthErrorCodes.socialAuthCancelled,
+            'Apple sign-in was cancelled by the user',
+            e,
+          );
+        } else {
+          throw AuthException(
+            AuthErrorCodes.appleSignInFailed,
+            'Apple sign-in failed: ${e.message}',
+            e,
+          );
+        }
+      } else if (e is FirebaseAuthException) {
+        throw _handleException(e);
+      } else if (e is AuthException) {
+        throw e;
+      }
+      
+      throw AuthException(
+        AuthErrorCodes.appleSignInFailed,
+        'Apple sign-in failed',
+        e,
+      );
     }
   }
 
@@ -273,63 +215,35 @@ class FirebaseAuthService implements AuthServiceInterface {
   Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required void Function(PhoneAuthCredential) verificationCompleted,
-    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(AuthException) verificationFailed,
     required void Function(String, int?) codeSent,
     required void Function(String) codeAutoRetrievalTimeout,
   }) async {
     try {
-      debugPrint('📱 PHONE AUTH: Starting phone verification for $phoneNumber');
-
-      // Configure phone verification settings based on environment
-      if (kDebugMode) {
-        // In debug/development mode, use settings optimized for testing
-        await _firebaseAuth.verifyPhoneNumber(
-          phoneNumber: phoneNumber,
-          verificationCompleted: (credential) {
-            debugPrint('📱 PHONE AUTH: Auto-verification completed');
-            verificationCompleted(credential);
-          },
-          verificationFailed: (e) {
-            debugPrint('📱 PHONE AUTH: Verification failed: ${e.message}');
-            verificationFailed(AuthExceptionHandler.handleException(e));
-          },
-          codeSent: (verificationId, resendToken) {
-            debugPrint('📱 PHONE AUTH: Verification code sent to user');
-            codeSent(verificationId, resendToken);
-          },
-          codeAutoRetrievalTimeout: (verificationId) {
-            debugPrint('📱 PHONE AUTH: Auto-retrieval timeout');
-            codeAutoRetrievalTimeout(verificationId);
-          },
-          timeout: const Duration(seconds: 120), // Longer timeout for testing
-          forceResendingToken: null,
-        );
+      await _firebaseAuth.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: verificationCompleted,
+        verificationFailed: (FirebaseAuthException e) {
+          verificationFailed(_handleException(e));
+        },
+        codeSent: codeSent,
+        codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+        timeout: const Duration(seconds: 60),
+      );
+    } catch (e) {
+      debugPrint('Phone number verification error: ${e.toString()}');
+      
+      if (e is FirebaseAuthException) {
+        verificationFailed(_handleException(e));
       } else {
-        // In production mode, use standard settings
-        await _firebaseAuth.verifyPhoneNumber(
-          phoneNumber: phoneNumber,
-          verificationCompleted: (credential) {
-            debugPrint('📱 PHONE AUTH: Auto-verification completed');
-            verificationCompleted(credential);
-          },
-          verificationFailed: (e) {
-            debugPrint('📱 PHONE AUTH: Verification failed: ${e.message}');
-            verificationFailed(AuthExceptionHandler.handleException(e));
-          },
-          codeSent: (verificationId, resendToken) {
-            debugPrint('📱 PHONE AUTH: Verification code sent to user');
-            codeSent(verificationId, resendToken);
-          },
-          codeAutoRetrievalTimeout: (verificationId) {
-            debugPrint('📱 PHONE AUTH: Auto-retrieval timeout');
-            codeAutoRetrievalTimeout(verificationId);
-          },
-          timeout: const Duration(seconds: 60),
+        verificationFailed(
+          AuthException(
+            AuthErrorCodes.phoneAuthFailed,
+            'Failed to verify phone number',
+            e,
+          ),
         );
       }
-    } catch (e) {
-      debugPrint('❌ PHONE AUTH ERROR: ${e.toString()}');
-      throw Exception('Failed to verify phone number: ${e.toString()}');
     }
   }
 
@@ -340,7 +254,13 @@ class FirebaseAuthService implements AuthServiceInterface {
     try {
       return await _firebaseAuth.signInWithCredential(credential);
     } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
+      throw _handleException(e);
+    } catch (e) {
+      throw AuthException(
+        AuthErrorCodes.phoneAuthFailed,
+        'Failed to sign in with phone credential',
+        e,
+      );
     }
   }
 
@@ -350,61 +270,81 @@ class FirebaseAuthService implements AuthServiceInterface {
     String smsCode,
   ) async {
     try {
-      // Create a PhoneAuthCredential with the verification ID and OTP code
-      final PhoneAuthCredential credential = PhoneAuthProvider.credential(
+      final credential = PhoneAuthProvider.credential(
         verificationId: verificationId,
         smsCode: smsCode,
       );
-      return await signInWithPhoneAuthCredential(credential);
+      return await _firebaseAuth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw _handleException(e);
     } catch (e) {
-      throw Exception('Failed to verify OTP: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.phoneAuthFailed,
+        'Failed to verify OTP code',
+        e,
+      );
     }
   }
 
   @override
   Future<void> signOut() async {
     try {
+      // Sign out from Google
       await _googleSignIn.signOut();
+      
+      // Sign out from Firebase
       await _firebaseAuth.signOut();
     } catch (e) {
-      throw Exception('Failed to sign out: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.unknown,
+        'Failed to sign out',
+        e,
+      );
     }
   }
 
-  @override
-  Future<void> sendPasswordResetEmail(String email) async {
-    try {
-      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
-    } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
-    }
-  }
-
-  @override
-  Future<void> deleteAccount() async {
-    try {
-      await _firebaseAuth.currentUser?.delete();
-    } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
-    }
-  }
+  // Password reset and account deletion methods removed
 
   @override
   Future<void> updateProfile({String? displayName, String? photoURL}) async {
     try {
-      await _firebaseAuth.currentUser?.updateDisplayName(displayName);
-      await _firebaseAuth.currentUser?.updatePhotoURL(photoURL);
+      final user = currentUser;
+      if (user == null) {
+        throw AuthException(
+          AuthErrorCodes.notLoggedIn,
+          'No user is currently logged in',
+        );
+      }
+      
+      await user.updateDisplayName(displayName);
+      await user.updatePhotoURL(photoURL);
+    } on FirebaseAuthException catch (e) {
+      throw _handleException(e);
     } catch (e) {
-      throw Exception('Failed to update profile: ${e.toString()}');
+      if (e is AuthException) {
+        throw e;
+      }
+      throw AuthException(
+        AuthErrorCodes.unknown,
+        'Failed to update profile',
+        e,
+      );
     }
   }
 
-  @override
-  Future<void> updateEmail(String newEmail) async {
-    try {
-      await _firebaseAuth.currentUser?.updateEmail(newEmail.trim());
-    } on FirebaseAuthException catch (e) {
-      throw AuthExceptionHandler.handleException(e);
-    }
+  // Email update functionality removed
+
+  /// Generates a cryptographically secure random nonce for Apple Sign In
+  String generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  /// Returns the sha256 hash of [input] in hex notation
+  String sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
   }
 }

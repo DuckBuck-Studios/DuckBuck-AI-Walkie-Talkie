@@ -5,11 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/user_model.dart';
 
 /// Authentication method options
-enum AuthMethod { email, phone, google, apple, signup }
+enum AuthMethod { phone, google, apple }
 
 /// Bottom sheet component containing authentication options
 class AuthBottomSheet extends StatefulWidget {
-  final Function(String email, String password) onLogin;
   final Function(String phoneNumber) onPhoneAuth;
   final VoidCallback onGoogleAuth;
   final VoidCallback onAppleAuth;
@@ -24,7 +23,6 @@ class AuthBottomSheet extends StatefulWidget {
 
   const AuthBottomSheet({
     super.key,
-    required this.onLogin,
     required this.onPhoneAuth,
     required this.onGoogleAuth,
     required this.onAppleAuth,
@@ -47,31 +45,15 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
   AuthMethod? _selectedAuthMethod;
 
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  bool _obscurePassword = true;
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
 
   // Validation methods (keep existing validation methods)
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Email is required';
-    }
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(value)) {
-      return 'Enter a valid email address';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Password is required';
-    }
-    return null;
-  }
-
   String? _validatePhone(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Phone number is required';
@@ -83,17 +65,14 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
     return null;
   }
 
-  // Handle method selection (only for Email/Phone now)
+  // Handle method selection (only for Phone now)
   void _selectAuthMethod(AuthMethod method) {
     HapticFeedback.mediumImpact();
     // Removed Google/Apple direct calls from here
     debugPrint('Selected auth method: $method');
     setState(() {
       _selectedAuthMethod = method;
-      _emailController.clear();
-      _passwordController.clear();
       _phoneController.clear();
-      _obscurePassword = true;
     });
   }
 
@@ -101,8 +80,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
     HapticFeedback.lightImpact();
     setState(() {
       _selectedAuthMethod = null;
-      _emailController.clear();
-      _passwordController.clear();
       _phoneController.clear();
     });
   }
@@ -128,23 +105,11 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
     HapticFeedback.lightImpact();
 
     if (_formKey.currentState?.validate() ?? false) {
-      if (_selectedAuthMethod == AuthMethod.email) {
-        final email = _emailController.text.trim();
-        final password = _passwordController.text;
-        widget.onLogin(email, password);
-      } else if (_selectedAuthMethod == AuthMethod.phone) {
+      if (_selectedAuthMethod == AuthMethod.phone) {
         final phone = _phoneController.text.trim();
         widget.onPhoneAuth(phone);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _phoneController.dispose();
-    super.dispose();
   }
 
   @override
@@ -170,8 +135,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
     Widget content;
     if (_selectedAuthMethod == null) {
       content = _buildInitialOptions();
-    } else if (_selectedAuthMethod == AuthMethod.email) {
-      content = _buildEmailForm();
     } else if (_selectedAuthMethod == AuthMethod.phone) {
       content = _buildPhoneForm();
     } else {
@@ -244,8 +207,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
 
   String _getTitle() {
     switch (_selectedAuthMethod) {
-      case AuthMethod.email:
-        return 'Sign in with Email';
       case AuthMethod.phone:
         return 'Sign in with Phone';
       default:
@@ -257,37 +218,13 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Email button
-        _buildAuthOptionButton(
-          icon: Icons.email_outlined,
-          label: 'Continue with Email',
-          // Disable if any loading is happening
-          onPressed:
-              widget.isLoading
-                  ? null
-                  : () => _selectAuthMethod(AuthMethod.email),
-          isBlack: false,
-          showLoadingIndicator:
-              widget.isLoading &&
-              widget.loadingMethod ==
-                  AuthMethod.email, // Show loading if this method is loading
-        ),
-        const SizedBox(height: 8),
-
         // Phone button
         _buildAuthOptionButton(
           icon: Icons.phone_outlined,
           label: 'Continue with Phone',
-          // Disable if any loading is happening
-          onPressed:
-              widget.isLoading
-                  ? null
-                  : () => _selectAuthMethod(AuthMethod.phone),
+          onPressed: widget.isLoading ? null : () => _selectAuthMethod(AuthMethod.phone),
           isBlack: false,
-          showLoadingIndicator:
-              widget.isLoading &&
-              widget.loadingMethod ==
-                  AuthMethod.phone, // Show loading if this method is loading
+          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.phone,
         ),
         const SizedBox(height: 8),
 
@@ -295,13 +232,9 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
         _buildAuthOptionButton(
           icon: FontAwesomeIcons.google,
           label: 'Continue with Google',
-          // Disable if any loading is happening
           onPressed: widget.isLoading ? null : _handleGoogleAuth,
           isBlack: true,
-          showLoadingIndicator:
-              widget.isLoading &&
-              widget.loadingMethod ==
-                  AuthMethod.google, // Show loading if this method is loading
+          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.google,
         ),
         const SizedBox(height: 8),
 
@@ -309,13 +242,9 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
         _buildAuthOptionButton(
           icon: FontAwesomeIcons.apple,
           label: 'Continue with Apple',
-          // Disable if any loading is happening
           onPressed: widget.isLoading ? null : _handleAppleAuth,
           isBlack: true,
-          showLoadingIndicator:
-              widget.isLoading &&
-              widget.loadingMethod ==
-                  AuthMethod.apple, // Show loading if this method is loading
+          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.apple,
         ),
       ],
     );
@@ -390,151 +319,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> {
         child: buttonContent,
       );
     }
-  }
-
-  Widget _buildEmailForm() {
-    // Use widget.isLoading to show loading state on the submit button
-    final bool isEmailLoading =
-        widget.isLoading && widget.loadingMethod == AuthMethod.email;
-
-    return Form(
-      key: _formKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Email field (disable based on global loading)
-          TextFormField(
-            controller: _emailController,
-            validator: _validateEmail,
-            keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'Email',
-              labelStyle: const TextStyle(color: Colors.white70),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.1),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white, width: 1.5),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
-              ),
-              prefixIcon: const Icon(
-                Icons.email_outlined,
-                color: Colors.white70,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              errorStyle: TextStyle(color: Colors.redAccent),
-            ),
-            textInputAction: TextInputAction.next,
-            enabled: !widget.isLoading, // Use global loading state
-          ),
-          const SizedBox(height: 16),
-
-          // Password field (disable based on global loading)
-          TextFormField(
-            controller: _passwordController,
-            validator: _validatePassword,
-            obscureText: _obscurePassword,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: 'Password',
-              labelStyle: const TextStyle(color: Colors.white70),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.1),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white, width: 1.5),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
-              ),
-              prefixIcon: const Icon(
-                Icons.lock_outlined,
-                color: Colors.white70,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              errorStyle: TextStyle(color: Colors.redAccent),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  color: Colors.white70,
-                ),
-                onPressed:
-                    () => setState(() => _obscurePassword = !_obscurePassword),
-              ),
-            ),
-            textInputAction: TextInputAction.done,
-            enabled: !widget.isLoading, // Use global loading state
-            onFieldSubmitted: (_) => _submitForm(),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Sign in button (show loading based on email method)
-          ElevatedButton(
-            onPressed:
-                widget.isLoading
-                    ? null
-                    : _submitForm, // Disable if global loading
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-              splashFactory: isEmailLoading ? NoSplash.splashFactory : null,
-            ),
-            child:
-                isEmailLoading // Show loading indicator if email is loading
-                    ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                        strokeWidth: 2,
-                      ),
-                    )
-                    : const Text(
-                      'Sign in',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildPhoneForm() {

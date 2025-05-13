@@ -2,9 +2,10 @@ import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth/auth_service_interface.dart';
-import '../models/user_model.dart';
+import '../models/user_model.dart';  // Account deletion functionality has been removed
 import '../services/firebase/firebase_database_service.dart';
 import '../services/service_locator.dart';
+import '../exceptions/auth_exceptions.dart';
 
 /// Repository to handle user data operations
 class UserRepository {
@@ -33,48 +34,7 @@ class UserRepository {
     });
   }
 
-  /// Sign in with email and password
-  Future<UserModel> signInWithEmail({
-    required String email,
-    required String password,
-    bool requireEmailVerification = false,
-  }) async {
-    final credential = await authService.signInWithEmailPassword(
-      email,
-      password,
-      requireEmailVerification: requireEmailVerification,
-    );
-    final user = UserModel.fromFirebaseUser(credential.user!);
-
-    // Update user record in Firestore to track last sign in
-    await _updateUserData(user);
-
-    return user;
-  }
-
-  /// Create a new account with email and password
-  Future<UserModel> createAccountWithEmail({
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    final credential = await authService.createAccountWithEmailPassword(
-      email,
-      password,
-    );
-
-    // Update display name if provided
-    if (displayName != null) {
-      await authService.updateProfile(displayName: displayName);
-    }
-
-    final user = UserModel.fromFirebaseUser(credential.user!);
-
-    // Create user record in Firestore
-    await _createUserData(user);
-
-    return user;
-  }
+  // Email and password authentication has been removed in favor of social auth and phone auth
 
   /// Sign in with Google
   Future<(UserModel, bool)> signInWithGoogle() async {
@@ -124,7 +84,7 @@ class UserRepository {
   Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required void Function(PhoneAuthCredential) verificationCompleted,
-    required void Function(FirebaseAuthException) verificationFailed,
+    required void Function(AuthException) verificationFailed,
     required void Function(String, int?) codeSent,
     required void Function(String) codeAutoRetrievalTimeout,
   }) {
@@ -169,8 +129,13 @@ class UserRepository {
 
       return (user, isNewUser);
     } catch (e) {
-      throw Exception(
-        'Failed to sign in with phone credential: ${e.toString()}',
+      if (e is AuthException) {
+        throw e; // Re-throw our custom exception if already processed
+      }
+      throw AuthException(
+        AuthErrorCodes.phoneAuthFailed,
+        'Failed to sign in with phone credential',
+        e,
       );
     }
   }
@@ -205,10 +170,7 @@ class UserRepository {
     }
   }
 
-  /// Send password reset email
-  Future<void> sendPasswordResetEmail(String email) {
-    return authService.sendPasswordResetEmail(email);
-  }
+  // Password reset functionality has been removed
 
   /// Get user data from Firestore
   Future<UserModel?> getUserData(String uid) async {
@@ -218,7 +180,11 @@ class UserRepository {
 
       return UserModel.fromMap(doc.data()!);
     } catch (e) {
-      throw Exception('Failed to get user data: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.unknown,
+        'Failed to get user data',
+        e
+      );
     }
   }
 
@@ -238,7 +204,11 @@ class UserRepository {
       
       print('🔍 USER REPO: Created new user with auth provider: $providerId');
     } catch (e) {
-      throw Exception('Failed to create user data: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to create user data',
+        e
+      );
     }
   }
 
@@ -251,7 +221,11 @@ class UserRepository {
         'lastLoggedIn': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception('Failed to update user data: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to update user data',
+        e
+      );
     }
   }
 
@@ -280,27 +254,15 @@ class UserRepository {
       }
     } catch (e) {
       print('❌ CHECKING USER EXISTENCE ERROR: ${e.toString()}');
-      throw Exception('Failed to create or update user data: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to create or update user data',
+        e
+      );
     }
   }
 
-  /// Delete the current user
-  Future<void> deleteAccount() async {
-    try {
-      final uid = authService.currentUser?.uid;
-      if (uid == null) {
-        throw Exception('No user is currently signed in');
-      }
-
-      // Delete user data from Firestore
-      await _firestore.collection(_userCollection).doc(uid).delete();
-
-      // Delete the Firebase Auth account
-      await authService.deleteAccount();
-    } catch (e) {
-      throw Exception('Failed to delete account: ${e.toString()}');
-    }
-  }
+  // Account deletion functionality has been removed
 
   /// Check if a user is new (doesn't exist in Firestore or has isNewUser flag)
   Future<bool> checkIfUserIsNew(String uid) async {
@@ -337,7 +299,11 @@ class UserRepository {
       });
     } catch (e) {
       print('❌ USER REPO ERROR: ${e.toString()}');
-      throw Exception('Failed to mark user onboarding as complete: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to mark user onboarding as complete',
+        e
+      );
     }
   }
 }

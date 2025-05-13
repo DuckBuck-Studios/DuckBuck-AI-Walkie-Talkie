@@ -10,11 +10,12 @@ The DuckBuck friend system enables users to connect, manage relationships, and c
 - **FriendService**: Core service handling all friend-related operations and data access
   
 ### Repository Layer
-- **FriendRepository**: Application-level repository mediating between UI and service layers
+- **FriendRepository**: Enhanced repository with caching and error handling that mediates between UI and service layers
 
 ### Models
-- **FriendRequestModel**: Represents friend requests with status tracking
-- **BlockedUserModel**: Represents blocked user relationships
+- **FriendRelationshipModel**: Single-document model that represents the complete relationship between two users
+- **RelationshipStatus**: Enum representing possible relationship states (none, pending, friends, blocked)
+- **RelationshipDirection**: Enum representing the direction of an action in a relationship (fromFirst, fromSecond, mutual)
 
 ## Key Features
 
@@ -44,10 +45,20 @@ The DuckBuck friend system enables users to connect, manage relationships, and c
 
 The `FriendService` implements all core friend operations:
 
-- Friend request database operations
+- Friend relationship database operations
 - Friend relationship management in Firestore
 - Block list management
 - Real-time friendship status updates
+
+### FriendRepository
+
+The enhanced `FriendRepository` provides:
+
+- **Performance Optimization**: Client-side caching with automatic invalidation
+- **Consolidated Storage**: All relationship data between two users in a single document
+- **Error Handling**: Custom exceptions with specific error codes
+- **Relationship History**: Complete history of relationship events in a single document
+- **Caching**: In-memory caching for frequently accessed data with configurable TTL
 
 **Key Components**:
 - Friend request collection management
@@ -162,3 +173,53 @@ The blocking system provides critical privacy and safety controls:
                       │  (Extension Methods)     │
                       └─────────────────────┘
 ```
+
+## Enhanced Implementation
+
+### Single-Document Relationship Architecture
+
+The enhanced implementation uses a single-document approach for storing relationships:
+
+```
+┌─────────────────────────────┐
+│   Relationship Document     │
+├─────────────────────────────┤
+│ - user1Id                   │
+│ - user2Id                   │
+│ - status (enum)             │
+│ - direction                 │
+│ - createdAt                 │
+│ - updatedAt                 │
+│ - history[]                 │
+└─────────────────────────────┘
+```
+
+Benefits:
+- Reduced database operations
+- Atomic updates to relationship status
+- Complete relationship history in one place
+- Consistent document IDs based on user IDs
+
+### Caching and Performance
+
+The repository implements sophisticated caching:
+- In-memory caching of friend lists with configurable TTL
+- Automatic invalidation when relationships change
+- Periodic cleanup of expired cache entries
+- Batch processing for user details
+
+### Robust Error Handling
+
+Custom exception handling with specific error codes:
+- Authentication errors (not logged in)
+- Input validation errors (invalid IDs, self-requests)
+- Blocking-related errors (blocked by sender/receiver)
+- Relationship errors (already friends, not friends)
+- Operation failures (request/accept/reject failures)
+
+### Data Migration
+
+The new architecture supports migration from multi-document to single-document structure:
+1. Relationship documents are created with deterministic IDs
+2. History records are populated from existing documents
+3. Old documents can be preserved for backward compatibility

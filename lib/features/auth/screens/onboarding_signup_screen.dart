@@ -67,18 +67,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     super.dispose();
   }
 
-  /// Handle email/password login
-  Future<void> _handleEmailLogin(String email, String password) async {
-    // Don't require email verification - allow users to sign in regardless of verification status
-    await _handleAuthentication(
-      AuthMethod.email,
-      email: email,
-      password: password,
-      requireEmailVerification:
-          false, // Set to false to allow login without email verification
-    );
-  }
-
   /// Handle phone authentication
   Future<void> _handlePhoneAuth(String phoneNumber) async {
     await _handleAuthentication(AuthMethod.phone, phoneNumber: phoneNumber);
@@ -87,7 +75,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   /// Handle Google authentication
   Future<void> _handleGoogleAuth() async {
     debugPrint('🔍 SIGNUP SCREEN: Google auth button pressed');
-    // Don't force profile completion - properly check if user is new
     await _handleAuthentication(AuthMethod.google);
   }
 
@@ -136,11 +123,8 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   /// Handle authentication process with different providers
   Future<void> _handleAuthentication(
     AuthMethod method, {
-    String? email,
-    String? password,
     String? phoneNumber,
-    bool requireEmailVerification = false,
-    bool forceProfileCompletion = false, // New parameter to force profile completion
+    bool forceProfileCompletion = false,
   }) async {
     debugPrint(
       '🔍 SIGNUP SCREEN: Starting authentication process for method: $method, forceProfileCompletion: $forceProfileCompletion',
@@ -161,13 +145,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
 
       // Perform authentication based on the method
       switch (method) {
-        case AuthMethod.email:
-          debugPrint('🔍 SIGNUP SCREEN: Processing email auth');
-          if (email != null && password != null) {
-            // Email auth logic
-          }
-          break;
-
         case AuthMethod.google:
           debugPrint('🔍 SIGNUP SCREEN: Starting Google auth flow...');
           try {
@@ -285,11 +262,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
               _errorMessage = 'Phone number is required';
             });
           }
-          break;
-
-        case AuthMethod.signup:
-          debugPrint('🔍 SIGNUP SCREEN: Processing signup');
-          // Signup logic
           break;
       }
     } catch (e) {
@@ -500,8 +472,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                     ),
                   ),
 
-                  // REMOVED the error message Text widget from here
-
                   // Equal spacer to center the content vertically
                   const Spacer(flex: 2),
 
@@ -532,7 +502,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
               key: const ValueKey('auth_bottom_sheet'),
               isLoading: _isLoading,
               loadingMethod: _loadingMethod,
-              onLogin: _handleEmailLogin,
               onPhoneAuth: _handlePhoneAuth,
               onGoogleAuth: _handleGoogleAuth,
               onAppleAuth: _handleAppleAuth,

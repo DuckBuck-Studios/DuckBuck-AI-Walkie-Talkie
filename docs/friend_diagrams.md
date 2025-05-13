@@ -7,8 +7,8 @@ classDiagram
     class FriendService {
         -FirebaseDatabaseService _databaseService
         +Future~String~ sendFriendRequest(String senderId, String receiverId)
-        +Future~FriendRequestModel?~ getFriendRequest(String requestId)
-        +Future~List~FriendRequestModel~~ getPendingRequestsForUser(String userId)
+        +Future~FriendRelationshipModel?~ getRelationship(String relationshipId)
+        +Future~FriendRelationshipModel?~ getRelationshipBetweenUsers(String user1Id, String user2Id)
         +Future~bool~ acceptFriendRequest(String requestId)
         +Future~bool~ rejectFriendRequest(String requestId)
         +Future~bool~ cancelFriendRequest(String requestId)
@@ -24,11 +24,20 @@ classDiagram
     class FriendRepository {
         -FriendService _friendService
         -UserRepository _userRepository
+        -Map~String, List~String~~ _friendsCache
+        -Map~String, DateTime~ _cacheTimestamps
+        -Map~String, FriendRelationshipModel~ _relationshipCache
+        -Duration _cacheDuration
+        -Timer? _cacheCleanupTimer
         +Future~String~ sendFriendRequest(String receiverId)
-        +Future~List~FriendRequestModel~~ getPendingRequests()
+        +Future~List~FriendRelationshipModel~~ getPendingRequests()
         +Future~bool~ acceptFriendRequest(String requestId)
         +Future~bool~ rejectFriendRequest(String requestId)
-        +Future~bool~ cancelFriendRequest(String requestId)
+        +Future~List~String~~ getFriends(bool forceRefresh)
+        +Future~List~String~~ getFriendsFor(String userId, bool forceRefresh)
+        +Future~RelationshipStatus~ getRelationshipWith(String userId)
+        +void invalidateCache(String userId)
+        -void _cleanupExpiredCache()
         +Future~List~String~~ getFriends()
         +Future~List~String~~ getFriendsFor(String userId)
         +Future~bool~ isFriendWith(String userId)
@@ -40,16 +49,45 @@ classDiagram
         +Future~bool~ isUserBlockedBy(String blockerId, String blockedId)
     }
 
-    class FriendRequestModel {
+    // FriendRequestModel removed - using a single model approach
+    
+    class FriendRelationshipModel {
         +String id
-        +String senderId
-        +String receiverId
-        +FriendRequestStatus status
+        +String user1Id
+        +String user2Id
+        +RelationshipStatus status
+        +RelationshipDirection direction
         +DateTime createdAt
         +DateTime updatedAt
+        +List~RelationshipEvent~ history
         +toMap()
         +fromMap()
-        +copyWith()
+        +addEvent()
+        +updateStatus()
+        +hasUser()
+        +getOtherUserId()
+    }
+    
+    class RelationshipEvent {
+        +String eventType
+        +String userId
+        +DateTime timestamp
+        +String? message
+        +toMap()
+        +fromMap()
+    }
+    
+    enum RelationshipStatus {
+        none
+        pending
+        friends
+        blocked
+    }
+    
+    enum RelationshipDirection {
+        mutual
+        fromUser1ToUser2
+        fromUser2ToUser1
     }
 
     class FriendRepositoryMessagingExtension {
@@ -57,18 +95,16 @@ classDiagram
         +Future~List~String~~ getMessagingEnabledFriends(String userId)
     }
 
-    enum FriendRequestStatus {
-        pending
-        accepted
-        rejected
-        cancelled
-    }
+    // Using RelationshipStatus instead of FriendRequestStatus
 
     FriendRepository --> FriendService : uses
     FriendRepository --> UserRepository : uses
-    FriendService --> FriendRequestModel : creates/manages
+    FriendService --> FriendRelationshipModel : creates/manages
     FriendRepository <|-- FriendRepositoryMessagingExtension : extends
-    FriendRequestModel --> FriendRequestStatus : uses
+    FriendRelationshipModel --> RelationshipStatus : uses
+    FriendRelationshipModel --> RelationshipDirection : uses
+    FriendRelationshipModel *-- RelationshipEvent : contains
+    RelationshipEvent --> RelationshipStatus : affects
 ```
 
 ## Friend Request Flow Diagram
@@ -86,10 +122,14 @@ sequenceDiagram
     %% Friend Request Flow
     Sender->>SenderUI: Send Friend Request
     SenderUI->>FriendRepo: sendFriendRequest(receiverId)
+    FriendRepo->>FriendRepo: validate & check relationships
     FriendRepo->>FriendSvc: sendFriendRequest(senderId, receiverId)
-    FriendSvc->>DB: Create Friend Request
+    FriendSvc->>DB: Get or Create Relationship Document
+    FriendSvc->>DB: Update Relationship Status to Pending
+    FriendSvc->>DB: Add Request Event to History
     DB-->>FriendSvc: Request ID
     FriendSvc-->>FriendRepo: Request ID
+    FriendRepo->>FriendRepo: Invalidate Cache
     FriendRepo-->>SenderUI: Success
     SenderUI-->>Sender: Request Sent Confirmation
     
@@ -106,11 +146,14 @@ sequenceDiagram
     %% Accept Friend Request
     Receiver->>ReceiverUI: Accept Request
     ReceiverUI->>FriendRepo: acceptFriendRequest(requestId)
+    FriendRepo->>FriendRepo: Validate request belongs to user
     FriendRepo->>FriendSvc: acceptFriendRequest(requestId)
-    FriendSvc->>DB: Update Request Status
-    FriendSvc->>DB: Create Friendship (Both Ways)
+    FriendSvc->>DB: Get Relationship Document
+    FriendSvc->>DB: Update Status to Friends
+    FriendSvc->>DB: Add Accept Event to History
     DB-->>FriendSvc: Success
     FriendSvc-->>FriendRepo: Success
+    FriendRepo->>FriendRepo: Invalidate Cache for both users
     FriendRepo-->>ReceiverUI: Success
     ReceiverUI-->>Receiver: Friend Added Confirmation
 ```
@@ -128,21 +171,27 @@ sequenceDiagram
     %% Block User Flow
     User->>UI: Block User (userId)
     UI->>FriendRepo: blockUser(userId)
+    FriendRepo->>FriendRepo: Validate request & currentUser
     FriendRepo->>FriendSvc: blockUser(currentUserId, userId)
-    FriendSvc->>FriendSvc: Remove friendship if exists
-    FriendSvc->>DB: Create Block Record
+    FriendSvc->>DB: Get or Create Relationship Document
+    FriendSvc->>FriendSvc: Calculate relationship direction
+    FriendSvc->>DB: Set Status to Blocked
+    FriendSvc->>DB: Add Block Event to History
     DB-->>FriendSvc: Success
     FriendSvc-->>FriendRepo: Success
+    FriendRepo->>FriendRepo: Invalidate Cache for both users
     FriendRepo-->>UI: Success
     UI-->>User: User Blocked Confirmation
     
     %% Check if blocked before interaction
     User->>UI: Try to message user
     UI->>FriendRepo: canSendMessage(senderId, receiverId)
-    FriendRepo->>FriendRepo: checkIfFriends(senderId, receiverId)
-    FriendRepo->>FriendRepo: isUserBlockedBy(receiverId, senderId)
-    FriendRepo->>FriendRepo: isUserBlockedBy(senderId, receiverId)
-    FriendRepo-->>UI: Can/Cannot Send Message
+    FriendRepo->>FriendRepo: getRelationshipWith(receiverId)
+    FriendRepo->>FriendSvc: Get relationship document
+    FriendSvc->>DB: Query relationship by deterministic ID
+    DB-->>FriendSvc: Relationship document
+    FriendSvc-->>FriendRepo: Relationship data
+    FriendRepo-->>UI: Can/Cannot Send Message (based on status)
     UI-->>User: Allow/Block Action
 ```
 

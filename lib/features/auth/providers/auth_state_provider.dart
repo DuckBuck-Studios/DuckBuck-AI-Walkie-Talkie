@@ -5,6 +5,7 @@ import '../../../core/models/user_model.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/notifications/notifications_service.dart';
+import '../../../core/exceptions/auth_exceptions.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -65,62 +66,6 @@ class AuthStateProvider extends ChangeNotifier {
 
   /// Whether the user is authenticated
   bool get isAuthenticated => _currentUser != null;
-
-  /// Sign in with email and password
-  Future<UserModel> signInWithEmail({
-    required String email,
-    required String password,
-    bool requireEmailVerification = false,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      final user = await _userRepository.signInWithEmail(
-        email: email,
-        password: password,
-        requireEmailVerification: requireEmailVerification,
-      );
-
-      _errorMessage = null;
-      return user;
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Create a new account with email and password
-  Future<UserModel> createAccount({
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      final user = await _userRepository.createAccountWithEmail(
-        email: email,
-        password: password,
-        displayName: displayName,
-      );
-
-      _errorMessage = null;
-      return user;
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
 
   /// Sign in with Google
   Future<(UserModel, bool)> signInWithGoogle() async {
@@ -199,11 +144,11 @@ class AuthStateProvider extends ChangeNotifier {
           notifyListeners();
           onVerified();
         },
-        verificationFailed: (e) {
+        verificationFailed: (AuthException e) {
           _errorMessage = e.message;
           _isLoading = false;
           notifyListeners();
-          onError(e.message ?? 'Verification failed');
+          onError(e.message);
         },
         codeSent: (verificationId, resendToken) {
           _isLoading = false;
@@ -317,23 +262,6 @@ class AuthStateProvider extends ChangeNotifier {
 
       // Force refresh the current user
       _currentUser = _userRepository.currentUser;
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Send password reset email
-  Future<void> sendPasswordResetEmail(String email) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _userRepository.sendPasswordResetEmail(email);
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
