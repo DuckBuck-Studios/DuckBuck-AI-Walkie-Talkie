@@ -27,10 +27,10 @@ class AppColors {
   static const Color infoBlue = Color(0xFF00FFAA); // Lighter green for info
 
   // Transparent colors for overlays
-  static Color blackOpacity10 = Colors.black.withOpacity(0.1);
-  static Color blackOpacity20 = Colors.black.withOpacity(0.2);
-  static Color blackOpacity50 = Colors.black.withOpacity(0.5);
-  static Color whiteOpacity10 = Colors.white.withOpacity(0.1);
-  static Color whiteOpacity20 = Colors.white.withOpacity(0.2);
-  static Color whiteOpacity50 = Colors.white.withOpacity(0.5);
+  static Color blackOpacity10 = Colors.black.withValues(alpha: 0.1);
+  static Color blackOpacity20 = Colors.black.withValues(alpha: 0.2);
+  static Color blackOpacity50 = Colors.black.withValues(alpha: 0.5);
+  static Color whiteOpacity10 = Colors.white.withValues(alpha: 0.1);
+  static Color whiteOpacity20 = Colors.white.withValues(alpha: 0.2);
+  static Color whiteOpacity50 = Colors.white.withValues(alpha: 0.5);
 }

@@ -58,6 +58,10 @@ android {
 dependencies {
     // Add desugaring library for backward compatibility with older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
+    
+    // Required dependencies for Apple Sign In on Android
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("androidx.browser:browser:1.6.0")
 }
 
 flutter {

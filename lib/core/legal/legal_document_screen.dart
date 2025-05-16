@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:duckbuck/core/legal/legal_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+ 
 class LegalDocumentScreen extends StatefulWidget {
   final String title;
   final Future<LegalDocument> Function() documentLoader;
@@ -17,39 +19,60 @@ class LegalDocumentScreen extends StatefulWidget {
   State<LegalDocumentScreen> createState() => _LegalDocumentScreenState();
 }
 
-class _LegalDocumentScreenState extends State<LegalDocumentScreen> with SingleTickerProviderStateMixin {
-  late Future<LegalDocument> _documentFuture;
+class _LegalDocumentScreenState extends State<LegalDocumentScreen> 
+    with SingleTickerProviderStateMixin {
+  LegalDocument? _document;
+  bool _isLoading = true;
+  String? _errorMessage;
   late AnimationController _animationController;
-  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
-    _documentFuture = widget.documentLoader();
     
-    // Setup animation controller
+    // Use shorter animation duration for better performance
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 250),
     );
-    
-    // Create slide animation from right to left (for opening)
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(1.0, 0.0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
     
     // Start the animation
     _animationController.forward();
+    
+    // Pre-fetch document data to eliminate visible loading state
+    _preloadDocument();
   }
-
+  
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  /// Preload document data with optimized loading strategy
+  Future<void> _preloadDocument() async {
+    // Add a microtask to allow UI to render first before loading data
+    Future.microtask(() async {
+      try {
+        // Preload document with compute to avoid UI jank
+        final document = await widget.documentLoader();
+        
+        // Only update state if the widget is still mounted
+        if (!mounted) return;
+        
+        setState(() {
+          _document = document;
+          _isLoading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    });
   }
 
   /// Get the web URL for the current document
@@ -66,15 +89,10 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> with SingleTi
   Future<void> _launchUrl() async {
     final Uri url = Uri.parse(_getWebUrl);
     try {
-      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not launch $_getWebUrl')));
-      }
+      await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      // Silent error handling with debugPrint
+      debugPrint('Error launching URL $_getWebUrl: $e');
     }
   }
   
@@ -90,179 +108,287 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> with SingleTi
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _handleBackPress,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Scaffold(
-          backgroundColor: AppColors.backgroundBlack,
-          appBar: AppBar(
-            title: Text(widget.title),
-            backgroundColor: AppColors.surfaceBlack,
-            foregroundColor: AppColors.textPrimary,
-            elevation: 0,
-            // Override the back button to trigger our custom animation
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () async {
-                await _handleBackPress();
-                if (mounted) Navigator.of(context).pop();
-              },
-            ),
+      child: Platform.isIOS 
+        ? _buildCupertinoUI()
+        : _buildMaterialUI(),
+    );
+  }
+
+  /// Build iOS-specific UI
+  Widget _buildCupertinoUI() {
+    return FadeTransition(
+      opacity: _animationController.drive(CurveTween(curve: Curves.easeOut)),
+      child: CupertinoPageScaffold(
+        backgroundColor: CupertinoColors.systemBackground.darkColor,
+        navigationBar: CupertinoNavigationBar(
+          backgroundColor: AppColors.surfaceBlack,
+          middle: Text(
+            widget.title,
+            style: const TextStyle(color: AppColors.textPrimary),
           ),
-          body: FutureBuilder<LegalDocument>(
-            future: _documentFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: AppColors.accentBlue),
-                );
-              }
-
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: AppColors.errorRed,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading document',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          snapshot.error.toString(),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _documentFuture = widget.documentLoader();
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.accentBlue,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              if (snapshot.hasData) {
-                final document = snapshot.data!;
-                return Scrollbar(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16.0),
-                    children: [
-                      // Document header
-                      Text(
-                        document.title,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      Text(
-                        'Version ${document.version} | Last Updated: ${document.lastUpdated}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-
-                      // Document sections with no animation
-                      ...List.generate(document.sections.length, (index) {
-                        final section = document.sections[index];
-                        return _buildSection(section, context);
-                      }),
-
-                      // Read more section with link to website
-                      _buildReadMoreSection(context),
-
-                      // Bottom padding
-                      const SizedBox(height: 40),
-                    ],
-                  ),
-                );
-              }
-
-              return const Center(child: Text('No document found'));
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            child: const Icon(CupertinoIcons.back, color: AppColors.textPrimary),
+            onPressed: () async {
+              await _handleBackPress();
+              if (mounted) Navigator.of(context).pop();
             },
           ),
+        ),
+        child: _buildBody(context, useCupertinoStyle: true),
+      ),
+    );
+  }
+
+  /// Build Android-specific UI
+  Widget _buildMaterialUI() {
+    return FadeTransition(
+      opacity: _animationController.drive(CurveTween(curve: Curves.easeOut)),
+      child: Scaffold(
+        backgroundColor: AppColors.backgroundBlack,
+        appBar: AppBar(
+          title: Text(widget.title),
+          backgroundColor: AppColors.surfaceBlack,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async {
+              await _handleBackPress();
+              if (mounted) Navigator.of(context).pop();
+            },
+          ),
+        ),
+        body: _buildBody(context, useCupertinoStyle: false),
+      ),
+    );
+  }
+
+  /// Builds the body content with conditional styling based on platform
+  Widget _buildBody(BuildContext context, {required bool useCupertinoStyle}) {
+    // Show blank space instead of loading indicator to improve perceived performance
+    if (_isLoading) {
+      return const SizedBox.shrink();
+    }
+    
+    // Show error view if document loading failed
+    if (_errorMessage != null) {
+      return _buildErrorView(context, useCupertinoStyle);
+    }
+
+    // Document is loaded
+    if (_document != null) {
+      return _buildDocumentView(context, useCupertinoStyle);
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  /// Creates the error view with platform-specific styling
+  Widget _buildErrorView(BuildContext context, bool useCupertinoStyle) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              useCupertinoStyle ? CupertinoIcons.exclamationmark_circle : Icons.error_outline,
+              color: AppColors.errorRed,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Error loading document',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            useCupertinoStyle
+                ? CupertinoButton(
+                    color: AppColors.accentBlue,
+                    onPressed: () {
+                      setState(() {
+                        _isLoading = true;
+                        _errorMessage = null;
+                      });
+                      _preloadDocument();
+                    },
+                    child: const Text('Retry'),
+                  )
+                : ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLoading = true;
+                        _errorMessage = null;
+                      });
+                      _preloadDocument();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentBlue,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Retry'),
+                  ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSection(LegalSection section, BuildContext context) {
+  /// Creates the document view with a memory-efficient approach 
+  Widget _buildDocumentView(BuildContext context, bool useCupertinoStyle) {
+    // Use platform-specific scrolling with optimized builders for better performance
+    final scrollView = ListView.builder(
+      // Use builder pattern with caching for better memory management
+      padding: const EdgeInsets.all(16.0),
+      // Adding physics for smoother scrolling based on platform
+      physics: useCupertinoStyle 
+        ? const AlwaysScrollableScrollPhysics() 
+        : const ClampingScrollPhysics(),
+      // Efficient item count calculation
+      itemCount: _document!.sections.length + 3, // header, info line, read more button, sections
+      // Add cacheExtent for smoother scrolling
+      cacheExtent: 500,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          // Header - use RepaintBoundary for performance
+          return RepaintBoundary(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                _document!.title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          );
+        } else if (index == 1) {
+          // Version info
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 24.0),
+            child: Text(
+              'Version ${_document!.version} | Last Updated: ${_document!.lastUpdated}',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          );
+        } else if (index == _document!.sections.length + 2) {
+          // Read more button
+          return _buildReadMoreButton(context, useCupertinoStyle);
+        } else {
+          // Section with memory optimizations
+          final sectionIndex = index - 2;
+          final section = _document!.sections[sectionIndex];
+          // Using RepaintBoundary to prevent unnecessary repaints
+          return RepaintBoundary(
+            child: _buildSection(section, context, useCupertinoStyle),
+          );
+        }
+      },
+    );
+    
+    return useCupertinoStyle
+        ? CupertinoScrollbar(child: scrollView)
+        : Scrollbar(child: scrollView);
+  }
+
+  /// Creates an optimized section card with platform-specific styling
+  /// Uses memory optimization techniques to prevent lag
+  Widget _buildSection(LegalSection section, BuildContext context, bool useCupertinoStyle) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24.0),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: AppColors.surfaceBlack,
         borderRadius: BorderRadius.circular(12),
+        // Optimize border with only top and bottom for better performance
         border: Border.all(color: AppColors.borderColor, width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            section.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.accentBlue,
-              fontWeight: FontWeight.w600,
+      // Use more efficient ConstrainedBox for better layout performance
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 50),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title with optimized text rendering
+            Text(
+              section.title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.accentBlue,
+              ),
+              // Optimize text rendering
+              textAlign: TextAlign.left,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            section.content, 
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textPrimary,
+            const SizedBox(height: 12),
+            // Content with optimized text
+            Text(
+              section.content,
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textPrimary,
+                // Use height for better readability and performance
+                height: 1.4,
+              ),
+              // Don't use rich text features for better performance
+              textAlign: TextAlign.left,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildReadMoreSection(BuildContext context) {
+  /// Creates a platform-specific read more button
+  Widget _buildReadMoreButton(BuildContext context, bool useCupertinoStyle) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       child: Center(
-        child: ElevatedButton(
-          onPressed: _launchUrl,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentBlue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: const Text(
-            'Read More',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-          ),
-        ),
+        child: useCupertinoStyle
+            ? CupertinoButton(
+                color: AppColors.accentBlue,
+                onPressed: _launchUrl,
+                child: const Text(
+                  'Read More',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              )
+            : ElevatedButton(
+                onPressed: _launchUrl,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Read More',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:duckbuck/core/navigation/app_routes.dart';
@@ -7,6 +8,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/core/theme/widget_styles.dart';
 import 'package:duckbuck/core/widgets/safe_slide_action.dart'; // Import our custom widget
+import 'package:duckbuck/core/services/service_locator.dart';
+import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
+import 'package:duckbuck/core/services/logger/logger_service.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -16,14 +20,28 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  String _appVersion = '1.0.0';
+  String _appVersion = '';
   bool _isStartingApp = false;
+  
+  // Services
+  final _analytics = serviceLocator<FirebaseAnalyticsService>();
+  final _logger = serviceLocator<LoggerService>();
+  final String _tag = 'WelcomeScreen';
 
   @override
   void initState() {
     super.initState();
     _getAppVersion();
     _markWelcomeScreenAsSeen();
+    _logScreenView();
+  }
+  
+  void _logScreenView() {
+    _analytics.logScreenView(
+      screenName: 'welcome_screen',
+      screenClass: 'WelcomeScreen',
+    );
+    _logger.i(_tag, 'Welcome screen viewed');
   }
 
   Future<void> _getAppVersion() async {
@@ -31,11 +49,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final packageInfo = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          _appVersion = packageInfo.version;
+          _appVersion = packageInfo.version + '+' + packageInfo.buildNumber;
         });
       }
     } catch (e) {
       debugPrint('Failed to get app version: $e');
+      // Set a fallback version in case of error
+      if (mounted) {
+        setState(() {
+          _appVersion = 'Unknown';
+        });
+      }
     }
   }
 
@@ -53,9 +77,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     setState(() {
       _isStartingApp = true;
     });
+    
+    // Log the start of onboarding
+    await _analytics.logEvent(
+      name: 'start_onboarding',
+      parameters: {
+        'source': 'welcome_screen',
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    _logger.i(_tag, 'User started onboarding flow');
 
-    // Use the AppRoutes system for navigation
-    Navigator.of(context).pushNamed(AppRoutes.onboarding);
+    // Reset onboarding progress to ensure users see all screens
+    await PreferencesService.instance.setCurrentOnboardingStep(0);
+
+    // Check if the widget is still mounted before using context
+    if (mounted) {
+      // Use the AppRoutes system for navigation
+      Navigator.of(context).pushReplacementNamed(AppRoutes.onboarding);
+    }
   }
 
   @override
@@ -205,31 +245,39 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildSlideToAction(BuildContext context, bool isIOS) {
-    // Use our custom SafeSlideAction widget instead of the original SlideAction
-    return SafeSlideAction(
-      height: 60,
-      sliderButtonIconSize: 24,
-      sliderRotate: false,
-      borderRadius: 16,
-      elevation: 0,
-      innerColor: AppColors.accentBlue,
-      outerColor: AppColors.surfaceBlack,
-      sliderButtonIcon:
-          isIOS
-              ? const Icon(CupertinoIcons.arrow_right, color: Colors.white)
-              : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-      text: 'Slide to get started',
-      textStyle: const TextStyle(
-        color: AppColors.textPrimary,
-        fontSize: 18,
-        fontWeight: FontWeight.w500,
+    // Wrap in RepaintBoundary for better rendering performance
+    return RepaintBoundary(
+      child: SafeSlideAction(
+        height: isIOS ? 58 : 60,
+        sliderButtonIconSize: isIOS ? 22 : 24,
+        sliderRotate: false,
+        borderRadius: isIOS ? 18 : 16,
+        elevation: 0,
+        innerColor: AppColors.accentBlue,
+        outerColor: AppColors.surfaceBlack,
+        sliderButtonIcon: isIOS
+            ? const Icon(CupertinoIcons.arrow_right, color: Colors.white)
+            : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+        text: 'Slide to get started',
+        textStyle: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: isIOS ? 16 : 18,
+          fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
+        ),
+        onSubmit: () {
+          // Provide haptic feedback based on platform
+          if (isIOS) {
+            HapticFeedback.mediumImpact();
+          } else {
+            HapticFeedback.lightImpact();
+          }
+          
+          // Navigate to onboarding screens after a short delay
+          Future.delayed(const Duration(milliseconds: 200), () {
+            _navigateToOnboarding();
+          });
+        },
       ),
-      onSubmit: () {
-        // Navigate to onboarding screens after a short delay
-        Future.delayed(const Duration(milliseconds: 200), () {
-          _navigateToOnboarding();
-        });
-      },
     );
   }
 
@@ -242,7 +290,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Widget _buildVersionText() {
     return Text(
-      'Version $_appVersion',
+      _appVersion.isEmpty ? 'Loading version...' : 'Version $_appVersion',
       style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
     );
   }

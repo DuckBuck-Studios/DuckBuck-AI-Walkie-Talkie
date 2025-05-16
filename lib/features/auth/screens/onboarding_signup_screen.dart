@@ -1,11 +1,16 @@
+import 'dart:io';
+import 'dart:math' as Math;
+
 import 'package:duckbuck/core/models/user_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../components/auth_bottom_sheet.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/firebase/firebase_analytics_service.dart';
+import '../../../core/services/logger/logger_service.dart';
 import '../providers/auth_state_provider.dart';
 import '../../../core/widgets/notification_bar.dart';
 import '../../../core/navigation/app_routes.dart';
@@ -21,12 +26,13 @@ class OnboardingSignupScreen extends StatefulWidget {
 }
 
 class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
+    with TickerProviderStateMixin {
+  // No more animation controller needed
 
   // Services
   late final FirebaseAnalyticsService _analyticsService;
+  late final LoggerService _logger;
+  final String _tag = 'OnboardingSignupScreen';
 
   // UI state management
   bool _isLoading = false;
@@ -40,22 +46,17 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
 
-    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
-    );
-
-    _animationController.forward();
+    // Remove animation controller setup
 
     // Add haptic feedback when screen appears with stronger impact for final screen
     HapticFeedback.heavyImpact();
 
     // Initialize services
     _analyticsService = serviceLocator<FirebaseAnalyticsService>();
+    _logger = serviceLocator<LoggerService>();
+
+    _logger.i(_tag, 'Initializing OnboardingSignupScreen');
 
     // Check if the user is already authenticated and route accordingly
     _checkAndRouteAuthenticatedUser();
@@ -63,24 +64,38 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
+    // Remove animation controller disposal
     super.dispose();
   }
 
   /// Handle phone authentication
   Future<void> _handlePhoneAuth(String phoneNumber) async {
+    // Set loading state immediately to show the loading indicator
+    setState(() {
+      _isLoading = true;
+      _loadingMethod = AuthMethod.phone;
+      _errorMessage = null;
+    });
+
+    // Log the phone number verification attempt
+    _logger.i(_tag, 'Starting phone number verification: $phoneNumber');
+
+    // Reset any previous verification state before starting new verification
+    _verificationId = null;
+    _phoneNumber = null;
+
     await _handleAuthentication(AuthMethod.phone, phoneNumber: phoneNumber);
   }
 
   /// Handle Google authentication
   Future<void> _handleGoogleAuth() async {
-    debugPrint('🔍 SIGNUP SCREEN: Google auth button pressed');
+    _logger.i(_tag, 'Google auth button pressed');
     await _handleAuthentication(AuthMethod.google);
   }
 
   /// Handle Apple authentication
   Future<void> _handleAppleAuth() async {
-    debugPrint('🔍 SIGNUP SCREEN: Apple auth button pressed');
+    _logger.i(_tag, 'Apple auth button pressed');
     await _handleAuthentication(AuthMethod.apple);
   }
 
@@ -88,19 +103,66 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   Future<void> _handlePhoneAuthCredential(dynamic credential) async {
     setState(() {
       _isLoading = true;
+      _loadingMethod = AuthMethod.phone; // Make sure to set the loading method
       _errorMessage = null;
     });
 
+    // Log OTP verification attempt
+    _logger.i(_tag, 'Verifying OTP for phone number: $_phoneNumber');
+
     try {
+      // Logging attempt with analytics
+      await _analyticsService.logOtpEntered(
+        isSuccessful: false, // Will update to true if successful
+        isAutoFilled: false, // Manual entry
+      );
+
       final authProvider = Provider.of<AuthStateProvider>(
         context,
         listen: false,
       );
+
+      _logger.d(_tag, 'Submitting phone auth credential for verification');
+
+      // Fix: Use the credential directly as a positional parameter
       final (user, isNewUser) = await authProvider
           .signInWithPhoneAuthCredential(credential);
 
-      // Track signup/login event with analytics
-      _analyticsService.logLogin(loginMethod: 'phone');
+      // Log successful OTP verification
+      await _analyticsService.logOtpEntered(
+        isSuccessful: true,
+        isAutoFilled: false,
+      );
+
+      // Track appropriate event based on new/existing user
+      if (isNewUser) {
+        _analyticsService.logSignUp(signUpMethod: 'phone');
+        _analyticsService.logEvent(
+          name: 'new_user_signup',
+          parameters: {
+            'auth_method': 'phone',
+            'user_id': user.uid.toString().substring(0, Math.min(user.uid.length, 36)),
+            'verification_type': 'manual_code_entry',
+          }
+        );
+      } else {
+        _analyticsService.logLogin(loginMethod: 'phone');
+        _analyticsService.logEvent(
+          name: 'returning_user_login',
+          parameters: {
+            'auth_method': 'phone',
+            'user_id': user.uid,
+            'verification_type': 'manual_code_entry',
+          }
+        );
+      }
+
+      // Track auth success
+      _analyticsService.logAuthSuccess(
+        authMethod: 'phone',
+        userId: user.uid,
+        isNewUser: isNewUser,
+      );
 
       // Reset verification state
       setState(() {
@@ -112,10 +174,43 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
       // Check if user needs profile completion with explicit isNewUser flag
       _showProfileCompletionIfNeeded(user, isNewUser);
     } catch (e) {
-      debugPrint('🔍 SIGNUP SCREEN: Phone auth verification error: $e');
+      // Log the detailed error with full stack trace
+      _logger.e(_tag, 'OTP verification error: ${e.toString()}', e);
+
+      // Log OTP verification failure in analytics
+      await _analyticsService.logAuthFailure(
+        authMethod: 'phone_otp_verification',
+        reason: e.toString(),
+        errorCode: e is FirebaseAuthException ? e.code : null,
+      );
+
+      // Format user-friendly error message
+      String errorMsg = 'Verification failed';
+
+      if (e.toString().contains('invalid-verification-code')) {
+        errorMsg = 'Invalid verification code. Please try again.';
+      } else if (e.toString().contains('session-expired')) {
+        errorMsg = 'Verification session expired. Please resend the code.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMsg = 'Network error. Please check your connection and try again.';
+      } else if (e.toString().contains('auth/invalid-credential')) {
+        errorMsg = 'Invalid verification code. Please check and try again.';
+      } else if (e.toString().contains('auth/code-expired')) {
+        errorMsg = 'Verification code has expired. Please request a new code.';
+      } else if (e.toString().contains('auth/invalid-verification-id')) {
+        // If verification ID is invalid, we need to restart the verification process
+        errorMsg = 'Verification session is invalid. Please restart the verification process.';
+        // Reset verification state to force starting over
+        _verificationId = null;
+      } else {
+        errorMsg = 'Verification failed: ${e.toString()}';
+      }
+
+      // Update UI state
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString();
+        _loadingMethod = null;
+        _errorMessage = errorMsg;
       });
     }
   }
@@ -126,8 +221,9 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     String? phoneNumber,
     bool forceProfileCompletion = false,
   }) async {
-    debugPrint(
-      '🔍 SIGNUP SCREEN: Starting authentication process for method: $method, forceProfileCompletion: $forceProfileCompletion',
+    _logger.i(
+      _tag,
+      'Starting authentication process for method: $method, forceProfileCompletion: $forceProfileCompletion',
     );
 
     setState(() {
@@ -146,29 +242,61 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
       // Perform authentication based on the method
       switch (method) {
         case AuthMethod.google:
-          debugPrint('🔍 SIGNUP SCREEN: Starting Google auth flow...');
-          try {
-            final (user, isNewUser) = await authProvider.signInWithGoogle();
-            debugPrint(
-              '🔍 SIGNUP SCREEN: Google sign-in successful, user: ${user.email}, isNewUser: $isNewUser',
-            );
+          // Log authentication attempt with analytics
+          _analyticsService.logAuthAttempt(authMethod: 'google');
 
-            // Track signup/login event with analytics
-            _analyticsService.logLogin(loginMethod: 'google');
+          try {
+            // FIX: Correctly destructure the tuple
+            final (userModel, isNewUser) = await authProvider.signInWithGoogle();
+
+            // Track successful login/signup with analytics
+            // FIX: Use userModel instead of user
+            if (isNewUser) {
+              _analyticsService.logSignUp(signUpMethod: 'google');
+              _analyticsService.logEvent(
+                name: 'new_user_signup',
+                parameters: {
+                  'auth_method': 'google',
+                  'user_id': userModel.uid,
+                  'has_email': userModel.email != null,
+                },
+              );
+            } else {
+              _analyticsService.logLogin(loginMethod: 'google');
+              _analyticsService.logEvent(
+                name: 'returning_user_login',
+                parameters: {
+                  'auth_method': 'google',
+                  'user_id': userModel.uid,
+                },
+              );
+            }
+
+            // Track auth success
+            // FIX: Use userModel instead of user
+            _analyticsService.logAuthSuccess(
+              authMethod: 'google',
+              userId: userModel.uid,
+              isNewUser: isNewUser,
+            );
 
             // For Google authentication, we can force the profile completion if requested
             // This is useful for testing or when we want to ensure a user completes their profile
             if (forceProfileCompletion) {
-              debugPrint('🔍 SIGNUP SCREEN: Forcing profile completion for Google user');
-              _showProfileCompletionIfNeeded(user, true); // Force isNewUser to true
+              // FIX: Use userModel instead of user
+              _showProfileCompletionIfNeeded(userModel, true); // Force isNewUser to true
             } else {
               // Proceed to profile completion if needed
-              _showProfileCompletionIfNeeded(user, isNewUser);
+              // FIX: Use userModel instead of user
+              _showProfileCompletionIfNeeded(userModel, isNewUser);
             }
           } catch (e) {
-            debugPrint(
-              '🔍 SIGNUP SCREEN: Google sign-in failed with error: $e',
+            // Track auth failure with analytics
+            _analyticsService.logAuthFailure(
+              authMethod: 'google',
+              reason: e.toString(),
             );
+
             setState(() {
               _isLoading = false;
               _errorMessage = e.toString();
@@ -177,20 +305,54 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
           break;
 
         case AuthMethod.apple:
-          debugPrint('🔍 SIGNUP SCREEN: Processing Apple auth');
+          // Log authentication attempt with analytics
+          _analyticsService.logAuthAttempt(authMethod: 'apple');
+
           try {
-            final (user, isNewUser) = await authProvider.signInWithApple();
-            debugPrint(
-              '🔍 SIGNUP SCREEN: Apple sign-in successful, user: ${user.email ?? "unknown email"}, isNewUser: $isNewUser',
+            // FIX: Correctly destructure the tuple
+            final (userModel, isNewUser) = await authProvider.signInWithApple();
+
+            // Track signup or login event based on user status
+            // FIX: Use userModel instead of user
+            if (isNewUser) {
+              _analyticsService.logSignUp(signUpMethod: 'apple');
+              _analyticsService.logEvent(
+                name: 'new_user_signup',
+                parameters: {
+                  'auth_method': 'apple',
+                  'user_id': userModel.uid,
+                  'has_email': userModel.email != null,
+                },
+              );
+            } else {
+              _analyticsService.logLogin(loginMethod: 'apple');
+              _analyticsService.logEvent(
+                name: 'returning_user_login',
+                parameters: {
+                  'auth_method': 'apple',
+                  'user_id': userModel.uid,
+                },
+              );
+            }
+
+            // Track auth success
+            // FIX: Use userModel instead of user
+            _analyticsService.logAuthSuccess(
+              authMethod: 'apple',
+              userId: userModel.uid,
+              isNewUser: isNewUser,
             );
 
-            // Track signup/login event with analytics
-            _analyticsService.logLogin(loginMethod: 'apple');
-
             // Proceed to profile completion if needed
-            _showProfileCompletionIfNeeded(user, isNewUser);
+            // FIX: Use userModel instead of user
+            _showProfileCompletionIfNeeded(userModel, isNewUser);
           } catch (e) {
-            debugPrint('🔍 SIGNUP SCREEN: Apple sign-in failed with error: $e');
+            // Track auth failure with analytics
+            _analyticsService.logAuthFailure(
+              authMethod: 'apple',
+              reason: e.toString(),
+            );
+
             setState(() {
               _isLoading = false;
               _errorMessage = e.toString();
@@ -199,73 +361,74 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
           break;
 
         case AuthMethod.phone:
-          debugPrint('🔍 SIGNUP SCREEN: Processing Phone auth');
-          if (phoneNumber != null) {
-            try {
-              // Start phone verification with callbacks
-              await authProvider.verifyPhoneNumber(
-                phoneNumber: phoneNumber,
-                onCodeSent: (String verificationId, int? resendToken) {
-                  debugPrint('🔍 SIGNUP SCREEN: SMS code sent to $phoneNumber');
-
-                  // Store verification ID and phone number
-                  setState(() {
-                    _verificationId = verificationId;
-                    _phoneNumber = phoneNumber;
-                    _isLoading = false;
-                  });
-                },
-                onError: (String errorMessage) {
-                  debugPrint(
-                    '🔍 SIGNUP SCREEN: Phone auth error - $errorMessage',
-                  );
-                  setState(() {
-                    _isLoading = false;
-                    _errorMessage = errorMessage;
-                  });
-                },
-                onVerified: () async {
-                  // This is called when the phone is auto-verified
-                  debugPrint('🔍 SIGNUP SCREEN: Phone automatically verified');
-                  setState(() {
-                    _isLoading = false;
-                  });
-
-                  // When auto-verification happens, we need to explicitly check if the user is new in Firestore
-                  final user = authProvider.currentUser;
-                  if (user != null) {
-                    _analyticsService.logLogin(loginMethod: 'phone');
-
-                    // Use AuthStateProvider's public method to check if user is new
-                    print(
-                      '🔍 AUTO VERIFY: Explicitly checking if user ${user.uid} exists in Firestore',
-                    );
-                    final isNewUser = await authProvider.checkIfUserIsNew(
-                      user.uid,
-                    );
-                    print('🔍 AUTO VERIFY: User is new? $isNewUser');
-
-                    _showProfileCompletionIfNeeded(user, isNewUser);
-                  }
+          // For phone, initiate verification
+          await authProvider.verifyPhoneNumber(
+            phoneNumber: phoneNumber!,
+            onCodeSent: (String verificationId, int? resendToken) {
+              // Log analytics for code sent
+              _analyticsService.logEvent(
+                name: 'phone_verification_code_sent',
+                parameters: {
+                  'timestamp': DateTime.now().toIso8601String(),
                 },
               );
-            } catch (e) {
-              debugPrint('🔍 SIGNUP SCREEN: Phone verification error: $e');
+
+              // Log debug information
+              _logger.i(_tag, 'Verification code sent to $phoneNumber');
+
+              // Update state with verification ID first
+              setState(() {
+                _verificationId = verificationId;
+                _phoneNumber = phoneNumber;
+                _isLoading = false;
+                _loadingMethod = null;
+              });
+
+              // Need to force a rebuild of the bottom sheet
+              // Close the current bottom sheet and show a new one with verification UI
+              Navigator.of(context).pop();
+
+              // Show new bottom sheet with verification UI after a small delay to ensure state is updated
+              Future.delayed(const Duration(milliseconds: 200), () {
+                if (mounted) {
+                  _showAuthOptionsWithVerification();
+                }
+              });
+            },
+            onError: (e) {
+              // Log analytics for verification failure
+              _analyticsService.logEvent(
+                name: 'phone_verification_failed',
+                parameters: {
+                  'error': e.toString(),
+                  'timestamp': DateTime.now().toIso8601String(),
+                },
+              );
+
               setState(() {
                 _isLoading = false;
-                _errorMessage = e.toString();
+                _loadingMethod = null;
+                _errorMessage = 'Verification failed: ${e.toString()}';
               });
-            }
-          } else {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = 'Phone number is required';
-            });
-          }
+            },
+            onVerified: () async {
+              setState(() {
+                _isLoading = false;
+              });
+
+              // When auto-verification happens, we need to explicitly check if the user is new in Firestore
+              final user = authProvider.currentUser;
+              if (user != null) {
+                // Check if new user
+                final isNewUser = await authProvider.checkIfUserIsNew(user.uid);
+                _showProfileCompletionIfNeeded(user, isNewUser);
+              }
+            },
+          );
           break;
       }
     } catch (e) {
-      debugPrint('🔍 SIGNUP SCREEN: Authentication error: $e');
+      _logger.e(_tag, 'Authentication error', e);
       setState(() {
         _isLoading = false;
         _errorMessage = e.toString();
@@ -279,16 +442,15 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     final user = authProvider.currentUser;
 
     if (user != null) {
-      debugPrint(
-        '🔍 SIGNUP SCREEN: User already authenticated, checking profile status',
-      );
+      _logger.i(_tag, 'User already authenticated, checking profile status');
 
       // Explicitly check if this user exists in Firestore
-      print(
-        '🔍 STARTUP CHECK: Checking if user ${user.uid} exists in Firestore',
+      _logger.d(
+        _tag,
+        'Checking if user ${user.uid} exists in Firestore',
       );
       final isNewUser = await authProvider.checkIfUserIsNew(user.uid);
-      print('🔍 STARTUP CHECK: Is user new? $isNewUser');
+      _logger.d(_tag, 'Is user new? $isNewUser');
 
       // Use the accurate isNewUser flag when determining profile completion needs
       _showProfileCompletionIfNeeded(user, isNewUser);
@@ -300,11 +462,13 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     UserModel user, [
     bool isNewUser = false,
   ]) {
-    print(
-      '🔍 PROFILE CHECK: Starting profile completion check for user ${user.uid}',
+    _logger.i(
+      _tag,
+      'Starting profile completion check for user ${user.uid}',
     );
-    print(
-      '🔍 PROFILE CHECK: User data - displayName: ${user.displayName}, photoURL: ${user.photoURL}, isNewUser parameter: $isNewUser',
+    _logger.d(
+      _tag,
+      'User data - displayName: ${user.displayName}, photoURL: ${user.photoURL}, isNewUser parameter: $isNewUser',
     );
 
     // Reset loading state first
@@ -315,10 +479,10 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     // Get user information
     final displayName = user.displayName;
     final photoURL = user.photoURL;
-    
+
     // Log authentication method if available
     final authProvider = user.metadata?['providerId'] as String? ?? 'unknown';
-    print('🔍 PROFILE CHECK: Auth provider: $authProvider');
+    _logger.d(_tag, 'Auth provider: $authProvider');
 
     // Only use metadata to determine if new user when explicit isNewUser flag wasn't provided
     // THIS IS THE FIX: Don't override the explicit isNewUser flag from Firestore
@@ -326,224 +490,393 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
       final creationTime = user.metadata?['creationTime'] as int?;
       final lastSignInTime = user.metadata?['lastSignInTime'] as int?;
 
-      print(
-        '🔍 PROFILE CHECK: Metadata - creationTime: $creationTime, lastSignInTime: $lastSignInTime',
+      _logger.d(
+        _tag,
+        'Metadata - creationTime: $creationTime, lastSignInTime: $lastSignInTime',
       );
 
       if (creationTime != null && lastSignInTime != null) {
         final timeDifference = (lastSignInTime - creationTime).abs();
-        print(
-          '🔍 PROFILE CHECK: Time difference between creation and sign-in: ${timeDifference}ms',
+        _logger.d(
+          _tag,
+          'Time difference between creation and sign-in: ${timeDifference}ms',
         );
 
         // Only consider metadata if we don't have an explicit isNewUser flag
         if (timeDifference < 10000) {
-          print(
-            '🔍 PROFILE CHECK: Metadata indicates possible new user, but using Firestore check result: $isNewUser',
+          _logger.d(
+            _tag,
+            'Metadata indicates possible new user, but using Firestore check result: $isNewUser',
           );
         }
       }
     }
 
-    // ROBUST LOGIC: Different handling for new vs returning users
-    bool needsProfileCompletion;
-    String reason = "";
+    // Check if user needs profile completion - only required for new users or if profile is incomplete
+    bool needsProfileCompletion = isNewUser || !_isProfileComplete(displayName, photoURL);
+    String reason = isNewUser
+        ? "New user registration - mandatory profile setup"
+        : (!_isProfileComplete(displayName, photoURL) ? "Incomplete profile information" : "Profile already complete");
 
-    if (isNewUser) {
-      // For new users: ALWAYS show profile completion regardless of whether they have info from providers
-      // This ensures all new users go through the profile setup flow
-      needsProfileCompletion = true;
-      reason = "New user registration - mandatory profile setup";
-    } else {
-      // For existing users:
-      // Only show profile completion if essential information is missing
-      bool hasMissingInfo =
-          displayName == null || displayName.isEmpty || photoURL == null;
-      needsProfileCompletion = hasMissingInfo;
+    // Log information about the user's current profile state
+    _logger.i(_tag, "Profile completion needed: $needsProfileCompletion. User has display name: ${displayName != null && displayName.isNotEmpty}, has photo: ${photoURL != null}");
 
-      if (hasMissingInfo) {
-        if (displayName == null || displayName.isEmpty) {
-          reason = "Missing display name";
-        } else if (photoURL == null)
-          reason = "Missing profile photo";
-      } else {
-        reason = "Returning user with complete profile";
-      }
-    }
-
-    print(
-      '🔍 PROFILE CHECK: Final decision - needsProfileCompletion: $needsProfileCompletion',
+    // Log profile completion check
+    _analyticsService.logEvent(
+      name: 'profile_completion_check',
+      parameters: {
+        'user_id': user.uid,
+        'is_new_user': isNewUser ? 'true' : 'false', // Convert boolean to string
+        'needs_completion': needsProfileCompletion ? 'true' : 'false', // Convert boolean to string
+        'reason': reason,
+        'has_display_name': (displayName != null && displayName.isNotEmpty) ? 'true' : 'false', // Convert boolean to string
+        'has_photo': photoURL != null ? 'true' : 'false', // Convert boolean to string
+        'auth_provider': user.metadata?['providerId'] as String? ?? 'unknown',
+      },
     );
-    print('🔍 PROFILE CHECK: Reason: $reason');
 
+    // Only proceed with profile completion if needed
     if (needsProfileCompletion) {
-      print('🔍 PROFILE CHECK: Navigating to profile completion screen');
+      // Log navigation to profile completion
+      _analyticsService.logEvent(
+        name: 'navigate_to_profile_completion',
+        parameters: {
+          'user_id': user.uid,
+          'is_new_user': isNewUser,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+
+      // Set a user property to track onboarding status
+      _analyticsService.setUserProperty(
+        name: 'onboarding_status',
+        value: 'profile_completion'
+      );
 
       // Navigate to the dedicated profile completion screen
       if (mounted) {
+        // Log screen view for analytics
+        _analyticsService.logScreenView(
+          screenName: 'profile_completion_screen',
+          screenClass: 'ProfileCompletionScreen',
+        );
+
+        _logger.i(_tag, "Navigating to profile completion screen for user ${user.uid}");
+
         AppRoutes.navigatorKey.currentState?.pushReplacementNamed(
           AppRoutes.profileCompletion,
         );
       }
     } else {
-      print('🔍 PROFILE CHECK: Profile complete, proceeding to dashboard');
-      _completeOnboarding();
+      // User already has a complete profile, skip profile completion
+      _logger.i(_tag, "User ${user.uid} already has a complete profile. Skipping profile completion.");
+
+      // Go directly to home
+      AppRoutes.navigatorKey.currentState?.pushReplacementNamed(
+        AppRoutes.home,
+      );
     }
   }
 
   /// Complete onboarding
-  void _completeOnboarding() {
-    debugPrint(
-      '🔍 SIGNUP SCREEN: Completing onboarding, calling onComplete callback',
+  /// This is a public method that should ONLY be called from the profile completion screen
+  /// after a user has successfully completed their profile with required information.
+  /// Do not call this method directly from the signup flow - users must complete profile first.
+  void completeOnboarding() {
+    final currentUserID = Provider.of<AuthStateProvider>(context, listen: false).currentUser?.uid ?? 'unknown';
+
+    _logger.i(_tag, 'Completing onboarding for user: $currentUserID');
+
+    // Log onboarding completion
+    _analyticsService.logEvent(
+      name: 'onboarding_complete',
+      parameters: {
+        'timestamp': DateTime.now().toIso8601String(),
+        'source': 'profile_completion', // Changed source to profile_completion
+        'user_id': currentUserID,
+      },
     );
+
+    // Set user property for completed onboarding
+    _analyticsService.setUserProperty(
+      name: 'onboarding_status',
+      value: 'completed',
+    );
+
     widget.onComplete();
   }
 
-  /// Dismiss the error notification
-  void _dismissError() {
-    setState(() {
-      _errorMessage = null;
-    });
+  /// Check if a user's profile is considered complete
+  bool _isProfileComplete(String? displayName, String? photoURL) {
+    return displayName != null && displayName.isNotEmpty && photoURL != null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
+    // Check platform for platform-specific UI
+    final bool isIOS = Platform.isIOS;
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Main content (Logo, Title, Spacers)
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 3), // Adjust flex for spacing
-                  // Logo with animation
-                  SizedBox(
-                    width: size.width * 0.4, // Adjust size as needed
-                    height: size.width * 0.4,
-                    child: ScaleTransition(
-                          scale: _scaleAnimation,
-                          child: ClipOval(
-                            child: Container(
-                              padding: const EdgeInsets.all(
-                                8,
-                              ), // Padding inside oval
-                              color: Colors.black, // Background for the oval
-                              child: Image.asset(
-                                'assets/logo.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.currency_exchange_rounded,
-                                    size: size.width * 0.15,
-                                    color: Colors.white,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        )
-                        .animate(onPlay: (controller) => controller.repeat())
-                        .shimmer(
-                          duration: 2500.ms,
-                          color: Colors.white.withOpacity(0.8),
-                          size: 3,
-                        ),
-                  ),
+      body: Container(
+        decoration: const BoxDecoration(
+          // Use Box decoration instead of gradient for better performance
+          color: Colors.black,
+        ),
+        child: Stack(
+          children: [
+            // Background
+            _buildBackgroundElements(),
 
-                  const SizedBox(height: 40),
+            // Main content without animation
+            Center(
+              child: RepaintBoundary( // Add RepaintBoundary for better performance
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(flex: 2),
 
-                  // Centered Join DuckBuck text - ALWAYS VISIBLE
-                  const Center(
-                    child: Text(
-                      'Join DuckBuck',
+                    // App logo - Cached for better performance
+                    _buildLogo(),
+
+                    const SizedBox(height: 24),
+
+                    // App name text
+                    const Text(
+                      'DuckBuck',
                       style: TextStyle(
+                        color: Colors.white,
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
                       ),
                     ),
-                  ),
 
-                  // Equal spacer to center the content vertically
-                  const Spacer(flex: 2),
+                    const SizedBox(height: 12),
 
-                  // Space for the bottom sheet height plus safe area
-                  SizedBox(height: size.height * 0.33 + bottomPadding + 20),
-                ],
-              ),
-            ),
-          ),
+                    // App tagline with platform-specific styling
+                    Text(
+                      'Connect with friends across the globe',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: isIOS ? 16 : 17,
+                        fontWeight: isIOS ? FontWeight.w500 : FontWeight.w400,
+                      ),
+                    ),
 
-          // Loading overlay
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.6),
-              child: const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    const Spacer(flex: 2),
+
+                    // Get started button with platform-specific styling
+                    _buildGetStartedButton(isIOS),
+
+                    const Spacer(flex: 1),
+                  ],
                 ),
               ),
             ),
 
-          // Bottom sheet positioned directly in place
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: AuthBottomSheet(
-              key: const ValueKey('auth_bottom_sheet'),
-              isLoading: _isLoading,
-              loadingMethod: _loadingMethod,
-              onPhoneAuth: _handlePhoneAuth,
-              onGoogleAuth: _handleGoogleAuth,
-              onAppleAuth: _handleAppleAuth,
-              onPhoneAuthCredential: _handlePhoneAuthCredential,
-              verificationId: _verificationId,
-              phoneNumber: _phoneNumber,
-              onError: (String errorMessage) {
-                setState(() {
-                  _errorMessage = errorMessage;
-                });
-              },
-              onVerified: (UserModel user) async {
-                _analyticsService.logLogin(loginMethod: 'phone');
+            // Notification for errors - positioned at the top
+            if (_errorMessage != null)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: NotificationBar(
+                  message: _errorMessage!,
+                  onDismiss: () {
+                    setState(() {
+                      _errorMessage = null;
+                    });
+                  },
+                  autoDismiss: true, // Auto-dismiss after 1.5 seconds
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                // Explicitly check if this user exists in Firestore
-                final authProvider = Provider.of<AuthStateProvider>(
-                  context,
-                  listen: false,
-                );
-                print(
-                  '🔍 BOTTOM SHEET VERIFY: Checking if user ${user.uid} exists in Firestore',
-                );
-                final isNewUser = await authProvider.checkIfUserIsNew(user.uid);
-                print('🔍 BOTTOM SHEET VERIFY: User is new? $isNewUser');
-
-                _showProfileCompletionIfNeeded(user, isNewUser);
-              },
-            ),
-          ),
-
-          // Notification Bar at the bottom (conditionally shown)
-          if (_errorMessage != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: NotificationBar(
-                message: _errorMessage!,
-                onDismiss: _dismissError,
+  /// Build platform-specific get started button
+  Widget _buildGetStartedButton(bool isIOS) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: isIOS
+          ? CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _showAuthOptions,
+              child: Container(
+                width: double.infinity,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  'Get Started',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          : ElevatedButton(
+              onPressed: _showAuthOptions,
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.black,
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'GET STARTED',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
+    );
+  }
+
+  // Build logo without animation
+  Widget _buildLogo() {
+    return RepaintBoundary( // Use RepaintBoundary for better performance
+      child: Image.asset(
+        'assets/logo.png',
+        width: 120,
+        height: 120,
+        cacheWidth: 240, // Use cacheWidth for better memory management
+        cacheHeight: 240,
+      ),
+    );
+  }
+
+  // Optimized background elements
+  Widget _buildBackgroundElements() {
+    // Use a stateless decoration to avoid rebuilds
+    return RepaintBoundary( // Optimize background rendering
+      child: Stack(
+        children: [
+          // Positioned elements for background
+          Positioned(
+            top: -50,
+            right: -30,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.purple.withOpacity(0.2),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.blue.withOpacity(0.15),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }  // Show auth bottom sheet
+  void _showAuthOptions() {
+    HapticFeedback.mediumImpact();
+    
+    // Log analytics event
+    _analyticsService.logEvent(
+      name: 'signup_flow_started',
+      parameters: {
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+
+    // Show bottom sheet with platform-specific UI
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      elevation: 0,
+      enableDrag: true,
+      useSafeArea: true, // Ensures proper insets with notches and rounded screens
+      builder: (context) => Padding(
+        padding: MediaQuery.of(context).viewInsets, // Handle keyboard appearance
+        child: AuthBottomSheet(
+          onPhoneAuth: _handlePhoneAuth,
+          onGoogleAuth: _handleGoogleAuth,
+          onAppleAuth: _handleAppleAuth,
+          onPhoneAuthCredential: _handlePhoneAuthCredential,
+          onError: (message) {
+            setState(() {
+              _errorMessage = message;
+              _isLoading = false; // Ensure loading is stopped on error from bottom sheet
+            });
+          },
+          isLoading: _isLoading,
+          loadingMethod: _loadingMethod,
+          verificationId: _verificationId,
+          phoneNumber: _phoneNumber,
+        ),
+      ),
+    );
+  }  // Show auth bottom sheet specifically for OTP verification
+  void _showAuthOptionsWithVerification() {
+    HapticFeedback.mediumImpact();
+    
+    // Log that we're showing the verification sheet
+    _logger.i(_tag, 'Showing verification sheet for phone: $_phoneNumber, id: $_verificationId');
+
+    // Show bottom sheet with verification UI
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      elevation: 0,
+      isDismissible: false, // Prevent dismissal during verification
+      enableDrag: false, // Prevent dragging during verification
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: AuthBottomSheet(
+          // Force phone method to be initially selected for verification screens
+          initialAuthMethod: AuthMethod.phone,
+          onPhoneAuth: _handlePhoneAuth,
+          onGoogleAuth: _handleGoogleAuth,
+          onAppleAuth: _handleAppleAuth,
+          onPhoneAuthCredential: _handlePhoneAuthCredential,
+          onError: (message) {
+            setState(() {
+              _errorMessage = message;
+              _isLoading = false;
+            });
+          },
+          isLoading: _isLoading,
+          loadingMethod: _loadingMethod,
+          // Pass verification data explicitly
+          verificationId: _verificationId,
+          phoneNumber: _phoneNumber,
+        ),
       ),
     );
   }

@@ -40,6 +40,7 @@ class AuthStateProvider extends ChangeNotifier {
 
       // When user logs in, register FCM token and update login state in preferences
       if (user != null) {
+        // Register a new token on login
         _notificationsService.registerToken(user.uid);
         PreferencesService.instance.setLoggedIn(true);
       }
@@ -50,6 +51,7 @@ class AuthStateProvider extends ChangeNotifier {
     // Load current user immediately if available
     _currentUser = _userRepository.currentUser;
     if (_currentUser != null) {
+      // Register token for immediate loading too
       _notificationsService.registerToken(_currentUser!.uid);
       PreferencesService.instance.setLoggedIn(true);
     }
@@ -233,15 +235,14 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Remove FCM token if there's a current user
-      if (_currentUser != null) {
-        await _notificationsService.removeToken(_currentUser!.uid);
-      }
-
-      // Sign out
+      // Use the centralized sign-out method in UserRepository
+      // This handles FCM token clearing, auth signout, and preference clearing
+      debugPrint('🔐 AUTH PROVIDER: Using central UserRepository.signOut() method');
       await _userRepository.signOut();
+      debugPrint('🔐 AUTH PROVIDER: User signed out successfully');
     } catch (e) {
       _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER: Error during sign-out process: ${e.toString()}');
     } finally {
       _isLoading = false;
       notifyListeners();

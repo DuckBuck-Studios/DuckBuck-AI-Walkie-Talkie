@@ -11,12 +11,18 @@ import '../repositories/user_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/message_repository.dart';
 import 'message/message_cache_service.dart'; 
+import 'logger/logger_service.dart';
 
 /// Global service locator instance
 final GetIt serviceLocator = GetIt.instance;
 
 /// Initialize all services and repositories
 Future<void> setupServiceLocator() async {
+  // Register logger service (singleton)
+  serviceLocator.registerLazySingleton<LoggerService>(
+    () => LoggerService(),
+  );
+
   // Register Firebase services
   serviceLocator.registerLazySingleton<AuthServiceInterface>(
     () => FirebaseAuthService(),
@@ -43,7 +49,10 @@ Future<void> setupServiceLocator() async {
 
   // Register repositories
   serviceLocator.registerLazySingleton<UserRepository>(
-    () => UserRepository(authService: serviceLocator<AuthServiceInterface>()),
+    () => UserRepository(
+      authService: serviceLocator<AuthServiceInterface>(),
+      analytics: serviceLocator<FirebaseAnalyticsService>(),
+    ),
   );
   
   // Register friend service

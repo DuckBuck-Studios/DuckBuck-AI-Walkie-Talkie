@@ -641,7 +641,7 @@ class MessageService {
         // Instead, we add this message ID to a "deletedMessages" collection for this user
         await _databaseService.setDocument(
           collection: 'deletedMessages',
-          documentId: '${userId}_${messageId}',
+          documentId: '${userId}_$messageId',
           data: {
             'userId': userId,
             'messageId': messageId,
@@ -668,7 +668,7 @@ class MessageService {
       // First, record that this conversation is deleted for this user
       await _databaseService.setDocument(
         collection: 'deletedConversations',
-        documentId: '${userId}_${conversationId}',
+        documentId: '${userId}_$conversationId',
         data: {
           'userId': userId,
           'conversationId': conversationId,

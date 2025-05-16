@@ -1,6 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../firebase/firebase_database_service.dart';
+import '../logger/logger_service.dart';
 
 /// Service for handling push notifications and FCM tokens
 ///
@@ -11,6 +13,9 @@ import '../firebase/firebase_database_service.dart';
 class NotificationsService {
   final FirebaseMessaging _firebaseMessaging;
   final FirebaseDatabaseService _databaseService;
+  final LoggerService _logger = LoggerService();
+  
+  static const String _tag = 'NOTIFICATIONS'; // Tag for logs
 
   /// Creates a new NotificationsService
   NotificationsService({
@@ -22,10 +27,9 @@ class NotificationsService {
   /// Initialize FCM token generation
   Future<void> initialize() async {
     try {
-      debugPrint('🔔 NOTIFICATION SERVICE: Initializing token generation only...');
-      
+      _logger.i(_tag, 'Initializing notifications service');
       // Request minimal permissions needed for token generation
-      final settings = await _firebaseMessaging.requestPermission(
+      await _firebaseMessaging.requestPermission(
         alert: false,
         badge: false,
         sound: false,
@@ -34,27 +38,32 @@ class NotificationsService {
         carPlay: false,
         criticalAlert: false,
       );
-
-      debugPrint(
-        '🔔 NOTIFICATION SERVICE: Permission status: ${settings.authorizationStatus}',
-      );
+      _logger.d(_tag, 'Permission request for FCM token completed');
       
       // Test if we can get a token (don't save it yet, just check availability)
       try {
-        final testToken = await _firebaseMessaging.getToken();
-        if (testToken != null) {
-          debugPrint('✅ NOTIFICATION SERVICE: FCM token is available');
-        } else {
-          debugPrint('⚠️ NOTIFICATION SERVICE WARNING: FCM token is null during initialization');
-        }
-      } catch (tokenError) {
-        debugPrint('⚠️ NOTIFICATION SERVICE WARNING: Failed to get test FCM token: $tokenError');
+        await _firebaseMessaging.getToken();
+        _logger.d(_tag, 'FCM token availability check passed');
+      } catch (e) {
+        // Handle error silently but log it for debugging
+        _logger.w(_tag, 'FCM token availability check failed: ${e.toString()}');
       }
-      
-      debugPrint('✅ NOTIFICATION SERVICE: Initialization complete');
     } catch (e) {
-      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to initialize notifications: $e');
-      debugPrint('❌ NOTIFICATION SERVICE ERROR: Stack trace: ${StackTrace.current}');
+      // Handle error silently but log it for debugging
+      _logger.e(_tag, 'Notification service initialization error: ${e.toString()}');
+    }
+  }
+
+  /// Register FCM token for the current user
+  /// This has been simplified to always register a fresh token
+  Future<void> restoreOrRegisterToken(String userId) async {
+    try {
+      _logger.i(_tag, 'Registering FCM token for user: $userId');
+      await registerToken(userId);
+    } catch (e) {
+      _logger.e(_tag, 'Error in restoreOrRegisterToken: ${e.toString()}');
+      // Retry registration
+      await registerToken(userId);
     }
   }
 
@@ -63,38 +72,31 @@ class NotificationsService {
   /// This should be called after successful user authentication
   Future<void> registerToken(String userId) async {
     try {
-      debugPrint('🔔 NOTIFICATION SERVICE: Generating FCM token for user: $userId');
-      
       // Force token refresh to ensure we get the latest
+      _logger.d(_tag, 'Refreshing FCM token for user: $userId');
       await _firebaseMessaging.deleteToken();
       final token = await _firebaseMessaging.getToken();
       
       if (token == null) {
-        debugPrint('⚠️ NOTIFICATION SERVICE: Failed to generate FCM token - token is null');
+        _logger.w(_tag, 'Failed to get FCM token - token is null');
         return;
       }
       
-      // Only log a substring of the token for security
-      String tokenPreview = token.length > 15 ? '${token.substring(0, 15)}...' : token;
-      debugPrint('🔔 NOTIFICATION SERVICE: FCM token generated: $tokenPreview');
-      
-      // Store the token in the user's document with minimal data
+      _logger.d(_tag, 'Successfully retrieved new FCM token');
+      // Store FCM token and related data under fcmTokenData object
       final Map<String, dynamic> tokenData = {
-        'fcmTokens': {
-          token: {
-            'createdAt': DateTime.now().toIso8601String(),
-            'platform': _getPlatformName(),
-          },
-        },
+        'fcmTokenData': {
+          'token': token,
+          'platform': _getPlatformName(), 
+        }
       };
-      
-      debugPrint('🔔 NOTIFICATION SERVICE: Saving token to Firestore...');
       
       // Retry mechanism for saving token
       bool saved = false;
       int attempts = 0;
       const maxAttempts = 3;
       
+      _logger.d(_tag, 'Saving FCM token to Firestore for user: $userId');
       while (!saved && attempts < maxAttempts) {
         attempts++;
         try {
@@ -105,37 +107,71 @@ class NotificationsService {
             merge: true,
           );
           saved = true;
-          debugPrint('✅ NOTIFICATION SERVICE: FCM token saved for user: $userId (attempt $attempts)');
+          _logger.i(_tag, 'FCM token saved successfully for user: $userId');
         } catch (e) {
+          _logger.w(_tag, 'Attempt $attempts failed to save token: ${e.toString()}');
           if (attempts < maxAttempts) {
-            debugPrint('⚠️ NOTIFICATION SERVICE: Retrying token save after error (attempt $attempts): $e');
+            _logger.d(_tag, 'Retrying in $attempts seconds...');
             await Future.delayed(Duration(seconds: 1 * attempts));
           } else {
+            _logger.e(_tag, 'All attempts to save token failed');
             rethrow;
           }
         }
       }
     } catch (e) {
-      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to save FCM token: $e');
-      debugPrint('❌ NOTIFICATION SERVICE ERROR: Stack trace: ${StackTrace.current}');
+      // Handle error silently but log it for debugging
+      _logger.e(_tag, 'Error in registerToken: ${e.toString()}');
     }
-    
-    // No listeners for token refresh are needed
   }
 
-  // Token refresh handling removed as requested
-
-  /// Delete FCM token when user logs out 
+  /// Delete FCM token when user logs out - removes from both local device and Firestore
   Future<void> removeToken(String userId) async {
     try {
-      debugPrint('🔔 NOTIFICATION SERVICE: Deleting FCM token for user: $userId');
+      _logger.i(_tag, 'Removing FCM token for user: $userId');
       
-      // Simply delete the token from Firebase Messaging
+      // 1. Delete the token from Firebase Messaging on device first
+      _logger.d(_tag, 'Deleting token from device');
+      await _firebaseMessaging.setAutoInitEnabled(false);
       await _firebaseMessaging.deleteToken();
+      _logger.d(_tag, 'Device token deletion completed');
       
-      debugPrint('✅ NOTIFICATION SERVICE: FCM token deleted locally for user: $userId');
+      // 2. Update Firestore to set token to null but preserve the structure
+      _logger.d(_tag, 'Updating token in Firestore');
+      final firestore = _databaseService.firestoreInstance;
+      final userRef = firestore.collection('users').doc(userId);
+      
+      await userRef.update({
+        'fcmTokenData.token': null, 
+      });
+      _logger.d(_tag, 'FCM token value set to null');
+
+      // Simple verification
+      final verifyDoc = await userRef.get(GetOptions(source: Source.server));
+      final verifyData = verifyDoc.data();
+      if (verifyData != null && verifyData.containsKey('fcmTokenData')) {
+        final fcmData = verifyData['fcmTokenData'] as Map<String, dynamic>?;
+        if (fcmData != null && fcmData['token'] == null) {
+          _logger.i(_tag, '✅ Verified fcmTokenData.token is now null');
+        } else {
+          _logger.w(_tag, '⚠️ Token may not be properly cleared');
+        }
+      }
     } catch (e) {
-      debugPrint('❌ NOTIFICATION SERVICE ERROR: Failed to delete FCM token: $e');
+      _logger.e(_tag, 'Error in removeToken: ${e.toString()}');
+      // Simple fallback approach if the update fails
+      try {
+        final firestore = _databaseService.firestoreInstance;
+        final userRef = firestore.collection('users').doc(userId);
+        await userRef.set({
+          'fcmTokenData': {
+            'token': null, 
+          }
+        }, SetOptions(merge: true));
+        _logger.i(_tag, '✅ Fallback token clearing completed');
+      } catch (_) {
+        _logger.e(_tag, '❌ Fallback token clearing failed');
+      }
     }
   }
 

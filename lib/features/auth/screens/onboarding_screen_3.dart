@@ -39,7 +39,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3> {
               width: size.width * 0.7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
               ),
             ),
           ),
@@ -52,7 +52,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3> {
               width: size.width * 0.6,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
               ),
             ),
           ),
@@ -74,11 +74,11 @@ class _OnboardingScreen3State extends State<OnboardingScreen3> {
                               OnboardingStyles.illustrationSize(size).height,
                           width: OnboardingStyles.illustrationSize(size).width,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha: 0.2),
                                 blurRadius: 20,
                                 spreadRadius: 2,
                               ),
@@ -165,7 +165,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3> {
       height: 10,
       width: isActive ? 24 : 10,
       decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
+        color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(5),
       ),
     );

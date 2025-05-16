@@ -1,4 +1,3 @@
-import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:flutter/material.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/navigation/app_routes.dart';
@@ -24,20 +23,18 @@ class _HomeScreenState extends State<HomeScreen> {
       // Get services from service locator
       final userRepository = serviceLocator<UserRepository>();
       final analyticsService = serviceLocator<FirebaseAnalyticsService>();
-      final prefsService = PreferencesService.instance;
-
+      
       // Log analytics event before signing out
       await analyticsService.logEvent(
         name: 'user_logout',
         parameters: {'timestamp': DateTime.now().toIso8601String()},
       );
 
-      // Perform logout - this will also clear FCM token via the user repository
+      // Perform logout - FCM token clearing happens inside the UserRepository.signOut() method
+      debugPrint('🔥 HOME: Calling central signOut method in UserRepository');
       await userRepository.signOut();
-
-      // Ensure all auth-related preferences are cleared
-      await prefsService.setLoggedIn(false);
-      await prefsService.clearAll();
+      
+      // No need to clear preferences here as it's already done in UserRepository.signOut()
 
       debugPrint('Logout completed successfully, all auth state cleared');
 
@@ -68,9 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
+    return PopScope(
       // Prevent back button navigation
-      onWillPop: () async => false,
+      canPop: false,
       child: Scaffold(
         // Remove back button and disable automatic back button
         appBar: AppBar(

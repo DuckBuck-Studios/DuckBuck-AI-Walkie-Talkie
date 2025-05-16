@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Add your Sign in with Apple callback and scope URLs -->
+    <string name="sign_in_with_apple_callback">com.duckbuck.app://callback</string>
+    <string name="sign_in_with_apple_client_id">com.duckbuck.service.id</string>
+    <string name="sign_in_with_apple_scope">email name</string>
+</resources>

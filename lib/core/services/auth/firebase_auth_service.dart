@@ -4,16 +4,20 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'auth_service_interface.dart';
-import 'package:flutter/material.dart';
 import '../../exceptions/auth_exceptions.dart';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import '../logger/logger_service.dart';
+import '../../constants/auth_constants.dart';
 
 /// Firebase implementation of the auth service interface
 class FirebaseAuthService implements AuthServiceInterface {
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
+  final LoggerService _logger = LoggerService();
+  
+  static const String _tag = 'AUTH';  
 
   /// Create a new FirebaseAuthService instance
   FirebaseAuthService({FirebaseAuth? firebaseAuth, GoogleSignIn? googleSignIn})
@@ -92,14 +96,19 @@ class FirebaseAuthService implements AuthServiceInterface {
   @override
   Future<UserCredential> signInWithGoogle() async {
     try {
+      _logger.i(_tag, 'Starting Google sign-in process');
+      
       if (kIsWeb) {
         // Web platform sign-in
+        _logger.d(_tag, 'Using web platform Google sign-in flow');
         final authProvider = GoogleAuthProvider();
         return await _firebaseAuth.signInWithPopup(authProvider);
       } else {
         // Mobile platform sign-in
+        _logger.d(_tag, 'Using mobile platform Google sign-in flow');
         final googleUser = await _googleSignIn.signIn();
         if (googleUser == null) {
+          _logger.w(_tag, 'Google sign-in canceled by user');
           throw AuthException(
             AuthErrorCodes.socialAuthCancelled,
             'Google sign-in was cancelled by the user',
@@ -107,15 +116,17 @@ class FirebaseAuthService implements AuthServiceInterface {
         }
 
         try {
+          _logger.d(_tag, 'Getting Google authentication tokens');
           final googleAuth = await googleUser.authentication;
           final credential = GoogleAuthProvider.credential(
             accessToken: googleAuth.accessToken,
             idToken: googleAuth.idToken,
           );
 
+          _logger.d(_tag, 'Signing in with Google credential');
           return await _firebaseAuth.signInWithCredential(credential);
         } catch (e) {
-          debugPrint('Error during Google sign-in: ${e.toString()}');
+          _logger.e(_tag, 'Error during Google sign-in authentication: ${e.toString()}');
           
           if (e is FirebaseAuthException) {
             throw _handleException(e);
@@ -129,12 +140,12 @@ class FirebaseAuthService implements AuthServiceInterface {
         }
       }
     } catch (e) {
-      debugPrint('Google sign-in error: ${e.toString()}');
+      _logger.e(_tag, 'Google sign-in process failed: ${e.toString()}');
       
       if (e is FirebaseAuthException) {
         throw _handleException(e);
       } else if (e is AuthException) {
-        throw e;
+        rethrow;
       }
       
       throw AuthException(
@@ -148,40 +159,67 @@ class FirebaseAuthService implements AuthServiceInterface {
   @override
   Future<UserCredential> signInWithApple() async {
     try {
-      if (Platform.isIOS) {
-        // Check if Apple Sign-In is available on the device
-        final appleSignInAvailable = await SignInWithApple.isAvailable();
-        if (!appleSignInAvailable) {
-          throw AuthException(
-            AuthErrorCodes.operationNotAllowed,
-            'Apple Sign-In is not available on this device.',
-          );
-        }
+      _logger.i(_tag, 'Starting Apple sign-in process');
+      
+      // Check if Apple Sign-In is available on the device (for any platform)
+      _logger.d(_tag, 'Checking Apple Sign-In availability');
+      final appleSignInAvailable = await SignInWithApple.isAvailable();
+      if (!appleSignInAvailable) {
+        _logger.w(_tag, 'Apple Sign-In is not available on this device');
+        throw AuthException(
+          AuthErrorCodes.operationNotAllowed,
+          'Apple Sign-In is not available on this device.',
+        );
       }
-
+      
       // Generate a random string to prevent CSRF attacks
+      _logger.d(_tag, 'Generating nonce for Apple Sign-In');
       final rawNonce = generateNonce();
       final nonce = sha256ofString(rawNonce);
 
-      // Request credentials
-      final appleCredential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        nonce: nonce,
-      );
+      // Request credentials - platform-specific implementation
+      _logger.d(_tag, 'Requesting Apple ID credentials with platform-specific flow');
+      
+      late AuthorizationCredentialAppleID appleCredential;
+      
+      if (Platform.isIOS || Platform.isMacOS) {
+        // Use native flow for iOS and macOS
+        _logger.d(_tag, 'Using native Apple Sign-In flow for iOS/macOS');
+        appleCredential = await SignInWithApple.getAppleIDCredential(
+          scopes: [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+          nonce: nonce,
+        );
+      } else {
+        // Use web authentication flow for Android
+        _logger.d(_tag, 'Using web authentication flow for Android with service ID: ${AuthConstants.appleServicesId}');
+        appleCredential = await SignInWithApple.getAppleIDCredential(
+          scopes: [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+          nonce: nonce,
+          webAuthenticationOptions: WebAuthenticationOptions(
+            clientId: AuthConstants.appleServicesId,
+            redirectUri: Uri.parse(AuthConstants.appleRedirectUrl),
+          ),
+        );
+      }
 
       // Create Firebase credential
+      _logger.d(_tag, 'Creating Firebase credential from Apple ID');
       final oauthCredential = OAuthProvider('apple.com').credential(
         idToken: appleCredential.identityToken,
         rawNonce: rawNonce,
       );
 
       // Sign in to Firebase with the Apple credentials
+      _logger.d(_tag, 'Signing in with Apple credential');
       return await _firebaseAuth.signInWithCredential(oauthCredential);
     } catch (e) {
-      debugPrint('Apple sign-in error: ${e.toString()}');
+      _logger.e(_tag, 'Apple sign-in error: ${e.toString()}');
       
       if (e is SignInWithAppleAuthorizationException) {
         if (e.code == AuthorizationErrorCode.canceled) {
@@ -190,6 +228,21 @@ class FirebaseAuthService implements AuthServiceInterface {
             'Apple sign-in was cancelled by the user',
             e,
           );
+        } else if (e.code == AuthorizationErrorCode.invalidResponse) {
+          // This often happens when web authentication is misconfigured
+          if (Platform.isAndroid) {
+            throw AuthException(
+              AuthErrorCodes.appleSignInFailed,
+              'Apple Sign-In failed: Make sure you have set up a Services ID in Apple Developer Portal',
+              e,
+            );
+          } else {
+            throw AuthException(
+              AuthErrorCodes.appleSignInFailed,
+              'Apple Sign-In received an invalid response',
+              e,
+            );
+          }
         } else {
           throw AuthException(
             AuthErrorCodes.appleSignInFailed,
@@ -200,7 +253,14 @@ class FirebaseAuthService implements AuthServiceInterface {
       } else if (e is FirebaseAuthException) {
         throw _handleException(e);
       } else if (e is AuthException) {
-        throw e;
+        rethrow;
+      } else if (Platform.isAndroid && e.toString().contains('webAuthenticationOptions')) {
+        // Specific error for missing web authentication options on Android
+        throw AuthException(
+          AuthErrorCodes.appleSignInFailed,
+          'Apple Sign-In failed on Android: webAuthenticationOptions missing or invalid',
+          e,
+        );
       }
       
       throw AuthException(
@@ -220,18 +280,29 @@ class FirebaseAuthService implements AuthServiceInterface {
     required void Function(String) codeAutoRetrievalTimeout,
   }) async {
     try {
+      _logger.i(_tag, 'Starting phone number verification: $phoneNumber');
       await _firebaseAuth.verifyPhoneNumber(
         phoneNumber: phoneNumber,
-        verificationCompleted: verificationCompleted,
+        verificationCompleted: (PhoneAuthCredential credential) {
+          _logger.i(_tag, 'Phone auth automatically completed');
+          verificationCompleted(credential);
+        },
         verificationFailed: (FirebaseAuthException e) {
+          _logger.w(_tag, 'Phone verification failed: ${e.code} - ${e.message}');
           verificationFailed(_handleException(e));
         },
-        codeSent: codeSent,
-        codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+        codeSent: (String verificationId, int? resendToken) {
+          _logger.i(_tag, 'Verification code sent to $phoneNumber');
+          codeSent(verificationId, resendToken);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _logger.d(_tag, 'Auto-retrieval timeout for verification code');
+          codeAutoRetrievalTimeout(verificationId);
+        },
         timeout: const Duration(seconds: 60),
       );
     } catch (e) {
-      debugPrint('Phone number verification error: ${e.toString()}');
+      _logger.e(_tag, 'Phone number verification error: ${e.toString()}');
       
       if (e is FirebaseAuthException) {
         verificationFailed(_handleException(e));
@@ -322,7 +393,7 @@ class FirebaseAuthService implements AuthServiceInterface {
       throw _handleException(e);
     } catch (e) {
       if (e is AuthException) {
-        throw e;
+        rethrow;
       }
       throw AuthException(
         AuthErrorCodes.unknown,
