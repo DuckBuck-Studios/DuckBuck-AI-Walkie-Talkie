@@ -250,7 +250,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // Add more app-wide providers here as needed
       ],
       child: MaterialApp(
-        title: 'DuckBuck',
+        title: 'DuckBuck - Updated',
         theme: AppTheme.blackTheme,
         darkTheme: AppTheme.blackTheme,
         themeMode: ThemeMode.system, // Uses system theme preference

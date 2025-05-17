@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow Firebase APIs -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">*.googleapis.com</domain>
+        <domain includeSubdomains="true">firebaseio.com</domain>
+        <domain includeSubdomains="true">firebase.com</domain>
+        <domain includeSubdomains="true">firebasestorage.googleapis.com</domain>
+        <domain includeSubdomains="true">firebaseremoteconfig.googleapis.com</domain>
+        <domain includeSubdomains="true">firebaseinstallations.googleapis.com</domain>
+        <domain includeSubdomains="true">firestore.googleapis.com</domain>
+        <pin-set expiration="2027-05-17">
+            <!-- Primary pin (leaf certificate) - extracted on May 17, 2025 -->
+            <pin digest="SHA-256">jYoTE/KICxVmNXPlhLcgJpD0FwK1sNupYdQSJg4RDos=</pin>
+            <!-- Backup pin (intermediate certificate) - for certificate rotation -->
+            <pin digest="SHA-256">YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=</pin>
+        </pin-set>
+    </domain-config>
+    
+    <!-- Default configuration for all domains not covered above -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -14,8 +14,10 @@ import 'friend/friend_service.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/message_repository.dart';
-import 'message/message_cache_service.dart'; 
+import 'message/message_cache_service.dart';
+import '../../features/messages/controllers/message_feature_controller.dart';
 import 'logger/logger_service.dart';
+
 
 /// Global service locator instance
 final GetIt serviceLocator = GetIt.instance;
