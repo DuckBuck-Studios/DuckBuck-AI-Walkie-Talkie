@@ -8,14 +8,14 @@ import 'firebase/firebase_database_service.dart';
 import 'firebase/firebase_storage_service.dart';
 import 'firebase/firebase_analytics_service.dart';
 import 'firebase/firebase_crashlytics_service.dart';
+import 'firebase/firebase_app_check_service.dart';
 import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart';
 import 'friend/friend_service.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/message_repository.dart';
-import 'message/message_cache_service.dart';
-import '../../features/messages/controllers/message_feature_controller.dart';
+import 'message/message_cache_service.dart'; 
 import 'logger/logger_service.dart';
 
 
@@ -49,6 +49,11 @@ Future<void> setupServiceLocator() async {
   // Register Firebase Crashlytics service
   serviceLocator.registerLazySingleton<FirebaseCrashlyticsService>(
     () => FirebaseCrashlyticsService(),
+  );
+  
+  // Register Firebase App Check service
+  serviceLocator.registerLazySingleton<FirebaseAppCheckService>(
+    () => FirebaseAppCheckService(),
   );
   
   // Register Crashlytics consent manager as async factory
