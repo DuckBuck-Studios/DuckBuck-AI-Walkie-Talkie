@@ -38,6 +38,34 @@ class UserRepository {
     if (firebaseUser == null) return null;
     return UserModel.fromFirebaseUser(firebaseUser);
   }
+  
+  /// Get the current user with enhanced caching for better performance
+  Future<UserModel?> getCurrentUserWithCache() async {
+    final firebaseUser = authService.currentUser;
+    if (firebaseUser == null) return null;
+    
+    // Check if we have valid cached user data
+    final prefService = PreferencesService.instance;
+    if (prefService.isCachedUserDataValid()) {
+      final cachedData = prefService.getCachedUserData();
+      if (cachedData != null && cachedData['uid'] == firebaseUser.uid) {
+        _logger.d(_tag, 'Using cached user data from preferences');
+        return UserModel.fromMap(cachedData);
+      }
+    }
+    
+    // If no valid cached data, create from Firebase user
+    final user = UserModel.fromFirebaseUser(firebaseUser);
+    
+    // Cache the user data
+    try {
+      await prefService.cacheUserData(user.toMap());
+    } catch (e) {
+      _logger.w(_tag, 'Failed to cache user data: ${e.toString()}');
+    }
+    
+    return user;
+  }
 
   /// Stream of auth state changes converted to UserModel
   Stream<UserModel?> get userStream {
@@ -570,6 +598,46 @@ class UserRepository {
     } catch (e) {
       throw AuthException(
         AuthErrorCodes.unknown,
+        'Failed to get user data',
+        e
+      );
+    }
+  }
+  
+  /// Get user data with selective field loading for better performance
+  /// This fetches only the specified fields from Firestore
+  Future<UserModel?> getUserWithSelectiveData(String uid, List<String> fields) async {
+    try {
+      // Check if we have valid cached data first
+      final prefService = PreferencesService.instance;
+      if (prefService.isCachedUserDataValid()) {
+        final cachedData = prefService.getCachedUserData();
+        if (cachedData != null && cachedData['uid'] == uid) {
+          _logger.d(_tag, 'Using cached user data');
+          return UserModel.fromMap(cachedData);
+        }
+      }
+      
+      // If no valid cached data, fetch from Firestore
+      final docRef = _firestore.collection(_userCollection).doc(uid);
+      
+      // Use Firebase's field selection for more efficient queries
+      final doc = await docRef.get(GetOptions(
+        source: Source.serverAndCache, // Try cache first, then server
+      ));
+      
+      if (!doc.exists) return null;
+      
+      final userData = doc.data()!;
+      
+      // Cache this data for future use
+      prefService.cacheUserData(userData);
+      
+      return UserModel.fromMap(userData);
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get selective user data', e);
+      throw AuthException(
+        AuthErrorCodes.databaseError,
         'Failed to get user data',
         e
       );

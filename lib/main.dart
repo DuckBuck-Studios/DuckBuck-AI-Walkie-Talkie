@@ -12,7 +12,8 @@ import 'features/auth/providers/auth_state_provider.dart';
 import 'core/services/firebase/firebase_app_check_service.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
 import 'core/services/crashlytics_consent_manager.dart';
-import 'core/providers/crashlytics_consent_provider.dart'; 
+import 'core/providers/crashlytics_consent_provider.dart';
+import 'core/services/auth/auth_security_manager.dart'; 
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -169,7 +170,66 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late AuthSecurityManager _securityManager;
+  
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeSecurityManager();
+  }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // User has returned to the app - update activity
+      _securityManager.updateUserActivity();
+    }
+  }
+  
+  Future<void> _initializeSecurityManager() async {
+    _securityManager = serviceLocator<AuthSecurityManager>();
+    await _securityManager.initialize(
+      onSessionExpired: _handleSessionExpired,
+    );
+    
+    // Start session tracking if user is logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _securityManager.startUserSession();
+    }
+  }
+  
+  void _handleSessionExpired() {
+    // Handle session timeout by logging the user out
+    if (!mounted) return;
+    
+    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+    authProvider.signOut().then((_) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session expired. Please sign in again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      
+      // Navigate to welcome screen
+      AppRoutes.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.welcome,
+        (route) => false,
+      );
+    });
+  }
+  
   @override
   Widget build(BuildContext context) {
     return MultiProvider(

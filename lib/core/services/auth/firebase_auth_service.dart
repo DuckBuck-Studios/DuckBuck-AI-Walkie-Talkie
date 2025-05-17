@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -5,7 +7,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'auth_service_interface.dart';
 import '../../exceptions/auth_exceptions.dart';
-import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../logger/logger_service.dart';
@@ -34,6 +35,33 @@ class FirebaseAuthService implements AuthServiceInterface {
 
   @override
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
+  
+  @override
+  Future<String?> refreshIdToken({bool forceRefresh = false}) async {
+    try {
+      final user = _firebaseAuth.currentUser;
+      if (user == null) {
+        throw AuthException(
+          AuthErrorCodes.notLoggedIn,
+          'No user is currently signed in',
+        );
+      }
+      
+      final token = await user.getIdToken(forceRefresh);
+      _logger.i(_tag, 'Auth token refreshed successfully');
+      return token;
+    } on FirebaseAuthException catch (e) {
+      _logger.e(_tag, 'Failed to refresh auth token', e);
+      throw _handleException(e);
+    } catch (e) {
+      _logger.e(_tag, 'Failed to refresh auth token', e);
+      throw AuthException(
+        AuthErrorCodes.tokenRefreshFailed,
+        'Failed to refresh authentication token',
+        e,
+      );
+    }
+  }
 
   /// Convert FirebaseAuthException to our AuthException
   AuthException _handleException(FirebaseAuthException e) {
@@ -417,5 +445,27 @@ class FirebaseAuthService implements AuthServiceInterface {
     final bytes = utf8.encode(input);
     final digest = sha256.convert(bytes);
     return digest.toString();
+  }
+  
+  @override
+  Future<bool> validateCredential(AuthCredential credential) async {
+    try {
+      if (_firebaseAuth.currentUser == null) {
+        _logger.w(_tag, 'Cannot validate credentials: No user is logged in');
+        return false;
+      }
+      
+      // Reauthenticate to check if credential is valid
+      final authResult = await _firebaseAuth.currentUser!.reauthenticateWithCredential(credential);
+      _logger.i(_tag, 'Credential validation successful');
+      
+      return authResult.user != null;
+    } on FirebaseAuthException catch (e) {
+      _logger.e(_tag, 'Credential validation failed: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_tag, 'Unexpected error during credential validation', e);
+      return false;
+    }
   }
 }

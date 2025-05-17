@@ -75,8 +75,16 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
   // Animation controller for stage transitions
   late final AnimationController _animationController;
   
-  // Loading state for buttons
-  bool _isSubmitting = false;
+  // Loading states for different authentication methods
+  bool _isGoogleLoading = false;
+  bool _isAppleLoading = false;
+  bool _isPhoneVerificationLoading = false;
+  bool _isOtpVerificationLoading = false;
+  
+  // Helper property to determine if any authentication is in progress
+  bool get _isAnyAuthInProgress => 
+      _isGoogleLoading || _isAppleLoading || 
+      _isPhoneVerificationLoading || _isOtpVerificationLoading;
   
   // Track when the code was first sent
   DateTime _codeFirstSentTime = DateTime.now();
@@ -124,7 +132,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
 
   /// Handles the Google sign-in process with proper auth service
   void _handleGoogleSignIn() async {
-    setState(() => _isSubmitting = true);
+    setState(() => _isGoogleLoading = true);
     HapticFeedback.mediumImpact();
     
     // Log Google sign-in attempt from UI
@@ -151,7 +159,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isGoogleLoading = false);
         Navigator.pop(context);
         
         // Navigate based on whether user is new or returning
@@ -190,7 +198,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isGoogleLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Google sign-in failed: ${e.toString()}'),
@@ -224,7 +232,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
 
   /// Handles the Apple sign-in process with proper auth service
   void _handleAppleSignIn() async {
-    setState(() => _isSubmitting = true);
+    setState(() => _isAppleLoading = true);
     HapticFeedback.mediumImpact();
     
     // Log Apple sign-in attempt from UI
@@ -251,7 +259,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isAppleLoading = false);
         Navigator.pop(context);
         
         // Navigate based on whether user is new or returning
@@ -290,7 +298,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isAppleLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Apple sign-in failed: ${e.toString()}'),
@@ -338,7 +346,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       return;
     }
     
-    setState(() => _isSubmitting = true);
+    setState(() => _isPhoneVerificationLoading = true);
     HapticFeedback.mediumImpact();
     
     // Get auth provider
@@ -361,7 +369,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           if (mounted) {
             setState(() {
               _verificationId = verificationId;
-              _isSubmitting = false;
+              _isPhoneVerificationLoading = false;
               _currentStage = AuthStage.otpVerification;
               _codeFirstSentTime = DateTime.now(); // Set first sent time
               _codeResendCount = 0; // Reset resend count
@@ -383,7 +391,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           );
           
           if (mounted) {
-            setState(() => _isSubmitting = false);
+            setState(() => _isPhoneVerificationLoading = false);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Verification failed: $error'),
@@ -403,7 +411,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           
           // Auto-verification succeeded, close bottom sheet
           if (mounted) {
-            setState(() => _isSubmitting = false);
+            setState(() => _isPhoneVerificationLoading = false);
             Navigator.pop(context);
             widget.onAuthComplete();
           }
@@ -420,7 +428,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isPhoneVerificationLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
@@ -478,7 +486,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       return;
     }
     
-    setState(() => _isSubmitting = true);
+    setState(() => _isOtpVerificationLoading = true);
     HapticFeedback.mediumImpact();
     
     try {
@@ -499,7 +507,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isOtpVerificationLoading = false);
         Navigator.pop(context);
         
         // Navigate based on whether user is new or returning
@@ -555,7 +563,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       );
       
       if (mounted) {
-        setState(() => _isSubmitting = false);
+        setState(() => _isOtpVerificationLoading = false);
         
         // Show user-friendly error message with option to resend if code expired
         ScaffoldMessenger.of(context).showSnackBar(
@@ -595,7 +603,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     // Resend the verification code
     final fullPhoneNumber = "$_countryCode${_phoneController.text}";
     
-    setState(() => _isSubmitting = true);
+    setState(() => _isOtpVerificationLoading = true);
     
     // Get auth provider
     final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
@@ -619,7 +627,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         if (mounted) {
           setState(() {
             _verificationId = verificationId;
-            _isSubmitting = false;
+            _isOtpVerificationLoading = false;
             _codeResendCount += 1;
           });
           
@@ -644,7 +652,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         );
         
         if (mounted) {
-          setState(() => _isSubmitting = false);
+          setState(() => _isOtpVerificationLoading = false);
           
           // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
@@ -658,7 +666,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       onVerified: () {
         // Auto-verification succeeded
         if (mounted) {
-          setState(() => _isSubmitting = false);
+          setState(() => _isOtpVerificationLoading = false);
           Navigator.pop(context);
           widget.onAuthComplete();
         }
@@ -930,7 +938,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         SizedBox(
           height: 50,
           child: ElevatedButton(
-            onPressed: _isSubmitting ? null : _handlePhoneSubmit,
+            onPressed: _isPhoneVerificationLoading ? null : _handlePhoneSubmit,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
@@ -939,7 +947,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
               ),
               disabledBackgroundColor: AppColors.whiteOpacity50,
             ),
-            child: _isSubmitting
+            child: _isPhoneVerificationLoading
                 ? SizedBox(
                     width: 24,
                     height: 24,
@@ -1048,7 +1056,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         SizedBox(
           height: 50,
           child: ElevatedButton(
-            onPressed: _isSubmitting ? null : _handleOtpSubmit,
+            onPressed: _isOtpVerificationLoading ? null : _handleOtpSubmit,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
@@ -1057,7 +1065,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
               ),
               disabledBackgroundColor: AppColors.whiteOpacity50,
             ),
-            child: _isSubmitting
+            child: _isOtpVerificationLoading
                 ? SizedBox(
                     width: 24,
                     height: 24,
@@ -1081,7 +1089,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Resend code button with improved implementation
         TextButton(
-          onPressed: _isSubmitting ? null : _handleResendCode,
+          onPressed: _isOtpVerificationLoading ? null : _handleResendCode,
           child: Text(
             'Resend Code',
             style: TextStyle(
@@ -1095,7 +1103,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     );
   }
 
-  /// Builds a styled authentication button
+  /// Builds a styled authentication button with clean, minimalist design
   Widget _buildAuthButton({
     required IconData icon,
     required String text,
@@ -1103,29 +1111,30 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     required bool isIOS,
     double iconSize = 22,
   }) {
+    // Determine if this specific button is loading
+    bool isLoading = false;
+    if (text.contains('Google')) {
+      isLoading = _isGoogleLoading;
+    } else if (text.contains('Apple')) {
+      isLoading = _isAppleLoading;
+    }
+    
     return Container(
       decoration: BoxDecoration(
+        color: Colors.black,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.whiteOpacity20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.whiteOpacity10,
-            AppColors.whiteOpacity10.withOpacity(0.5),
-          ],
-        ),
+        border: Border.all(color: Colors.white, width: 1.0),
       ),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: _isSubmitting ? null : onPressed,
+          onTap: _isAnyAuthInProgress ? null : onPressed,
           splashColor: AppColors.whiteOpacity10,
-          highlightColor: AppColors.whiteOpacity10,
+          highlightColor: Colors.transparent,
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: MediaQuery.of(context).size.height * 0.014),
+            padding: EdgeInsets.symmetric(vertical: MediaQuery.of(context).size.height * 0.018),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1141,16 +1150,17 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
                     color: Colors.white,
                     fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
                     fontSize: isIOS ? 15 : 16,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                if (_isSubmitting && (text.contains('Google') || text.contains('Apple')))
+                if (isLoading)
                   Container(
                     margin: const EdgeInsets.only(left: 12),
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.whiteOpacity50),
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
                     ),
                   ),
               ],

@@ -11,6 +11,7 @@ import 'package:duckbuck/core/widgets/safe_slide_action.dart'; // Import our cus
 import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
+import 'package:duckbuck/features/auth/screens/onboarding_container.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -21,7 +22,6 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   String _appVersion = '';
-  bool _isStartingApp = false;
   
   // Services
   final _analytics = serviceLocator<FirebaseAnalyticsService>();
@@ -71,32 +71,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  Future<void> _navigateToOnboarding() async {
-    if (_isStartingApp) return;
-
-    setState(() {
-      _isStartingApp = true;
-    });
-    
-    // Log the start of onboarding
-    await _analytics.logEvent(
-      name: 'start_onboarding',
-      parameters: {
-        'source': 'welcome_screen',
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    _logger.i(_tag, 'User started onboarding flow');
-
-    // Reset onboarding progress to ensure users see all screens
-    await PreferencesService.instance.setCurrentOnboardingStep(0);
-
-    // Check if the widget is still mounted before using context
-    if (mounted) {
-      // Use the AppRoutes system for navigation
-      Navigator.of(context).pushReplacementNamed(AppRoutes.onboarding);
-    }
-  }
+  // Removed _navigateToOnboarding method as it's now handled directly in the slide action
 
   @override
   Widget build(BuildContext context) {
@@ -247,36 +222,81 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget _buildSlideToAction(BuildContext context, bool isIOS) {
     // Wrap in RepaintBoundary for better rendering performance
     return RepaintBoundary(
-      child: SafeSlideAction(
-        height: isIOS ? 58 : 60,
-        sliderButtonIconSize: isIOS ? 22 : 24,
-        sliderRotate: false,
-        borderRadius: isIOS ? 18 : 16,
-        elevation: 0,
-        innerColor: AppColors.accentBlue,
-        outerColor: AppColors.surfaceBlack,
-        sliderButtonIcon: isIOS
-            ? const Icon(CupertinoIcons.arrow_right, color: Colors.white)
-            : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-        text: 'Slide to get started',
-        textStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: isIOS ? 16 : 18,
-          fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
+      child: Hero(
+        // Use a Hero widget to create a smooth visual connection with the next screen
+        tag: 'slide_action',
+        child: Material(
+          // Material is needed for proper Hero animation
+          color: Colors.transparent,
+          child: SafeSlideAction(
+            height: isIOS ? 58 : 60,
+            sliderButtonIconSize: isIOS ? 22 : 24,
+            sliderRotate: false,
+            borderRadius: isIOS ? 18 : 16,
+            elevation: 0,
+            innerColor: AppColors.accentBlue,
+            outerColor: AppColors.surfaceBlack,
+            sliderButtonIcon: isIOS
+                ? const Icon(CupertinoIcons.arrow_right, color: Colors.white)
+                : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+            text: 'Slide to get started',
+            textStyle: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: isIOS ? 16 : 18,
+              fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+            onSubmit: () {
+              // Provide haptic feedback for better physical feedback
+              HapticFeedback.mediumImpact();
+              
+              // Log analytics event
+              _analytics.logEvent(
+                name: 'start_onboarding',
+                parameters: {
+                  'source': 'welcome_screen',
+                  'timestamp': DateTime.now().toIso8601String(),
+                },
+              );
+              _logger.i(_tag, 'User started onboarding flow');
+              
+              // Reset onboarding progress before navigating to maintain a smooth flow
+              // By not awaiting this operation, we ensure the navigation happens immediately
+              PreferencesService.instance.setCurrentOnboardingStep(0);
+              
+              // Use pushReplacement with a combined fade and scale transition for smoother experience
+              Navigator.pushReplacement(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => 
+                    OnboardingContainer(
+                      onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
+                    ),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    const begin = Offset(0.0, 0.05);
+                    const end = Offset.zero;
+                    final tween = Tween(begin: begin, end: end).chain(
+                      CurveTween(curve: Curves.easeOutCubic)
+                    );
+                    final offsetAnimation = animation.drive(tween);
+                    
+                    return FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                      child: SlideTransition(
+                        position: offsetAnimation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  transitionDuration: const Duration(milliseconds: 400),
+                ),
+              );
+            },
+          ),
         ),
-        onSubmit: () {
-          // Provide haptic feedback based on platform
-          if (isIOS) {
-            HapticFeedback.mediumImpact();
-          } else {
-            HapticFeedback.lightImpact();
-          }
-          
-          // Navigate to onboarding screens after a short delay
-          Future.delayed(const Duration(milliseconds: 200), () {
-            _navigateToOnboarding();
-          });
-        },
       ),
     );
   }

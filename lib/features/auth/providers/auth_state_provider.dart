@@ -6,6 +6,7 @@ import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/notifications/notifications_service.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
+import '../../../core/services/auth/auth_security_manager.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -15,6 +16,7 @@ import '../../../core/exceptions/auth_exceptions.dart';
 class AuthStateProvider extends ChangeNotifier {
   final UserRepository _userRepository;
   final NotificationsService _notificationsService;
+  final AuthSecurityManager _securityManager;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -23,9 +25,10 @@ class AuthStateProvider extends ChangeNotifier {
   AuthStateProvider({
     UserRepository? userRepository,
     NotificationsService? notificationsService,
+    AuthSecurityManager? securityManager,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
-       _notificationsService =
-           notificationsService ?? serviceLocator<NotificationsService>() {
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
+       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>() {
     _init();
   }
 
@@ -54,11 +57,25 @@ class AuthStateProvider extends ChangeNotifier {
       // Register token for immediate loading too
       _notificationsService.registerToken(_currentUser!.uid);
       PreferencesService.instance.setLoggedIn(true);
+      
+      // Start session tracking for already authenticated users
+      _securityManager.startUserSession();
     }
   }
 
   /// Current authenticated user, if any
   UserModel? get currentUser => _currentUser;
+  
+  /// Get current user with enhanced performance using caching
+  Future<UserModel?> getCurrentUserWithCache() async {
+    try {
+      final user = await _securityManager.getCurrentUserWithCache();
+      return user as UserModel?;
+    } catch (e) {
+      debugPrint('Error getting cached user: $e');
+      return _currentUser;
+    }
+  }
 
   /// Whether authentication operations are in progress
   bool get isLoading => _isLoading;
@@ -83,6 +100,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Google sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -112,6 +136,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Apple sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -187,6 +218,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Phone OTP verification successful, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -214,6 +252,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Phone auth successful for user: ${user.phoneNumber ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -235,6 +280,9 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // End the user session first
+      _securityManager.endUserSession();
+      
       // Use the centralized sign-out method in UserRepository
       // This handles FCM token clearing, auth signout, and preference clearing
       debugPrint('🔐 AUTH PROVIDER: Using central UserRepository.signOut() method');
@@ -276,6 +324,17 @@ class AuthStateProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+  
+  /// Validate a user credential for security-sensitive operations
+  Future<bool> validateCredential(AuthCredential credential) async {
+    try {
+      return await _securityManager.validateCredential(credential);
+    } catch (e) {
+      _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER: Credential validation failed: ${e.toString()}');
+      return false;
+    }
   }
 
   /// Check if a user is new (doesn't exist in Firestore)

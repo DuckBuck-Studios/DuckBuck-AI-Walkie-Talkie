@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../styles/onboarding_styles.dart';
 import '../components/auth_bottom_sheet.dart';

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth/auth_service_interface.dart';
 import 'auth/firebase_auth_service.dart';
+import 'auth/auth_security_manager.dart';
 import 'firebase/firebase_database_service.dart';
 import 'firebase/firebase_storage_service.dart';
 import 'firebase/firebase_analytics_service.dart';
@@ -102,6 +103,10 @@ Future<void> setupServiceLocator() async {
     ),
   );
    
+  // Register authentication security manager
+  serviceLocator.registerLazySingleton<AuthSecurityManager>(
+    () => AuthSecurityManager(),
+  );
 
   // Add more service registrations here as needed
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +13,8 @@ class PreferencesService {
   static const String _hasSeenWelcomeKey = 'has_seen_welcome';
   static const String _currentOnboardingStepKey = 'current_onboarding_step';
   static const String _passwordlessEmailKey = 'passwordless_email';
+  static const String _cachedUserDataKey = 'cached_user_data';
+  static const String _lastAuthTimeKey = 'last_auth_time';
 
   PreferencesService._();
 
@@ -129,5 +132,51 @@ class PreferencesService {
         debugPrint('Critical error clearing preferences: $fallbackError');
       }
     }
+  }
+  
+  /// Caches user data in shared preferences for faster access
+  Future<void> cacheUserData(Map<String, dynamic> userData) async {
+    try {
+      await _prefs.setString(_cachedUserDataKey, jsonEncode(userData));
+      await _prefs.setString(_lastAuthTimeKey, DateTime.now().toIso8601String());
+    } catch (e) {
+      debugPrint('Error caching user data: $e');
+    }
+  }
+  
+  /// Retrieves cached user data if available
+  Map<String, dynamic>? getCachedUserData() {
+    try {
+      final cachedData = _prefs.getString(_cachedUserDataKey);
+      if (cachedData == null) return null;
+      
+      return jsonDecode(cachedData) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error retrieving cached user data: $e');
+      return null;
+    }
+  }
+  
+  /// Checks if the cached user data is recent enough (within the last hour)
+  bool isCachedUserDataValid() {
+    try {
+      final lastAuthTimeStr = _prefs.getString(_lastAuthTimeKey);
+      if (lastAuthTimeStr == null) return false;
+      
+      final lastAuthTime = DateTime.parse(lastAuthTimeStr);
+      final now = DateTime.now();
+      
+      // Consider data valid if it's less than 1 hour old
+      return now.difference(lastAuthTime).inHours < 1;
+    } catch (e) {
+      debugPrint('Error checking cached user data validity: $e');
+      return false;
+    }
+  }
+  
+  /// Clears the cached user data
+  Future<void> clearCachedUserData() async {
+    await _prefs.remove(_cachedUserDataKey);
+    await _prefs.remove(_lastAuthTimeKey);
   }
 }

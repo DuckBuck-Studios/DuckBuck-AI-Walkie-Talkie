@@ -44,6 +44,14 @@ class AuthErrorCodes {
   static const String notLoggedIn = 'auth/not-logged-in';
   static const String userDeleted = 'auth/user-deleted';
   
+  // Token and session errors
+  static const String tokenRefreshFailed = 'auth/token-refresh-failed';
+  static const String tokenExpired = 'auth/token-expired';
+  static const String sessionExpired = 'auth/session-expired';
+  static const String requiresRecentLogin = 'auth/requires-recent-login';
+  static const String sessionTimeout = 'auth/session-timeout';
+  static const String credentialValidationFailed = 'auth/credential-validation-failed';
+  
   // Google Sign-in specific 
   static const String googleSignInFailed = 'auth/google-sign-in-failed';
   static const String googleSignInCancelled = 'auth/google-sign-in-cancelled';
@@ -62,7 +70,7 @@ class AuthErrorCodes {
   static const String invalidVerificationCode = 'auth/invalid-verification-code';
   static const String invalidVerificationId = 'auth/invalid-verification-id';
   static const String smsCodeExpired = 'auth/code-expired';
-  static const String sessionExpired = 'auth/session-expired';
+  // Session expired is defined above
   static const String smsQuotaExceeded = 'auth/quota-exceeded';
   static const String smsCodeAutoRetrievalTimeout = 'auth/code-retrieval-timeout';
   

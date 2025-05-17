@@ -8,6 +8,10 @@ abstract class AuthServiceInterface {
 
   /// Stream of authentication state changes
   Stream<User?> get authStateChanges;
+  
+  /// Refresh the authentication token for the current user
+  /// Throws AuthException if refresh fails
+  Future<String?> refreshIdToken({bool forceRefresh = false});
 
   /// Sign in with Google account
   Future<UserCredential> signInWithGoogle();
@@ -40,4 +44,9 @@ abstract class AuthServiceInterface {
 
   /// Update user profile information
   Future<void> updateProfile({String? displayName, String? photoURL});
+  
+  /// Validate a credential to ensure it's still valid
+  /// Useful for sensitive operations that require recent authentication
+  /// Returns true if credential is valid, false otherwise
+  Future<bool> validateCredential(AuthCredential credential);
 }
