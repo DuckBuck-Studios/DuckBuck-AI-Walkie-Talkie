@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -37,189 +39,191 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: const BoxDecoration(color: Colors.black),
-      child: Stack(
-        children: [
-          // Add decorative background elements similar to screens 2 and 3
-          Positioned(
-                top: size.height * 0.1,
-                right: -size.width * 0.2,
-                child: Container(
-                  height: size.width * 0.6,
-                  width: size.width * 0.6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.05),
-                  ),
-                ),
-              )
-              .animate(target: _isReady ? 1 : 0)
-              .fadeIn(duration: 800.ms)
-              .scale(
-                begin: const Offset(0.7, 0.7),
-                end: const Offset(1.0, 1.0),
-                duration: 1000.ms,
-                curve: Curves.easeOutCubic,
-              ),
-
-          Positioned(
-                bottom: -size.height * 0.1,
-                left: -size.width * 0.15,
-                child: Container(
-                  height: size.width * 0.7,
-                  width: size.width * 0.7,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.08),
-                  ),
-                ),
-              )
-              .animate(target: _isReady ? 1 : 0)
-              .fadeIn(duration: 800.ms, delay: 200.ms)
-              .scale(
-                begin: const Offset(0.6, 0.6),
-                end: const Offset(1.0, 1.0),
-                duration: 1000.ms,
-              ),
-
-          // Small decorative circles
-          ...List.generate(8, (index) {
-            return Positioned(
-                  top: size.height * 0.2 + (index * 50),
-                  left: index % 2 == 0 ? size.width * 0.85 : size.width * 0.15,
+    return RepaintBoundary(
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(color: Colors.black),
+        child: Stack(
+          children: [
+            // Add decorative background elements similar to screens 2 and 3
+            Positioned(
+                  top: size.height * 0.1,
+                  right: -size.width * 0.2,
                   child: Container(
-                    height: 6,
-                    width: 6,
+                    height: size.width * 0.6,
+                    width: size.width * 0.6,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withOpacity(0.05),
                     ),
                   ),
                 )
                 .animate(target: _isReady ? 1 : 0)
-                .fadeIn(delay: (100 * index).ms, duration: 400.ms)
-                .scale(begin: const Offset(0, 0), end: const Offset(1.0, 1.0));
-          }),
+                .fadeIn(duration: 800.ms)
+                .scale(
+                  begin: const Offset(0.7, 0.7),
+                  end: const Offset(1.0, 1.0),
+                  duration: 1000.ms,
+                  curve: Curves.easeOutCubic,
+                ),
 
-          SafeArea(
-            child: Column(
-              children: [
-                // Content - Expanded to take available space
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Lottie animation instead of icon
-                        Container(
-                              height:
-                                  OnboardingStyles.illustrationSize(
-                                    size,
-                                  ).height,
-                              width:
-                                  OnboardingStyles.illustrationSize(size).width,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 20,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Lottie.asset(
-                                  'assets/animations/world-wide.json',
-                                  height:
-                                      OnboardingStyles.illustrationSize(
-                                        size,
-                                      ).height *
-                                      0.7,
-                                  width:
-                                      OnboardingStyles.illustrationSize(
-                                        size,
-                                      ).width *
-                                      0.7,
-                                  fit: BoxFit.contain,
+            Positioned(
+                  bottom: -size.height * 0.1,
+                  left: -size.width * 0.15,
+                  child: Container(
+                    height: size.width * 0.7,
+                    width: size.width * 0.7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
+                  ),
+                )
+                .animate(target: _isReady ? 1 : 0)
+                .fadeIn(duration: 800.ms, delay: 200.ms)
+                .scale(
+                  begin: const Offset(0.6, 0.6),
+                  end: const Offset(1.0, 1.0),
+                  duration: 1000.ms,
+                ),
+
+            // Small decorative circles
+            ...List.generate(8, (index) {
+              return Positioned(
+                    top: size.height * 0.2 + (index * 50),
+                    left: index % 2 == 0 ? size.width * 0.85 : size.width * 0.15,
+                    child: Container(
+                      height: 6,
+                      width: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                      ),
+                    ),
+                  )
+                  .animate(target: _isReady ? 1 : 0)
+                  .fadeIn(delay: (100 * index).ms, duration: 400.ms)
+                  .scale(begin: const Offset(0, 0), end: const Offset(1.0, 1.0));
+            }),
+
+            SafeArea(
+              child: Column(
+                children: [
+                  // Content - Expanded to take available space
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Lottie animation instead of icon
+                          Container(
+                                height:
+                                    OnboardingStyles.illustrationSize(
+                                      size,
+                                    ).height,
+                                width:
+                                    OnboardingStyles.illustrationSize(size).width,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
                                 ),
+                                child: Center(
+                                  child: Lottie.asset(
+                                    'assets/animations/world-wide.json',
+                                    height:
+                                        OnboardingStyles.illustrationSize(
+                                          size,
+                                        ).height *
+                                        0.7,
+                                    width:
+                                        OnboardingStyles.illustrationSize(
+                                          size,
+                                        ).width *
+                                        0.7,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              )
+                              .animate(target: _isReady ? 1 : 0)
+                              .fadeIn(duration: 800.ms, delay: 300.ms)
+                              .slideY(
+                                begin: 0.2,
+                                end: 0,
+                                duration: 700.ms,
+                                curve: Curves.easeOutQuad,
                               ),
+
+                          SizedBox(height: size.height * 0.05),
+
+                          // Regular title with animation
+                          const Text(
+                                'Connect Anywhere',
+                                style: OnboardingStyles.titleStyle,
+                              )
+                              .animate(target: _isReady ? 1 : 0)
+                              .fadeIn(duration: 600.ms, delay: 500.ms)
+                              .slideY(begin: 0.3, end: 0, duration: 500.ms),
+
+                          SizedBox(height: size.height * 0.03),
+
+                          // Description with improved visibility and animation
+                          Text(
+                                'Connect with friends and family from anywhere in the world. Just one tap away from global communication.',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                textAlign: TextAlign.center,
+                              )
+                              .animate(target: _isReady ? 1 : 0)
+                              .fadeIn(duration: 600.ms, delay: 700.ms)
+                              .slideY(begin: 0.3, end: 0, duration: 500.ms),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Swipe indicator instead of next button
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 40.0),
+                    child: Column(
+                      children: [
+                        // Page indicator
+                        Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildPageIndicator(isActive: true, index: 0),
+                                _buildPageIndicator(isActive: false, index: 1),
+                                _buildPageIndicator(isActive: false, index: 2),
+                                _buildPageIndicator(isActive: false, index: 3),
+                              ],
                             )
                             .animate(target: _isReady ? 1 : 0)
-                            .fadeIn(duration: 800.ms, delay: 300.ms)
-                            .slideY(
-                              begin: 0.2,
-                              end: 0,
-                              duration: 700.ms,
-                              curve: Curves.easeOutQuad,
-                            ),
+                            .fadeIn(duration: 600.ms, delay: 900.ms),
 
-                        SizedBox(height: size.height * 0.05),
+                        const SizedBox(height: 20),
 
-                        // Regular title with animation
-                        const Text(
-                              'Connect Anywhere',
-                              style: OnboardingStyles.titleStyle,
-                            )
-                            .animate(target: _isReady ? 1 : 0)
-                            .fadeIn(duration: 600.ms, delay: 500.ms)
-                            .slideY(begin: 0.3, end: 0, duration: 500.ms),
-
-                        SizedBox(height: size.height * 0.03),
-
-                        // Description with improved visibility and animation
-                        Text(
-                              'Connect with friends and family from anywhere in the world. Just one tap away from global communication.',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                height: 1.5,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              textAlign: TextAlign.center,
-                            )
-                            .animate(target: _isReady ? 1 : 0)
-                            .fadeIn(duration: 600.ms, delay: 700.ms)
-                            .slideY(begin: 0.3, end: 0, duration: 500.ms),
+                        // Swipe indicator with pulsing animation
+                        _buildSwipeIndicator(),
                       ],
                     ),
                   ),
-                ),
-
-                // Swipe indicator instead of next button
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 40.0),
-                  child: Column(
-                    children: [
-                      // Page indicator
-                      Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildPageIndicator(isActive: true, index: 0),
-                              _buildPageIndicator(isActive: false, index: 1),
-                              _buildPageIndicator(isActive: false, index: 2),
-                              _buildPageIndicator(isActive: false, index: 3),
-                            ],
-                          )
-                          .animate(target: _isReady ? 1 : 0)
-                          .fadeIn(duration: 600.ms, delay: 900.ms),
-
-                      const SizedBox(height: 20),
-
-                      // Swipe indicator with pulsing animation
-                      _buildSwipeIndicator(),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -245,20 +249,32 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
   }
 
   Widget _buildSwipeIndicator() {
-    return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Swipe to continue',
-              style: TextStyle(color: Colors.white, fontSize: 16),
+    final bool isIOS = Platform.isIOS;
+    
+    return RepaintBoundary(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Swipe to continue',
+            style: TextStyle(
+              color: const Color.fromARGB(255, 80, 65, 65), 
+              fontSize: isIOS ? 15 : 16,
+              fontWeight: isIOS ? FontWeight.w500 : FontWeight.normal
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-          ],
-        )
-        .animate(target: _isReady ? 1 : 0)
-        .fadeIn(delay: 1000.ms, duration: 600.ms)
-        .then()
-        .animate(onPlay: (controller) => controller.repeat());
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            isIOS ? CupertinoIcons.arrow_right : Icons.arrow_forward,
+            color: Colors.white, 
+            size: isIOS ? 18 : 20
+          ),
+        ],
+      )
+      .animate(target: _isReady ? 1 : 0)
+      .fadeIn(delay: 1000.ms, duration: 600.ms)
+      .then()
+      .animate(onPlay: (controller) => controller.repeat()),
+    );
   }
 }

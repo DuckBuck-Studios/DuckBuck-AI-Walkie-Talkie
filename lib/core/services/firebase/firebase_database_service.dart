@@ -81,14 +81,27 @@ class FirebaseDatabaseService {
     required String documentId,
     required Map<String, dynamic> data,
     bool merge = true,
+    bool logOperation = false,
   }) async {
     try {
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Setting document $documentId in $collection (merge: $merge)');
+        debugPrint('🔥 FIREBASE: Document data: $data');
+      }
+      
       await _firestore.collection(collection).doc(documentId).set({
         ...data,
         'updatedAt': FieldValue.serverTimestamp(),
         if (!merge) 'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: merge));
+      
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Document set successfully');
+      }
     } catch (e) {
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Error setting document: ${e.toString()}');
+      }
       throw Exception('Failed to set document: ${e.toString()}');
     }
   }
@@ -98,13 +111,26 @@ class FirebaseDatabaseService {
     required String collection,
     required String documentId,
     required Map<String, dynamic> data,
+    bool logOperation = false,
   }) async {
     try {
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Updating document $documentId in $collection');
+        debugPrint('🔥 FIREBASE: Update data: $data');
+      }
+      
       await _firestore.collection(collection).doc(documentId).update({
         ...data,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Document updated successfully');
+      }
     } catch (e) {
+      if (logOperation) {
+        debugPrint('🔥 FIREBASE: Error updating document: ${e.toString()}');
+      }
       throw Exception('Failed to update document: ${e.toString()}');
     }
   }

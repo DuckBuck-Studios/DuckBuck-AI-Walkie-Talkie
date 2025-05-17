@@ -69,9 +69,7 @@ class LegalService {
   }
 
   Future<LegalDocument> _loadLegalDocument(String path) async {
-    // Add artificial delay in debug mode to show animations
-    await Future.delayed(const Duration(milliseconds: 800));
-    
+    // Load document immediately without artificial delay
     final jsonString = await rootBundle.loadString(path);
     final Map<String, dynamic> jsonMap = json.decode(jsonString);
     return LegalDocument.fromJson(jsonMap);

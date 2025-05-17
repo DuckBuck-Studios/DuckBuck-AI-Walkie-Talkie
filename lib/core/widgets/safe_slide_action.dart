@@ -108,8 +108,10 @@ class _SafeSlideActionState extends State<SafeSlideAction> {
             textStyle: widget.textStyle,
             onSubmit: () {
               if (widget.onSubmit != null) {
+                // Execute callback immediately for smooth transition
                 widget.onSubmit!();
               }
+              // Return null for the loading widget to keep default behavior but skip the wait
               return null;
             },
           ),

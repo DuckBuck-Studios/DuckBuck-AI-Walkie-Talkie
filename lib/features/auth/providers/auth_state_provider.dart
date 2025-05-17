@@ -5,6 +5,8 @@ import '../../../core/models/user_model.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/notifications/notifications_service.dart';
+import '../../../core/exceptions/auth_exceptions.dart';
+import '../../../core/services/auth/auth_security_manager.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -14,6 +16,7 @@ import '../../../core/services/notifications/notifications_service.dart';
 class AuthStateProvider extends ChangeNotifier {
   final UserRepository _userRepository;
   final NotificationsService _notificationsService;
+  final AuthSecurityManager _securityManager;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -22,9 +25,10 @@ class AuthStateProvider extends ChangeNotifier {
   AuthStateProvider({
     UserRepository? userRepository,
     NotificationsService? notificationsService,
+    AuthSecurityManager? securityManager,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
-       _notificationsService =
-           notificationsService ?? serviceLocator<NotificationsService>() {
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
+       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>() {
     _init();
   }
 
@@ -39,6 +43,7 @@ class AuthStateProvider extends ChangeNotifier {
 
       // When user logs in, register FCM token and update login state in preferences
       if (user != null) {
+        // Register a new token on login
         _notificationsService.registerToken(user.uid);
         PreferencesService.instance.setLoggedIn(true);
       }
@@ -49,13 +54,28 @@ class AuthStateProvider extends ChangeNotifier {
     // Load current user immediately if available
     _currentUser = _userRepository.currentUser;
     if (_currentUser != null) {
+      // Register token for immediate loading too
       _notificationsService.registerToken(_currentUser!.uid);
       PreferencesService.instance.setLoggedIn(true);
+      
+      // Start session tracking for already authenticated users
+      _securityManager.startUserSession();
     }
   }
 
   /// Current authenticated user, if any
   UserModel? get currentUser => _currentUser;
+  
+  /// Get current user with enhanced performance using caching
+  Future<UserModel?> getCurrentUserWithCache() async {
+    try {
+      final user = await _securityManager.getCurrentUserWithCache();
+      return user as UserModel?;
+    } catch (e) {
+      debugPrint('Error getting cached user: $e');
+      return _currentUser;
+    }
+  }
 
   /// Whether authentication operations are in progress
   bool get isLoading => _isLoading;
@@ -65,62 +85,6 @@ class AuthStateProvider extends ChangeNotifier {
 
   /// Whether the user is authenticated
   bool get isAuthenticated => _currentUser != null;
-
-  /// Sign in with email and password
-  Future<UserModel> signInWithEmail({
-    required String email,
-    required String password,
-    bool requireEmailVerification = false,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      final user = await _userRepository.signInWithEmail(
-        email: email,
-        password: password,
-        requireEmailVerification: requireEmailVerification,
-      );
-
-      _errorMessage = null;
-      return user;
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Create a new account with email and password
-  Future<UserModel> createAccount({
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      final user = await _userRepository.createAccountWithEmail(
-        email: email,
-        password: password,
-        displayName: displayName,
-      );
-
-      _errorMessage = null;
-      return user;
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
 
   /// Sign in with Google
   Future<(UserModel, bool)> signInWithGoogle() async {
@@ -136,6 +100,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Google sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -165,6 +136,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Apple sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -199,11 +177,11 @@ class AuthStateProvider extends ChangeNotifier {
           notifyListeners();
           onVerified();
         },
-        verificationFailed: (e) {
+        verificationFailed: (AuthException e) {
           _errorMessage = e.message;
           _isLoading = false;
           notifyListeners();
-          onError(e.message ?? 'Verification failed');
+          onError(e.message);
         },
         codeSent: (verificationId, resendToken) {
           _isLoading = false;
@@ -240,6 +218,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Phone OTP verification successful, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -267,6 +252,13 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint(
         '🔐 AUTH PROVIDER: Phone auth successful for user: ${user.phoneNumber ?? 'Unknown'}, isNewUser: $isNewUser',
       );
+      
+      // Start tracking user session
+      _securityManager.startUserSession();
+      
+      // Ensure we have a valid token
+      await _securityManager.ensureValidToken();
+      
       _errorMessage = null;
       return (user, isNewUser);
     } catch (e) {
@@ -288,15 +280,17 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Remove FCM token if there's a current user
-      if (_currentUser != null) {
-        await _notificationsService.removeToken(_currentUser!.uid);
-      }
-
-      // Sign out
+      // End the user session first
+      _securityManager.endUserSession();
+      
+      // Use the centralized sign-out method in UserRepository
+      // This handles FCM token clearing, auth signout, and preference clearing
+      debugPrint('🔐 AUTH PROVIDER: Using central UserRepository.signOut() method');
       await _userRepository.signOut();
+      debugPrint('🔐 AUTH PROVIDER: User signed out successfully');
     } catch (e) {
       _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER: Error during sign-out process: ${e.toString()}');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -326,27 +320,21 @@ class AuthStateProvider extends ChangeNotifier {
     }
   }
 
-  /// Send password reset email
-  Future<void> sendPasswordResetEmail(String email) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _userRepository.sendPasswordResetEmail(email);
-    } catch (e) {
-      _errorMessage = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
   /// Clear any error messages
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+  
+  /// Validate a user credential for security-sensitive operations
+  Future<bool> validateCredential(AuthCredential credential) async {
+    try {
+      return await _securityManager.validateCredential(credential);
+    } catch (e) {
+      _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER: Credential validation failed: ${e.toString()}');
+      return false;
+    }
   }
 
   /// Check if a user is new (doesn't exist in Firestore)

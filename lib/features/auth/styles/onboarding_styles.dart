@@ -28,7 +28,7 @@ class OnboardingStyles {
     end: Alignment.bottomCenter,
     colors: [
       Colors.black,
-      Colors.black.withOpacity(0.9),
+      Colors.black.withValues(alpha: 0.9),
       const Color(0xFF1A1A1A),
     ],
   );
@@ -36,18 +36,18 @@ class OnboardingStyles {
   // Gradients for each onboarding screen
   static List<Color> gradientScreen1(bool isDarkMode) =>
       isDarkMode
-          ? [deepPurple, purple.withOpacity(0.8), purple.withOpacity(0.6)]
-          : [purple, purple.withOpacity(0.8), purple.withOpacity(0.6)];
+          ? [deepPurple, purple.withValues(alpha: 0.8), purple.withValues(alpha: 0.6)]
+          : [purple, purple.withValues(alpha: 0.8), purple.withValues(alpha: 0.6)];
 
   static List<Color> gradientScreen2(bool isDarkMode) =>
       isDarkMode
-          ? [darkBlue, lightBlue.withOpacity(0.7), lightBlue.withOpacity(0.5)]
-          : [lightBlue, lightBlue.withOpacity(0.7), lightBlue.withOpacity(0.5)];
+          ? [darkBlue, lightBlue.withValues(alpha: 0.7), lightBlue.withValues(alpha: 0.5)]
+          : [lightBlue, lightBlue.withValues(alpha: 0.7), lightBlue.withValues(alpha: 0.5)];
 
   static List<Color> gradientScreen3(bool isDarkMode) =>
       isDarkMode
-          ? [deepTeal, teal.withOpacity(0.7), teal.withOpacity(0.5)]
-          : [teal, teal.withOpacity(0.7), teal.withOpacity(0.5)];
+          ? [deepTeal, teal.withValues(alpha: 0.7), teal.withValues(alpha: 0.5)]
+          : [teal, teal.withValues(alpha: 0.7), teal.withValues(alpha: 0.5)];
 
   /// Title text style
   static const TextStyle titleStyle = TextStyle(
@@ -74,11 +74,11 @@ class OnboardingStyles {
 
   // Logo styling
   static BoxDecoration logoDecoration = BoxDecoration(
-    color: Colors.white.withOpacity(0.2),
+    color: Colors.white.withValues(alpha: 0.2),
     borderRadius: BorderRadius.circular(16),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.1),
+        color: Colors.black.withValues(alpha: 0.1),
         blurRadius: 10,
         spreadRadius: 2,
       ),
@@ -110,7 +110,7 @@ class OnboardingStyles {
 
   // Button styling
   static ButtonStyle socialButtonStyle() => OutlinedButton.styleFrom(
-    backgroundColor: Colors.white.withOpacity(0.1),
+    backgroundColor: Colors.white.withValues(alpha: 0.1),
     foregroundColor: Colors.white,
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
     side: const BorderSide(color: Colors.white54, width: 1),

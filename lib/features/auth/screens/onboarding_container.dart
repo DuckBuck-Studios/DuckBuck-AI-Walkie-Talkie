@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_swipe/liquid_swipe.dart';
 import 'package:duckbuck/core/services/preferences_service.dart';
+import 'package:duckbuck/core/services/service_locator.dart';
+import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
+import 'package:duckbuck/core/services/logger/logger_service.dart';
 
 import 'onboarding_screen_1.dart';
 import 'onboarding_screen_2.dart';
@@ -20,6 +23,11 @@ class OnboardingContainer extends StatefulWidget {
 class _OnboardingContainerState extends State<OnboardingContainer> {
   int _currentPage = 0;
   late final LiquidController _liquidController;
+  
+  // Services
+  final _analytics = serviceLocator<FirebaseAnalyticsService>();
+  final _logger = serviceLocator<LoggerService>();
+  final String _tag = 'OnboardingContainer';
 
   @override
   void initState() {
@@ -29,7 +37,16 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
     // Use post frame callback to ensure the widget is built before using controller
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restoreOnboardingProgress();
+      _logScreenView();
     });
+  }
+  
+  void _logScreenView() {
+    _analytics.logScreenView(
+      screenName: 'onboarding_container',
+      screenClass: 'OnboardingContainer',
+    );
+    _logger.i(_tag, 'Onboarding container screen viewed');
   }
 
   Future<void> _restoreOnboardingProgress() async {
@@ -64,6 +81,18 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
 
       // Save the current step to preferences
       PreferencesService.instance.setCurrentOnboardingStep(nextPage);
+      
+      // Log analytics when user manually advances to next page
+      _analytics.logEvent(
+        name: 'onboarding_next_page',
+        parameters: {
+          'from_page': _currentPage,
+          'to_page': nextPage,
+          'action': 'next_button',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      _logger.i(_tag, 'User advanced from page $_currentPage to page $nextPage');
     }
   }
 
@@ -74,6 +103,43 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
 
     // Notify parent
     widget.onComplete();
+  }
+
+  /// Log analytics event for onboarding page views
+  void _logOnboardingPageView(int page) {
+    String screenName;
+    switch (page) {
+      case 0:
+        screenName = 'onboarding_page_1';
+        break;
+      case 1:
+        screenName = 'onboarding_page_2';
+        break;
+      case 2:
+        screenName = 'onboarding_page_3';
+        break;
+      case 3:
+        screenName = 'onboarding_signup';
+        break;
+      default:
+        screenName = 'unknown_onboarding_page';
+    }
+    
+    _analytics.logScreenView(
+      screenName: screenName,
+      screenClass: 'OnboardingContainer',
+    );
+    
+    _analytics.logEvent(
+      name: 'onboarding_page_view',
+      parameters: {
+        'page_number': page,
+        'page_name': screenName,
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    _logger.i(_tag, 'Viewed onboarding page: $screenName (page $page)');
   }
 
   @override
@@ -98,6 +164,9 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
           // Save the current page when user manually swipes
           PreferencesService.instance.setCurrentOnboardingStep(page);
           _triggerHapticFeedback();
+          
+          // Log the onboarding page view for analytics
+          _logOnboardingPageView(page);
         },
         waveType: WaveType.liquidReveal,
         liquidController: _liquidController,

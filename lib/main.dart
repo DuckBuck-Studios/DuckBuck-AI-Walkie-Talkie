@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,10 +9,16 @@ import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/service_locator.dart';
 import 'features/auth/providers/auth_state_provider.dart';
-import 'core/services/firebase/firebase_app_check_service.dart'; 
+import 'core/services/firebase/firebase_app_check_service.dart';
+import 'core/services/firebase/firebase_crashlytics_service.dart';
+import 'core/services/crashlytics_consent_manager.dart';
+import 'core/providers/crashlytics_consent_provider.dart';
+import 'core/services/auth/auth_security_manager.dart'; 
 void main() async {
+  // Setup error capture before any other initialization
+  WidgetsFlutterBinding.ensureInitialized();
+  
   try {
-    WidgetsFlutterBinding.ensureInitialized();
 
     // Initialize Firebase with error handling
     try {
@@ -20,6 +27,27 @@ void main() async {
     } catch (e) {
       debugPrint('Failed to initialize Firebase: $e');
       // Allow app to continue even if Firebase fails, with limited functionality
+    }
+
+    // Initialize Firebase Crashlytics with error handling
+    try {
+      final crashlyticsService = FirebaseCrashlyticsService();
+      await crashlyticsService.initialize();
+      
+      // Register for unhandled errors in Flutter/Dart
+      FlutterError.onError = crashlyticsService.instance.recordFlutterFatalError;
+      
+      // Register for unhandled errors in the platform/native side
+      PlatformDispatcher.instance.onError = (error, stack) {
+        crashlyticsService.recordError(error, stack, fatal: true);
+        return true;
+      };
+      
+      // Note: FirebaseCrashlyticsService is registered in setupServiceLocator()
+      debugPrint('Firebase Crashlytics initialized successfully');
+    } catch (e) {
+      debugPrint('Failed to initialize Firebase Crashlytics: $e');
+      // App can function without Crashlytics, but with reduced error reporting
     }
 
     // Initialize Firebase App Check with error handling
@@ -55,6 +83,18 @@ void main() async {
     // Configure system UI overlay for consistent appearance
     AppTheme.configureSystemUIOverlay();
 
+    // Initialize Crashlytics consent manager
+    try {
+      // Wait for the async singleton to be ready
+      await serviceLocator.isReady<CrashlyticsConsentManager>();
+      final crashlyticsConsentManager = serviceLocator<CrashlyticsConsentManager>();
+      await crashlyticsConsentManager.initialize();
+      debugPrint('Crashlytics consent manager initialized');
+    } catch (e) {
+      debugPrint('Error initializing Crashlytics consent manager: $e');
+      // Continue execution even if this fails
+    }
+
     // Ensure authentication state is in sync
     try {
       await _syncAuthState();
@@ -65,8 +105,24 @@ void main() async {
     }
     
     runApp(const MyApp());
-  } catch (e) {
+  } catch (e, stack) {
     debugPrint('Critical error during app initialization: $e');
+    
+    // Try to log the error to Crashlytics if available
+    try {
+      final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
+      crashlytics.recordError(
+        e,
+        stack,
+        reason: 'App initialization failure',
+        fatal: true,
+        information: {'startup_stage': 'main_initialization'},
+      );
+    } catch (crashlyticsError) {
+      // Crashlytics itself failed, just log to console
+      debugPrint('Failed to log to Crashlytics: $crashlyticsError');
+    }
+    
     // Show some kind of error UI or gracefully exit
     runApp(
       MaterialApp(
@@ -114,7 +170,66 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late AuthSecurityManager _securityManager;
+  
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeSecurityManager();
+  }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // User has returned to the app - update activity
+      _securityManager.updateUserActivity();
+    }
+  }
+  
+  Future<void> _initializeSecurityManager() async {
+    _securityManager = serviceLocator<AuthSecurityManager>();
+    await _securityManager.initialize(
+      onSessionExpired: _handleSessionExpired,
+    );
+    
+    // Start session tracking if user is logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _securityManager.startUserSession();
+    }
+  }
+  
+  void _handleSessionExpired() {
+    // Handle session timeout by logging the user out
+    if (!mounted) return;
+    
+    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+    authProvider.signOut().then((_) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session expired. Please sign in again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      
+      // Navigate to welcome screen
+      AppRoutes.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.welcome,
+        (route) => false,
+      );
+    });
+  }
+  
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -122,6 +237,15 @@ class _MyAppState extends State<MyApp> {
         // Authentication state provider
         ChangeNotifierProvider<AuthStateProvider>(
           create: (_) => AuthStateProvider(),
+        ),
+        // Crashlytics consent provider
+        ChangeNotifierProvider<CrashlyticsConsentProvider>(
+          create: (_) {
+            final provider = CrashlyticsConsentProvider();
+            // Initialize in the background
+            provider.initialize();
+            return provider;
+          },
         ),
         // Add more app-wide providers here as needed
       ],
