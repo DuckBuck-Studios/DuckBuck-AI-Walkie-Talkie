@@ -190,8 +190,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       _analyticsService.logEvent(
         name: 'profile_update_attempt',
         parameters: {
-          'updating_photo': updatingPhoto,
-          'updating_name': updatingName,
+          'updating_photo': updatingPhoto ? '1' : '0', // Convert boolean to string
+          'updating_name': updatingName ? '1' : '0', // Convert boolean to string
           'timestamp': DateTime.now().toIso8601String(),
         },
       );
@@ -216,8 +216,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       _analyticsService.logEvent(
         name: 'profile_update_success',
         parameters: {
-          'updated_photo': updatingPhoto,
-          'updated_name': updatingName,
+          'updated_photo': updatingPhoto ? '1' : '0', // Convert boolean to string
+          'updated_name': updatingName ? '1' : '0', // Convert boolean to string
           'timestamp': DateTime.now().toIso8601String(),
         },
       );

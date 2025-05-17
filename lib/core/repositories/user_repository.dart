@@ -5,6 +5,7 @@ import '../services/auth/auth_service_interface.dart';
 import '../models/user_model.dart';  // Account deletion functionality has been removed
 import '../services/firebase/firebase_database_service.dart';
 import '../services/firebase/firebase_analytics_service.dart';
+import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/notifications/notifications_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
@@ -17,6 +18,7 @@ class UserRepository {
   final String _userCollection = 'users';
   final LoggerService _logger = LoggerService();
   final FirebaseAnalyticsService _analytics;
+  final FirebaseCrashlyticsService _crashlytics;
   
   static const String _tag = 'USER_REPO'; // Tag for logs
 
@@ -25,8 +27,10 @@ class UserRepository {
     required this.authService, 
     FirebaseFirestore? firestore,
     FirebaseAnalyticsService? analytics,
+    FirebaseCrashlyticsService? crashlytics,
   }) : _firestore = firestore ?? serviceLocator<FirebaseDatabaseService>().firestoreInstance,
-       _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>();
+       _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
+       _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>();
 
   /// Get the current authenticated user
   UserModel? get currentUser {
@@ -82,6 +86,11 @@ class UserRepository {
           isNewUser: true,
         );
         
+        // Set user ID in Crashlytics
+        await _crashlytics.setUserIdentifier(user.uid);
+        // Log user identifying info (non-PII)
+        await _crashlytics.log('User signed up with Google');
+        
         return (user, true);
       }
       
@@ -95,6 +104,11 @@ class UserRepository {
         userId: user.uid,
         isNewUser: isNewToFirestore,
       );
+      
+      // Set user ID in Crashlytics
+      await _crashlytics.setUserIdentifier(user.uid);
+      // Log user identifying info (non-PII)
+      await _crashlytics.log('User logged in with Google');
       
       return (user, isNewToFirestore);
     } catch (e) {
@@ -145,6 +159,10 @@ class UserRepository {
           isNewUser: true,
         );
         
+        // Set user ID in Crashlytics
+        await _crashlytics.setUserIdentifier(user.uid);
+        await _crashlytics.log('User signed up with Apple');
+        
         return (user, true);
       }
       
@@ -158,6 +176,10 @@ class UserRepository {
         userId: user.uid,
         isNewUser: isNewToFirestore,
       );
+      
+      // Set user ID in Crashlytics
+      await _crashlytics.setUserIdentifier(user.uid);
+      await _crashlytics.log('User logged in with Apple');
       
       return (user, isNewToFirestore);
     } catch (e) {
@@ -262,6 +284,10 @@ class UserRepository {
         userId: user.uid,
         isNewUser: isNewUser,
       );
+      
+      // Set user ID in Crashlytics
+      await _crashlytics.setUserIdentifier(user.uid);
+      await _crashlytics.log('User authenticated with phone');
 
       return (user, isNewUser);
     } catch (e) {
@@ -445,6 +471,11 @@ class UserRepository {
           },
         );
       }
+      
+      // Clear user identifier from Crashlytics
+      await _crashlytics.clearKeys();
+      await _crashlytics.setUserIdentifier('');
+      await _crashlytics.log('User signed out');
       
       // Sign out from Firebase Auth
       await authService.signOut();

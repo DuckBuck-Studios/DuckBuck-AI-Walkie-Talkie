@@ -52,8 +52,11 @@ class FirebaseAnalyticsService {
           } else {
             sanitizedValue = value;
           }
-        } else if (value is num || value is bool) {
+        } else if (value is num) {
           sanitizedValue = value;
+        } else if (value is bool) {
+          // Convert boolean to string ('1'/'0')
+          sanitizedValue = value ? '1' : '0';
         } else {
           // Convert to string for unsupported types
           debugPrint('WARNING: Firebase Analytics param value type not supported: ${value.runtimeType} for $key');

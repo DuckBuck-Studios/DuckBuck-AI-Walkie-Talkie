@@ -1,1102 +1,1163 @@
 import 'dart:io';
-import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:country_code_picker/country_code_picker.dart';
-import 'package:pin_code_fields/pin_code_fields.dart';
-import '../../../core/models/user_model.dart';
+import 'package:provider/provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/services/service_locator.dart';
+import '../../../core/services/firebase/firebase_analytics_service.dart';
+import '../providers/auth_state_provider.dart';
 
-/// Authentication method options
-enum AuthMethod { phone, google, apple }
+// Authentication flow states
+enum AuthStage {
+  options,
+  phoneEntry,
+  otpVerification
+}
 
-/// Bottom sheet component containing authentication options
+/// A bottom sheet that presents authentication options to the user
+/// with animated transitions between auth stages
 class AuthBottomSheet extends StatefulWidget {
-  final Function(String phoneNumber) onPhoneAuth;
-  final VoidCallback onGoogleAuth;
-  final VoidCallback onAppleAuth;
-  final Function(PhoneAuthCredential)? onPhoneAuthCredential;
-  final Function(String errorMessage)? onError;
-  final Function(UserModel user)? onVerified;
+  /// Function to be called when the user completes the auth process
+  final Function() onAuthComplete;
+  
+  /// Flag to control loading state
   final bool isLoading;
-  final AuthMethod? loadingMethod; // Track which method is loading
-  final String? verificationId; // For phone verification
-  final String? phoneNumber; // Phone number being verified
-  final bool requireEmailVerification; // Whether to require email verification
-  final AuthMethod? initialAuthMethod; // Initial auth method to display
 
   const AuthBottomSheet({
     super.key,
-    required this.onPhoneAuth,
-    required this.onGoogleAuth,
-    required this.onAppleAuth,
-    this.onPhoneAuthCredential,
-    this.onError,
-    this.onVerified,
+    required this.onAuthComplete,
     this.isLoading = false,
-    this.loadingMethod,
-    this.verificationId,
-    this.phoneNumber,
-    this.requireEmailVerification = false, // Default to not requiring verification
-    this.initialAuthMethod, // For pre-selecting a method (especially for verification)
   });
 
+  /// Show the bottom sheet with authentication options
+  static Future<void> show({required BuildContext context, required Function() onAuthComplete}) {
+    // Add haptic feedback when sheet appears
+    HapticFeedback.mediumImpact();
+    
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      isDismissible: false, // Prevent dismissing during verification
+      enableDrag: false, // Prevent dragging down during verification
+      builder: (context) => AuthBottomSheet(
+        onAuthComplete: onAuthComplete,
+      ),
+    );
+  }
+  
   @override
   State<AuthBottomSheet> createState() => _AuthBottomSheetState();
 }
 
-class _AuthBottomSheetState extends State<AuthBottomSheet> {
-  AuthMethod? _selectedAuthMethod;
-
-  final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
-  String _countryCode = '+1'; // Default country code
-  String _otpValue = ''; // To store OTP value
-
-  // Stream controller for OTP timer
-  StreamController<ErrorAnimationType>? _otpErrorController;
-  bool _hasError = false;
-
+class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProviderStateMixin {
+  // Track the current stage of authentication
+  AuthStage _currentStage = AuthStage.options;
+  
+  // Controller for phone number input
+  final TextEditingController _phoneController = TextEditingController();
+  
+  // Controller for OTP input
+  final TextEditingController _otpController = TextEditingController();
+  
+  // Selected country code
+  String _countryCode = '+1';
+  
+  // Verification ID for OTP verification
+  String? _verificationId;
+  
+  // Animation controller for stage transitions
+  late final AnimationController _animationController;
+  
+  // Loading state for buttons
+  bool _isSubmitting = false;
+  
+  // Track when the code was first sent
+  DateTime _codeFirstSentTime = DateTime.now();
+  
+  // Track resend code count
+  int _codeResendCount = 0;
+  
+  // Analytics service
+  late final FirebaseAnalyticsService _analytics;
+  
   @override
   void initState() {
     super.initState();
-    _otpErrorController = StreamController<ErrorAnimationType>();
     
-    // Set initial auth method if provided
-    if (widget.initialAuthMethod != null) {
-      _selectedAuthMethod = widget.initialAuthMethod;
-    }
+    // Initialize services
+    _analytics = serviceLocator<FirebaseAnalyticsService>();
     
-    // If we have verification ID and phone number, we should show the verification UI
-    if (widget.verificationId != null && widget.phoneNumber != null) {
-      _selectedAuthMethod = AuthMethod.phone;
-      debugPrint("AUTH SHEET: Showing verification UI for ${widget.phoneNumber}");
-    }
+    // Initialize animation controller for transitions
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    
+    // Log sheet opened event
+    _logBottomSheetOpened();
   }
-
+  
+  void _logBottomSheetOpened() {
+    _analytics.logEvent(
+      name: 'auth_sheet_opened',
+      parameters: {
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+  }
+  
   @override
   void dispose() {
+    // Dispose controllers
+    _animationController.dispose();
     _phoneController.dispose();
-    _otpErrorController?.close();
+    _otpController.dispose();
     super.dispose();
   }
 
-  // Validation methods
-  String? _validatePhone(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Phone number is required';
-    }
-    
-    // More simplified regex that just checks for mostly numbers
-    final phoneRegex = RegExp(r'^[0-9\s-]{7,15}$');
-    if (!phoneRegex.hasMatch(value)) {
-      return 'Enter a valid phone number';
-    }
-    return null;
-  }
-
-  // Handle method selection (only for Phone now)
-  void _selectAuthMethod(AuthMethod method) {
+  /// Handles the Google sign-in process with proper auth service
+  void _handleGoogleSignIn() async {
+    setState(() => _isSubmitting = true);
     HapticFeedback.mediumImpact();
     
-    // Use a microtask to ensure smooth transition animation
-    Future.microtask(() {
-      if (mounted) {
-        setState(() {
-          _selectedAuthMethod = method;
-          _phoneController.clear();
-        });
-      }
-    });
-  }
-
-  void _goBack() {
-    HapticFeedback.lightImpact();
+    // Log Google sign-in attempt from UI
+    _analytics.logEvent(
+      name: 'auth_google_button_clicked',
+      parameters: {
+        'source': 'auth_bottom_sheet',
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
     
-    // Use a microtask to ensure smooth transition animation
-    Future.microtask(() {
-      if (mounted) {
-        setState(() {
-          _selectedAuthMethod = null;
-          _phoneController.clear();
-        });
-      }
-    });
-  }
-
-  // Handle Google auth with loading state
-  void _handleGoogleAuth() {
-    if (!widget.isLoading) {
-      HapticFeedback.mediumImpact();
-      widget.onGoogleAuth();
-    }
-  }
-
-  // Handle Apple auth with loading state
-  void _handleAppleAuth() {
-    if (!widget.isLoading) {
-      HapticFeedback.mediumImpact();
-      widget.onAppleAuth();
-    }
-  }
-
-  void _submitForm() {
-    FocusScope.of(context).unfocus();
-    HapticFeedback.lightImpact();
-    
-    if (_hasError) {
-      setState(() {
-        _hasError = false;
-      });
-    }
-
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_selectedAuthMethod == AuthMethod.phone) {
-        final phoneNumberText = _phoneController.text.trim();
-        // Combine country code with phone number
-        final fullPhoneNumber = _countryCode + phoneNumberText;
-        widget.onPhoneAuth(fullPhoneNumber);
-      }
-    }
-  }
-
-  void _onCountryCodeChanged(CountryCode code) {
-    setState(() {
-      _countryCode = code.dialCode ?? '+1';
-    });
-  }
-
-  @override
-  void didUpdateWidget(AuthBottomSheet oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // Debug log for verification state changes
-    debugPrint("Auth bottom sheet didUpdateWidget: oldVerificationId=${oldWidget.verificationId}, newVerificationId=${widget.verificationId}, phoneNumber=${widget.phoneNumber}");
-
-    // Reset error state when props change
-    if (_hasError) {
-      setState(() {
-        _hasError = false;
-      });
-    }
-
-    // Handle verification ID and phone number changes
-    final bool hadVerificationId = oldWidget.verificationId != null;
-    final bool hasVerificationId = widget.verificationId != null;
-    final bool verificationIdChanged = oldWidget.verificationId != widget.verificationId;
-
-    // Always check if we should show verification based on current props,
-    // not just changes since this might be a new instance of the sheet
-    if (widget.verificationId != null && widget.phoneNumber != null) {
-      debugPrint("VERIFICATION SHOULD BE SHOWING! Setting selectedAuthMethod to phone");
+    try {
+      // Get auth provider and attempt sign in
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      final (user, isNewUser) = await authProvider.signInWithGoogle();
       
-      // Force phone auth mode to show verification UI
-      setState(() {
-        _selectedAuthMethod = AuthMethod.phone;
-        _otpValue = ''; // Reset OTP value when showing verification UI
+      // Log successful Google sign-in UI flow completion
+      _analytics.logEvent(
+        name: 'auth_google_success_ui',
+        parameters: {
+          'is_new_user': isNewUser ? '1' : '0',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        Navigator.pop(context);
         
-        // Clear the text controller - we don't need it when showing verification
-        if (_phoneController.text.isNotEmpty) {
-          _phoneController.clear();
+        // Navigate based on whether user is new or returning
+        if (isNewUser) {
+          // Log new user flow start
+          _analytics.logEvent(
+            name: 'profile_completion_navigation',
+            parameters: {
+              'auth_method': 'google',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          // New user goes to profile completion
+          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+        } else {
+          // Log returning user flow
+          _analytics.logEvent(
+            name: 'home_screen_navigation',
+            parameters: {
+              'auth_method': 'google',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          // Returning user goes to home
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
-      });
-    } else if ((hadVerificationId && !hasVerificationId) || 
-               (verificationIdChanged && widget.verificationId == null)) {
-      // If we previously had a verification ID but now don't, go back to phone input
-      debugPrint("Verification ID removed, going back to phone input");
+      }
+    } catch (e) {
+      // Log failed Google sign-in UI flow
+      _analytics.logEvent(
+        name: 'auth_google_failure_ui',
+        parameters: {
+          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
       
-      setState(() {
-        _selectedAuthMethod = AuthMethod.phone;
-        _otpValue = ''; // Reset OTP value
-      });
-    } else {
-      debugPrint("No verification ID or phone number, normal auth sheet");
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google sign-in failed: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Handles the transition to phone input UI
+  void _handlePhoneSignIn() {
+    HapticFeedback.mediumImpact();
+    
+    // Log phone auth method selection
+    _analytics.logEvent(
+      name: 'auth_phone_button_clicked',
+      parameters: {
+        'source': 'auth_bottom_sheet',
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    setState(() {
+      _currentStage = AuthStage.phoneEntry;
+    });
+    
+    // Play forward transition animation
+    _animationController.forward(from: 0.0);
+  }
+
+  /// Handles the Apple sign-in process with proper auth service
+  void _handleAppleSignIn() async {
+    setState(() => _isSubmitting = true);
+    HapticFeedback.mediumImpact();
+    
+    // Log Apple sign-in attempt from UI
+    _analytics.logEvent(
+      name: 'auth_apple_button_clicked',
+      parameters: {
+        'source': 'auth_bottom_sheet',
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    try {
+      // Get auth provider and attempt sign in
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      final (user, isNewUser) = await authProvider.signInWithApple();
+      
+      // Log successful Apple sign-in UI flow completion
+      _analytics.logEvent(
+        name: 'auth_apple_success_ui',
+        parameters: {
+          'is_new_user': isNewUser ? '1' : '0',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        Navigator.pop(context);
+        
+        // Navigate based on whether user is new or returning
+        if (isNewUser) {
+          // Log new user flow start
+          _analytics.logEvent(
+            name: 'profile_completion_navigation',
+            parameters: {
+              'auth_method': 'apple',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          // New user goes to profile completion
+          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+        } else {
+          // Log returning user flow
+          _analytics.logEvent(
+            name: 'home_screen_navigation',
+            parameters: {
+              'auth_method': 'apple',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          // Returning user goes to home
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        }
+      }
+    } catch (e) {
+      // Log failed Apple sign-in UI flow
+      _analytics.logEvent(
+        name: 'auth_apple_failure_ui',
+        parameters: {
+          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Apple sign-in failed: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+  
+  /// Handles submission of phone number
+  void _handlePhoneSubmit() async {
+    // Validate phone number with country code
+    final fullPhoneNumber = "$_countryCode${_phoneController.text}";
+    
+    // Log phone submission attempt
+    _analytics.logEvent(
+      name: 'phone_number_submit',
+      parameters: {
+        'country_code': _countryCode,
+        'phone_length': _phoneController.text.length.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    if (_phoneController.text.isEmpty || _phoneController.text.length < 10) {
+      // Log validation error
+      _analytics.logEvent(
+        name: 'phone_validation_failed',
+        parameters: {
+          'reason': 'too_short',
+          'length': _phoneController.text.length.toString(),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      // Show validation error
+      HapticFeedback.heavyImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please enter a valid phone number'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+    
+    setState(() => _isSubmitting = true);
+    HapticFeedback.mediumImpact();
+    
+    // Get auth provider
+    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+    
+    try {
+      // Initiate actual phone verification
+      await authProvider.verifyPhoneNumber(
+        phoneNumber: fullPhoneNumber,
+        onCodeSent: (String verificationId, int? resendToken) {
+          // Log code sent success
+          _analytics.logEvent(
+            name: 'verification_code_sent',
+            parameters: {
+              'has_resend_token': resendToken != null ? '1' : '0',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          
+          if (mounted) {
+            setState(() {
+              _verificationId = verificationId;
+              _isSubmitting = false;
+              _currentStage = AuthStage.otpVerification;
+              _codeFirstSentTime = DateTime.now(); // Set first sent time
+              _codeResendCount = 0; // Reset resend count
+            });
+            
+            // Reset animation and play forward for next transition
+            _animationController.reset();
+            _animationController.forward();
+          }
+        },
+        onError: (String error) {
+          // Log verification error
+          _analytics.logEvent(
+            name: 'phone_verification_error',
+            parameters: {
+              'error': error.substring(0, math.min(error.length, 100)),
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          
+          if (mounted) {
+            setState(() => _isSubmitting = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Verification failed: $error'),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
+        },
+        onVerified: () {
+          // Log auto-verification success
+          _analytics.logEvent(
+            name: 'auto_verification_success',
+            parameters: {
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          
+          // Auto-verification succeeded, close bottom sheet
+          if (mounted) {
+            setState(() => _isSubmitting = false);
+            Navigator.pop(context);
+            widget.onAuthComplete();
+          }
+        },
+      );
+    } catch (e) {
+      // Log verification exception
+      _analytics.logEvent(
+        name: 'phone_verification_exception',
+        parameters: {
+          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+  
+  /// Handles verification of OTP
+  void _handleOtpSubmit() async {
+    // Log OTP submission attempt
+    _analytics.logEvent(
+      name: 'otp_submission_attempt',
+      parameters: {
+        'otp_length': _otpController.text.length.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    // Validate OTP code - enforcing exactly 6 digits
+    if (_otpController.text.isEmpty || _otpController.text.length != 6 || !RegExp(r'^\d{6}$').hasMatch(_otpController.text)) {
+      // Log validation failure with specific reason
+      _analytics.logEvent(
+        name: 'otp_validation_failed',
+        parameters: {
+          'reason': _otpController.text.isEmpty ? 'empty_code' : 
+                    _otpController.text.length != 6 ? 'invalid_length' : 'non_numeric',
+          'entered_length': _otpController.text.length.toString(),
+          'required_length': '6',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      // Show error feedback with haptic
+      HapticFeedback.heavyImpact();
+      
+      // Show more specific error message
+      String errorMessage = 'Please enter a valid 6-digit code';
+      if (_otpController.text.isEmpty) {
+        errorMessage = 'Please enter the verification code';
+      } else if (_otpController.text.length != 6) {
+        errorMessage = 'The verification code must be 6 digits';
+      } else if (!RegExp(r'^\d{6}$').hasMatch(_otpController.text)) {
+        errorMessage = 'The code should only contain numbers';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+    
+    setState(() => _isSubmitting = true);
+    HapticFeedback.mediumImpact();
+    
+    try {
+      // Get the auth provider and verify OTP
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      final (user, isNewUser) = await authProvider.verifyOtpAndSignIn(
+        verificationId: _verificationId!, 
+        smsCode: _otpController.text,
+      );
+      
+      // Log successful OTP verification at UI level
+      _analytics.logEvent(
+        name: 'otp_verification_success_ui',
+        parameters: {
+          'is_new_user': isNewUser ? '1' : '0',
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        Navigator.pop(context);
+        
+        // Navigate based on whether user is new or returning
+        if (isNewUser) {
+          // Log new user flow
+          _analytics.logEvent(
+            name: 'profile_completion_navigation',
+            parameters: {
+              'auth_method': 'phone',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+        } else {
+          // Log returning user flow
+          _analytics.logEvent(
+            name: 'home_screen_navigation',
+            parameters: {
+              'auth_method': 'phone',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        }
+      }
+    } catch (e) {
+      // Extract meaningful error message
+      String errorMessage = 'Verification failed';
+      String errorCode = 'unknown';
+      
+      // Extract error code from error message if possible
+      if (e.toString().contains('invalid-verification-code')) {
+        errorMessage = 'Invalid verification code';
+        errorCode = 'invalid-verification-code';
+      } else if (e.toString().contains('session-expired') || e.toString().contains('code-expired')) {
+        errorMessage = 'Verification code expired';
+        errorCode = 'code-expired';
+      } else if (e.toString().contains('network')) {
+        errorMessage = 'Network error, please check your connection';
+        errorCode = 'network-error';
+      }
+      
+      // Log OTP verification failure with detailed parameters
+      _analytics.logEvent(
+        name: 'otp_verification_failure_ui',
+        parameters: {
+          'error_message': e.toString().substring(0, math.min(e.toString().length, 100)),
+          'error_code': errorCode,
+          'otp_length': _otpController.text.length.toString(),
+          'resend_count': _codeResendCount,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        
+        // Show user-friendly error message with option to resend if code expired
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red.shade700,
+            action: errorCode == 'code-expired' ? SnackBarAction(
+              label: 'Resend',
+              textColor: Colors.white,
+              onPressed: _handleResendCode,
+            ) : null,
+          ),
+        );
+      }
+    }
+  }
+  
+  /// Handle resend code functionality
+  void _handleResendCode() {
+    HapticFeedback.mediumImpact();
+    
+    // Log resend code action
+    _analytics.logEvent(
+      name: 'resend_code_clicked',
+      parameters: {
+        'source': 'error_snackbar',
+        'phone_number_length': _phoneController.text.length,
+        'time_since_first_send': DateTime.now().difference(_codeFirstSentTime).inSeconds,
+        'resend_count': _codeResendCount,
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    // Reset OTP field
+    _otpController.clear();
+    
+    // Resend the verification code
+    final fullPhoneNumber = "$_countryCode${_phoneController.text}";
+    
+    setState(() => _isSubmitting = true);
+    
+    // Get auth provider
+    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+    
+    // Request new code
+    authProvider.verifyPhoneNumber(
+      phoneNumber: fullPhoneNumber,
+      onCodeSent: (String verificationId, int? resendToken) {
+        // Log successful code resend
+        _analytics.logEvent(
+          name: 'resend_code_success',
+          parameters: {
+            'source': 'error_snackbar',
+            'has_resend_token': resendToken != null ? '1' : '0',
+            'phone_country_code': _countryCode,
+            'resend_count': _codeResendCount + 1,
+            'timestamp': DateTime.now().toIso8601String(),
+          },
+        );
+        
+        if (mounted) {
+          setState(() {
+            _verificationId = verificationId;
+            _isSubmitting = false;
+            _codeResendCount += 1;
+          });
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Verification code resent'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+      onError: (String error) {
+        // Log resend error
+        _analytics.logEvent(
+          name: 'resend_code_error',
+          parameters: {
+            'source': 'error_snackbar',
+            'error': error.substring(0, math.min(error.length, 100)),
+            'timestamp': DateTime.now().toIso8601String(),
+          },
+        );
+        
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          
+          // Show error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to resend code: $error'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      },
+      onVerified: () {
+        // Auto-verification succeeded
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+          Navigator.pop(context);
+          widget.onAuthComplete();
+        }
+      },
+    );
+  }
+  
+  /// Handles back navigation between stages
+  void _handleBackPress() {
+    HapticFeedback.lightImpact();
+    
+    // Log back button press with current stage info
+    _analytics.logEvent(
+      name: 'auth_back_pressed',
+      parameters: {
+        'from_stage': _currentStage.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    if (_currentStage == AuthStage.otpVerification) {
+      setState(() => _currentStage = AuthStage.phoneEntry);
+      _animationController.reverse();
+    } else if (_currentStage == AuthStage.phoneEntry) {
+      setState(() => _currentStage = AuthStage.options);
+      _animationController.reverse();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
-    final isIOS = Platform.isIOS;
-
-    // Debug print for verification and phone state
-    debugPrint("AUTH BOTTOM SHEET BUILD: verificationId=${widget.verificationId}, phoneNumber=${widget.phoneNumber}, selectedAuthMethod=$_selectedAuthMethod");
-
-    // Content for the bottom sheet
-    Widget content;
-    if (_selectedAuthMethod == null) {
-      content = _buildInitialOptions(isIOS);
-    } else if (_selectedAuthMethod == AuthMethod.phone) {
-      content = _buildPhoneForm(isIOS);
-    } else {
-      content = const SizedBox.shrink();
-    }
-
-    // Dark background color
-    final darkBackgroundColor = const Color(0xFF1A1A1A);
-
-    // Use a more compact fixed height for the sheet that fits just the content
-    // This ensures height consistency across all auth states
-    final double sheetHeight = _selectedAuthMethod == null 
-        ? 230.0  // Height for initial auth options (3 buttons)
-        : _selectedAuthMethod == AuthMethod.phone && widget.verificationId != null
-            ? 260.0  // Height for verification UI
-            : 240.0;  // Height for phone input
-
-    return Material(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(isIOS ? 28 : 24)),
-      color: darkBackgroundColor,
-      elevation: 8,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, isIOS ? 24 : 20, 24, 16 + bottomPadding),
-          child: SizedBox(
-            height: sheetHeight,
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Sheet handle at the top
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[400],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                
-                  // Title with back button if needed
-                  Row(
-                    children: [
-                      if (_selectedAuthMethod != null)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: Colors.white,
-                          ),
-                          onPressed: _goBack,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      if (_selectedAuthMethod != null) 
-                        const SizedBox(width: 8),
-                      Text(
-                        _getTitle(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Content based on selection with improved animation
-                  AnimatedSwitcher(
-                    layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
-                      // Custom layout builder to maintain consistent size
-                      return Stack(
-                        alignment: Alignment.topCenter,
-                        fit: StackFit.loose,
-                        children: <Widget>[
-                          ...previousChildren,
-                          if (currentChild != null) currentChild,
-                        ],
-                      );
-                    },
-                    duration: const Duration(milliseconds: 250),
-                    transitionBuilder: (Widget child, Animation<double> animation) {
-                      // Use only fade transition to avoid layout shifts
-                      return FadeTransition(
-                        opacity: CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: SizedBox(
-                      key: ValueKey<AuthMethod?>(_selectedAuthMethod),
-                      width: double.infinity,
-                      child: content,
-                    ),
-                  ),
-                ],
+    final bool isIOS = Platform.isIOS;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    
+    final screenHeight = MediaQuery.of(context).size.height;
+    return Container(
+      padding: EdgeInsets.only(
+        top: screenHeight * 0.02,
+        left: 24,
+        right: 24,
+        bottom: bottomPadding + screenHeight * 0.02,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.whiteOpacity20,
+            blurRadius: 10,
+            spreadRadius: -5,
+          ),
+        ],
+        border: Border.all(
+          color: AppColors.whiteOpacity20,
+          width: 1,
+        ),
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle indicator
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.whiteOpacity20,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
+            
+            // Content based on current stage
+            if (_currentStage == AuthStage.options) _buildAuthOptions(isIOS),
+            if (_currentStage == AuthStage.phoneEntry) _buildPhoneEntryUI(isIOS),
+            if (_currentStage == AuthStage.otpVerification) _buildOtpVerificationUI(isIOS),
+          ],
         ),
       ),
     );
   }
 
-  String _getTitle() {
-    switch (_selectedAuthMethod) {
-      case AuthMethod.phone:
-        return widget.verificationId != null ? 'Verify Phone' : 'Sign in with Phone';
-      default:
-        return ''; // Removing "Sign in" text from the header
-    }
-  }
-
-  Widget _buildInitialOptions(bool isIOS) {
-    // Get screen size
-    final size = MediaQuery.of(context).size;
-    // Adjust button spacing based on screen size
-    final buttonSpacing = size.height < 700 ? 8.0 : 12.0;
-    
+  // UI for initial auth options
+  Widget _buildAuthOptions(bool isIOS) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Phone button
-        _buildAuthOptionButton(
-          icon: isIOS ? CupertinoIcons.phone : Icons.phone_outlined,
-          label: 'Continue with Phone',
-          onPressed: widget.isLoading ? null : () => _selectAuthMethod(AuthMethod.phone),
-          isBlack: false,
-          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.phone,
-          isIOS: isIOS,
-        ),
-        SizedBox(height: buttonSpacing),
-
-        // Google button
-        _buildAuthOptionButton(
+        // Removed "Continue with" text for more compact UI
+        
+        SizedBox(height: MediaQuery.of(context).size.height * 0.01),
+        
+        // Google sign in
+        _buildAuthButton(
           icon: FontAwesomeIcons.google,
-          label: 'Continue with Google',
-          onPressed: widget.isLoading ? null : _handleGoogleAuth,
-          isBlack: true,
-          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.google,
+          text: 'Continue with Google',
+          onPressed: _handleGoogleSignIn,
           isIOS: isIOS,
-        ),
-        SizedBox(height: buttonSpacing),
-
-        // Apple button - show on all platforms
-        _buildAuthOptionButton(
+          iconSize: 20,
+        ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.2, end: 0),
+        
+        SizedBox(height: MediaQuery.of(context).size.height * 0.012),
+        
+        // Phone sign in
+        _buildAuthButton(
+          icon: isIOS ? CupertinoIcons.phone : FontAwesomeIcons.phone,
+          text: 'Continue with Phone',
+          onPressed: _handlePhoneSignIn,
+          isIOS: isIOS,
+        ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
+        
+        SizedBox(height: MediaQuery.of(context).size.height * 0.012),
+        
+        // Apple sign in
+        _buildAuthButton(
           icon: FontAwesomeIcons.apple,
-          label: 'Continue with Apple',
-          onPressed: widget.isLoading ? null : _handleAppleAuth,
-          isBlack: true,
-          showLoadingIndicator: widget.isLoading && widget.loadingMethod == AuthMethod.apple,
+          text: 'Continue with Apple',
+          onPressed: _handleAppleSignIn,
           isIOS: isIOS,
-        ),
+          iconSize: 24,
+        ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 0.2, end: 0),
+        
+        SizedBox(height: MediaQuery.of(context).size.height * 0.012),
+        
+        // Legal information text
+        Padding(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).size.height * 0.005),
+          child: Text(
+            'By continuing, you agree to our Terms of Service and Privacy Policy',
+            style: TextStyle(
+              color: AppColors.whiteOpacity50,
+              fontSize: 11,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
       ],
     );
   }
 
-  Widget _buildAuthOptionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-    required bool isBlack,
-    bool showLoadingIndicator = false,
-    required bool isIOS,
-  }) {
-    // Colors based on theme
-    final Color backgroundColor = isBlack ? Colors.black : Colors.white;
-    final Color contentColor = isBlack ? Colors.white : Colors.black;
-    
-    // Get screen size to adjust button height
-    final size = MediaQuery.of(context).size;
-    final buttonHeight = size.height < 700 ? 45.0 : 50.0;
-    
-    // Loading indicator with platform-specific styling
-    final Widget loadingIndicator = SizedBox(
-      height: 20,
-      width: 20,
-      child: isIOS 
-        ? CupertinoActivityIndicator(color: contentColor)
-        : CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(contentColor),
-            strokeWidth: 2,
-          ),
-    );
-
-    // Content to display (either loading indicator or normal content)
-    final Widget content = showLoadingIndicator 
-        ? loadingIndicator
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: contentColor, size: isIOS ? 16 : 18),
-              SizedBox(width: isIOS ? 8 : 10),
-              Text(
-                label,
-                style: TextStyle(
-                  color: contentColor,
-                  fontSize: isIOS ? 16 : 14,
-                  fontWeight: isIOS ? FontWeight.w500 : FontWeight.w400,
-                ),
-              ),
-            ],
-          );
-            
-    // Platform-specific button with proper styling
-    return RepaintBoundary(
-      child: isIOS
-        ? CupertinoButton(
-            onPressed: onPressed,
+  // UI for phone number entry with improved UX
+  Widget _buildPhoneEntryUI(bool isIOS) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Back button
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            icon: Icon(
+              isIOS ? CupertinoIcons.back : Icons.arrow_back,
+              color: Colors.white,
+            ),
+            onPressed: _handleBackPress,
             padding: EdgeInsets.zero,
-            child: Container(
-              height: buttonHeight,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(12),
-                border: isBlack ? null : Border.all(color: Colors.black, width: 1),
-              ),
-              alignment: Alignment.center,
-              child: content,
-            ),
-          )
-        : ElevatedButton(
-            onPressed: onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: backgroundColor,
-              foregroundColor: contentColor,
-              minimumSize: Size(double.infinity, buttonHeight),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: isBlack ? BorderSide.none : const BorderSide(color: Colors.black),
-              ),
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              splashFactory: NoSplash.splashFactory,
-            ),
-            child: content,
           ),
-    );
-  }
-
-  Widget _buildPhoneForm(bool isIOS) {
-    // Loading state tracking
-    final bool isPhoneLoading = widget.isLoading && widget.loadingMethod == AuthMethod.phone;
-    
-    // Verification mode if we have a verification ID
-    final bool showVerification = widget.verificationId != null && widget.phoneNumber != null;
-    
-    if (isIOS) {
-      return _buildIOSPhoneForm(isPhoneLoading, showVerification);
-    } else {
-      return _buildAndroidPhoneForm(isPhoneLoading, showVerification);
-    }
-  }
-
-  Widget _buildIOSPhoneForm(bool isPhoneLoading, bool showVerification) {
-    // Debug print current verification state
-    debugPrint("IOS PHONE FORM: showVerification=$showVerification, verificationId=${widget.verificationId}, phoneNumber=${widget.phoneNumber}");
-    
-    return RepaintBoundary(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!showVerification) ... [
-            // Phone Input with Country Code
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A), // Use same dark color as background
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-              ),
-              height: 56,
-              child: Row(
-                children: [
-                  // Country Code Picker
-                  Container(
-                    padding: const EdgeInsets.only(left: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: CountryCodePicker(
-                      onChanged: _onCountryCodeChanged,
-                      initialSelection: 'US',
-                      favorite: const ['US', 'IN', 'CA', 'GB'],
-                      showCountryOnly: false,
-                      showOnlyCountryWhenClosed: false,
-                      alignLeft: false,
-                      textStyle: const TextStyle(color: Colors.white),
-                      padding: EdgeInsets.zero,
-                      barrierColor: Colors.black.withOpacity(0.7),
-                      backgroundColor: const Color(0xFF1A1A1A),
-                      dialogBackgroundColor: const Color(0xFF1A1A1A),
-                      searchDecoration: const InputDecoration(
-                        hintText: 'Search',
-                        hintStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.search, color: Colors.white70),
-                      ),
-                      dialogTextStyle: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  
-                  // Phone number field
-                  Expanded(
-                    child: CupertinoTextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      style: const TextStyle(color: Colors.white),
-                      placeholder: '123 456 7890',
-                      placeholderStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                      decoration: null,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      enabled: !isPhoneLoading,
-                      onSubmitted: (_) => _submitForm(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Continue Button with Loading State
-            CupertinoButton(
-              onPressed: isPhoneLoading ? null : _submitForm,
-              padding: EdgeInsets.zero,
-              child: Container(
-                height: 50,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: isPhoneLoading
-                  ? const CupertinoActivityIndicator(color: Colors.black)
-                  : const Text(
-                      'Continue',
-                      style: TextStyle(
-                        fontSize: 16, 
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                      ),
-                    ),
-              ),
-            ),
-            
-            const SizedBox(height: 12),
-            Text(
-              'We\'ll send a verification code to this number',
-              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ],
-
-          // OTP Verification UI
-          if (showVerification) ... [
-            // Show the phone number we're verifying
-            const Text(
-              'Enter verification code sent to',
-              style: TextStyle(color: Colors.white, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.phoneNumber!,
-              style: const TextStyle(
-                color: Colors.white, 
-                fontWeight: FontWeight.bold, 
-                fontSize: 16
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            
-            // iOS OTP Input as individual boxes
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: PinCodeTextField(
-                appContext: context,
-                length: 6,
-                obscureText: false,
-                animationType: AnimationType.fade,
-                pinTheme: PinTheme(
-                  shape: PinCodeFieldShape.box,
-                  borderRadius: BorderRadius.circular(12),
-                  fieldHeight: 50,
-                  fieldWidth: 40,
-                  activeFillColor: Colors.white.withOpacity(0.15),
-                  selectedFillColor: Colors.white.withOpacity(0.25),
-                  inactiveFillColor: Colors.white.withOpacity(0.1),
-                  activeColor: Colors.white,
-                  selectedColor: Colors.blue,
-                  inactiveColor: Colors.white.withOpacity(0.3),
-                ),
-                cursorColor: Colors.white,
-                animationDuration: const Duration(milliseconds: 300),
-                enableActiveFill: true,
-                errorAnimationController: _otpErrorController,
-                controller: TextEditingController(),
-                keyboardType: TextInputType.number,
-                boxShadows: const [
-                  BoxShadow(
-                    offset: Offset(0, 0),
-                    color: Colors.blue,
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    offset: Offset(0, 1),
-                    color: Colors.black26,
-                    blurRadius: 10,
-                  )
-                ],
-                onCompleted: (value) {
-                  _otpValue = value;
-                  _verifyOtp(value);
-                },
-                onChanged: (value) {
-                  setState(() {
-                    _otpValue = value;
-                  });
-                },
-                beforeTextPaste: (text) {
-                  // Allow only numbers
-                  return text != null && RegExp(r'^[0-9]+$').hasMatch(text);
-                },
-                textStyle: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Verify Button - auto-enabled when OTP is complete
-            CupertinoButton(
-              onPressed: isPhoneLoading ? null : (_otpValue.length == 6 ? () => _verifyOtp(_otpValue) : null),
-              padding: EdgeInsets.zero,
-              child: Container(
-                height: 50,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: _otpValue.length == 6 ? Colors.blue : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: _otpValue.length == 6 ? 
-                    [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.5),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      )
-                    ] : null,
-                ),
-                alignment: Alignment.center,
-                child: isPhoneLoading
-                  ? const CupertinoActivityIndicator(color: Colors.black)
-                  : Text(
-                      'Verify',
-                      style: TextStyle(
-                        fontSize: 16, 
-                        fontWeight: FontWeight.w600,
-                        color: _otpValue.length == 6 ? Colors.white : Colors.black,
-                      ),
-                    ),
-              ),
-            ),
-            
-            const SizedBox(height: 12),
-            
-            // Row with options to change phone number or resend code
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  onPressed: isPhoneLoading ? null : _goBack,
-                  child: Text(
-                    'Change Number',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                
-                Container(
-                  height: 16,
-                  width: 1,
-                  color: Colors.white.withOpacity(0.3),
-                ),
-                
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  onPressed: isPhoneLoading ? null : () {
-                    // Resend code using the existing phone number
-                    if (widget.phoneNumber != null) {
-                      widget.onPhoneAuth(widget.phoneNumber!);
-                    }
-                  },
-                  child: Text(
-                    'Resend Code',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAndroidPhoneForm(bool isPhoneLoading, bool showVerification) {
-    // Debug print current verification state
-    debugPrint("ANDROID PHONE FORM: showVerification=$showVerification, verificationId=${widget.verificationId}, phoneNumber=${widget.phoneNumber}");
-    
-    return Form(
-      key: _formKey,
-      child: RepaintBoundary(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!showVerification) ... [
-              // Phone Input with Material design and Country Code
+        ).animate().fadeIn(duration: 300.ms),
+        
+        const SizedBox(height: 8),
+        
+        Text(
+          'Enter your phone number',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: isIOS ? 19 : 20,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ).animate().fadeIn(duration: 400.ms),
+        
+        const SizedBox(height: 8),
+        
+        Text(
+          'We\'ll send you a 6-digit verification code',
+          style: TextStyle(
+            color: AppColors.whiteOpacity50,
+            fontSize: 14,
+          ),
+          textAlign: TextAlign.center,
+        ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+        
+        const SizedBox(height: 24),
+        
+        // Phone number input with country code picker
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.whiteOpacity10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Country code picker
               Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A), // Use same dark color as background
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+                padding: const EdgeInsets.only(left: 8),
+                constraints: const BoxConstraints(
+                  minWidth: 100, 
+                  maxWidth: 110,
                 ),
-                child: Row(
-                  children: [
-                    // Country Code Picker
-                    Container(
-                      padding: const EdgeInsets.only(left: 4),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          right: BorderSide(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: CountryCodePicker(
-                        onChanged: _onCountryCodeChanged,
-                        initialSelection: 'US',
-                        favorite: const ['US', 'IN', 'CA', 'GB'],
-                        showCountryOnly: false,
-                        showOnlyCountryWhenClosed: false,
-                        alignLeft: false,
-                        textStyle: const TextStyle(color: Colors.white),
-                        padding: EdgeInsets.zero,
-                        barrierColor: Colors.black.withOpacity(0.7),
-                        backgroundColor: const Color(0xFF1A1A1A),
-                        dialogBackgroundColor: const Color(0xFF1A1A1A),
-                        searchDecoration: const InputDecoration(
-                          hintText: 'Search',
-                          hintStyle: TextStyle(color: Colors.white70),
-                          prefixIcon: Icon(Icons.search, color: Colors.white70),
-                        ),
-                        dialogTextStyle: const TextStyle(color: Colors.white),
-                      ),
+                child: Theme(
+                  data: ThemeData.dark().copyWith(
+                    primaryColor: Colors.white,
+                    scaffoldBackgroundColor: Colors.black,
+                    textTheme: const TextTheme(
+                      bodyMedium: TextStyle(color: Colors.white),
                     ),
-                    
-                    // Phone number field
-                    Expanded(
-                      child: TextFormField(
-                        controller: _phoneController,
-                        validator: _validatePhone,
-                        keyboardType: TextInputType.phone,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: '123 456 7890',
-                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                        enabled: !isPhoneLoading,
-                        onFieldSubmitted: (_) => _submitForm(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Continue Button with Loading State
-              ElevatedButton(
-                onPressed: isPhoneLoading ? null : _submitForm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
-                ),
-                child: isPhoneLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text(
-                      'Continue',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-              ),
-              
-              const SizedBox(height: 12),
-              Text(
-                'We\'ll send a verification code to this number',
-                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-            ],
-
-            // OTP VERIFICATION UI
-            if (showVerification) ... [
-              // Show the phone number we're verifying
-              const Text(
-                'Enter verification code sent to',
-                style: TextStyle(color: Colors.white, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.phoneNumber!,
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.bold, 
-                  fontSize: 16
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              
-              // Material Design OTP Input
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: PinCodeTextField(
-                  appContext: context,
-                  length: 6,
-                  obscureText: false,
-                  animationType: AnimationType.fade,
-                  pinTheme: PinTheme(
-                    shape: PinCodeFieldShape.box,
-                    borderRadius: BorderRadius.circular(10),
-                    fieldHeight: 50,
-                    fieldWidth: 40,
-                    activeFillColor: Colors.white.withOpacity(0.15),
-                    selectedFillColor: Colors.white.withOpacity(0.25),
-                    inactiveFillColor: Colors.white.withOpacity(0.1),
-                    activeColor: Colors.white,
-                    selectedColor: Colors.blue,
-                    inactiveColor: Colors.white.withOpacity(0.3),
-                  ),
-                  cursorColor: Colors.white,
-                  animationDuration: const Duration(milliseconds: 300),
-                  enableActiveFill: true,
-                  errorAnimationController: _otpErrorController,
-                  controller: TextEditingController(),
-                  keyboardType: TextInputType.number,
-                  boxShadows: const [
-                    BoxShadow(
-                      offset: Offset(0, 0),
-                      color: Colors.blue,
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                    BoxShadow(
-                      offset: Offset(0, 1),
-                      color: Colors.black26,
-                      blurRadius: 10,
-                    )
-                  ],
-                  onCompleted: (value) {
-                    _otpValue = value;
-                    _verifyOtp(value);
-                  },
-                  onChanged: (value) {
-                    setState(() {
-                      _otpValue = value;
-                    });
-                  },
-                  beforeTextPaste: (text) {
-                    return text != null && RegExp(r'^[0-9]+$').hasMatch(text);
-                  },
-                  textStyle: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Verify Button - auto-enabled when OTP is complete
-              ElevatedButton(
-                onPressed: isPhoneLoading ? null : (_otpValue.length == 6 ? () => _verifyOtp(_otpValue) : null),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _otpValue.length == 6 ? Colors.blue : Colors.white,
-                  foregroundColor: _otpValue.length == 6 ? Colors.white : Colors.black,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: _otpValue.length == 6 ? 4 : 0,
-                  shadowColor: _otpValue.length == 6 ? Colors.blue.withOpacity(0.5) : Colors.transparent,
-                ),
-                child: isPhoneLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Text(
-                      'Verify',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: _otpValue.length == 6 ? Colors.white : Colors.black,
-                      ),
-                    ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Row with options to change phone number or resend code
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton(
-                    onPressed: isPhoneLoading ? null : _goBack,
-                    child: Text(
-                      'Change Phone Number',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
-                      ),
+                    dialogTheme: const DialogTheme(
+                      backgroundColor: Colors.black,
+                      titleTextStyle: TextStyle(color: Colors.white),
                     ),
                   ),
-                  
-                  Container(
-                    height: 16,
-                    width: 1,
-                    color: Colors.white.withOpacity(0.3),
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                  
-                  TextButton(
-                    onPressed: isPhoneLoading ? null : () {
-                      // Resend code using the existing phone number
-                      if (widget.phoneNumber != null) {
-                        widget.onPhoneAuth(widget.phoneNumber!);
-                      }
+                  child: CountryCodePicker(
+                    onChanged: (CountryCode code) {
+                      _countryCode = code.dialCode ?? '+1';
                     },
-                    child: Text(
-                      'Resend Code',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
-                      ),
+                    initialSelection: 'US',
+                    favorite: const ['US', 'IN', 'CA', 'UK'],
+                    showCountryOnly: false,
+                    showOnlyCountryWhenClosed: false,
+                    alignLeft: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    flagWidth: 24,
+                    textStyle: const TextStyle(color: Colors.white),
+                    dialogTextStyle: const TextStyle(color: Colors.white),
+                    searchStyle: const TextStyle(color: Colors.white),
+                    dialogBackgroundColor: Colors.black,
+                    boxDecoration: BoxDecoration(
+                      color: Colors.black,
+                      border: Border.all(color: AppColors.whiteOpacity20),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                ],
+                ),
+              ),
+              
+              // Vertical divider
+              Container(
+                height: 30,
+                width: 1,
+                color: AppColors.whiteOpacity20,
+              ),
+              
+              // Phone input field
+              Expanded(
+                child: TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: '(555) 123-4567',
+                    hintStyle: TextStyle(color: AppColors.whiteOpacity50),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  autofocus: true,
+                ),
               ),
             ],
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
+        
+        const SizedBox(height: 24),
+        
+        // Continue button
+        SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            onPressed: _isSubmitting ? null : _handlePhoneSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              disabledBackgroundColor: AppColors.whiteOpacity50,
+            ),
+            child: _isSubmitting
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black.withOpacity(0.7)),
+                    ),
+                  )
+                : Text(
+                    'Continue',
+                    style: TextStyle(
+                      fontSize: 16, 
+                      fontWeight: isIOS ? FontWeight.w600 : FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+      ],
+    );
+  }
+
+  // UI for OTP verification
+  Widget _buildOtpVerificationUI(bool isIOS) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Back button
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            icon: Icon(
+              isIOS ? CupertinoIcons.back : Icons.arrow_back,
+              color: Colors.white,
+            ),
+            onPressed: _handleBackPress,
+            padding: EdgeInsets.zero,
+          ),
+        ).animate().fadeIn(duration: 300.ms),
+        
+        const SizedBox(height: 8),
+        
+        Text(
+          'Enter verification code',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: isIOS ? 19 : 20,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ).animate().fadeIn(duration: 400.ms),
+        
+        const SizedBox(height: 8),
+        
+        Text(
+          'We\'ve sent it to $_countryCode ${_phoneController.text}',
+          style: TextStyle(
+            color: AppColors.whiteOpacity50,
+            fontSize: 14,
+          ),
+          textAlign: TextAlign.center,
+        ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+        
+        const SizedBox(height: 24),
+        
+        // OTP input field - updated for 6-digit verification code
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.whiteOpacity10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _otpController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20, // Slightly smaller for better fit with 6 digits
+              letterSpacing: 5, // Adjusted letter spacing for 6 digits
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              hintText: '• • • • • •', // 6 dots for 6 digits
+              hintStyle: TextStyle(
+                color: AppColors.whiteOpacity50,
+                fontSize: 20,
+              ),
+              border: InputBorder.none,
+              counterText: '', // Hide the counter
+            ),
+            maxLength: 6, // 6-digit verification code
+            autofocus: true,
+            onChanged: (value) {
+              // Auto-submit when all 6 digits are entered
+              if (value.length == 6) {
+                FocusScope.of(context).unfocus(); // Hide keyboard
+              }
+            },
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
+        
+        const SizedBox(height: 24),
+        
+        // Verify button
+        SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            onPressed: _isSubmitting ? null : _handleOtpSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              disabledBackgroundColor: AppColors.whiteOpacity50,
+            ),
+            child: _isSubmitting
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black.withOpacity(0.7)),
+                    ),
+                  )
+                : Text(
+                    'Verify',
+                    style: TextStyle(
+                      fontSize: 16, 
+                      fontWeight: isIOS ? FontWeight.w600 : FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+        
+        const SizedBox(height: 16),
+        
+        // Resend code button with improved implementation
+        TextButton(
+          onPressed: _isSubmitting ? null : _handleResendCode,
+          child: Text(
+            'Resend Code',
+            style: TextStyle(
+              color: AppColors.accentBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: isIOS ? 15 : 16,
+            ),
+          ),
+        ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
+      ],
+    );
+  }
+
+  /// Builds a styled authentication button
+  Widget _buildAuthButton({
+    required IconData icon,
+    required String text,
+    required VoidCallback onPressed,
+    required bool isIOS,
+    double iconSize = 22,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.whiteOpacity20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.whiteOpacity10,
+            AppColors.whiteOpacity10.withOpacity(0.5),
           ],
         ),
       ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _isSubmitting ? null : onPressed,
+          splashColor: AppColors.whiteOpacity10,
+          highlightColor: AppColors.whiteOpacity10,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: MediaQuery.of(context).size.height * 0.014),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FaIcon(
+                  icon,
+                  color: Colors.white,
+                  size: iconSize,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: isIOS ? 15 : 16,
+                  ),
+                ),
+                if (_isSubmitting && (text.contains('Google') || text.contains('Apple')))
+                  Container(
+                    margin: const EdgeInsets.only(left: 12),
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.whiteOpacity50),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
-  }
-
-  /// Verify OTP code and pass credential to parent
-  void _verifyOtp(String otp) {
-    // Debug log for verification attempt
-    debugPrint("Verifying OTP: ${otp.length} digits, verificationId: ${widget.verificationId != null}");
-    
-    // Validate OTP
-    if (otp.length != 6) {
-      // Show animation for error
-      _otpErrorController?.add(ErrorAnimationType.shake);
-      setState(() {
-        _hasError = true;
-      });
-      if (widget.onError != null) {
-        widget.onError!('Please enter a valid 6-digit verification code.');
-      }
-      return;
-    }
-    
-    // Validate verification ID
-    if (widget.verificationId == null || widget.verificationId!.isEmpty) {
-      // Show animation for error
-      _otpErrorController?.add(ErrorAnimationType.shake);
-      setState(() {
-        _hasError = true;
-      });
-      if (widget.onError != null) {
-        widget.onError!('Verification session has expired. Please restart the verification process.');
-      }
-      return;
-    }
-
-    try {
-      // Provide haptic feedback for verification attempt
-      HapticFeedback.mediumImpact();
-      
-      // Create phone credential from verification ID and code
-      // Ensure both are properly trimmed of any whitespace
-      final PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: widget.verificationId!.trim(),
-        smsCode: otp.trim(),
-      );
-
-      // Send back to parent
-      if (widget.onPhoneAuthCredential != null) {
-        debugPrint("Sending credential to parent: verificationId=${widget.verificationId!.trim()}, smsCode=${otp.trim()}");
-        widget.onPhoneAuthCredential!(credential);
-      } else {
-        debugPrint("ERROR: No onPhoneAuthCredential handler available");
-        if (widget.onError != null) {
-          widget.onError!('Unable to process verification code. Please try again.');
-        }
-      }
-    } catch (e) {
-      debugPrint("Error creating phone credential: $e");
-      // Show animation for error
-      _otpErrorController?.add(ErrorAnimationType.shake);
-      setState(() {
-        _hasError = true;
-      });
-      if (widget.onError != null) {
-        widget.onError!('Error verifying code: ${e.toString()}');
-      }
-    }
   }
 }

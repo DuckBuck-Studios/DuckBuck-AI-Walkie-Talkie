@@ -1,10 +1,13 @@
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth/auth_service_interface.dart';
 import 'auth/firebase_auth_service.dart';
 import 'firebase/firebase_database_service.dart';
 import 'firebase/firebase_storage_service.dart';
 import 'firebase/firebase_analytics_service.dart';
+import 'firebase/firebase_crashlytics_service.dart';
+import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart';
 import 'friend/friend_service.dart';
 import '../repositories/user_repository.dart';
@@ -38,6 +41,22 @@ Future<void> setupServiceLocator() async {
 
   serviceLocator.registerLazySingleton<FirebaseAnalyticsService>(
     () => FirebaseAnalyticsService(),
+  );
+
+  // Register Firebase Crashlytics service
+  serviceLocator.registerLazySingleton<FirebaseCrashlyticsService>(
+    () => FirebaseCrashlyticsService(),
+  );
+  
+  // Register Crashlytics consent manager as async factory
+  serviceLocator.registerSingletonAsync<CrashlyticsConsentManager>(
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      return CrashlyticsConsentManager(
+        prefs: prefs,
+        crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
+      );
+    },
   );
 
   // Register notifications service
