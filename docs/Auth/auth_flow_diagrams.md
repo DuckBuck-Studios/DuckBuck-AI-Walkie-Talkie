@@ -181,12 +181,12 @@ flowchart TD
     classDef process fill:#d9f2d9,stroke:#78c2ad,stroke-width:2px
     classDef decision fill:#d9e8f2,stroke:#6c8ebf,stroke-width:2px
     classDef error fill:#f2d9d9,stroke:#e74c3c,stroke-width:2px
-    classDef end fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
+    classDef endNodes fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
     
     class PhoneEntry,SendOTP,WaitSMS,AutoFill,ManualEntry,SignIn,CreateUser,UpdateUser process
     class ValidatePhone,AutoDetect,ValidateOTP,CheckUser decision
     class ShowError,RetryOTP error
-    class Start,Complete end
+    class Start,Complete endNodes
 ```
 
 ## Social Authentication Flow
@@ -230,14 +230,14 @@ flowchart TD
     classDef decision fill:#d9e8f2,stroke:#6c8ebf,stroke-width:2px
     classDef googleAction fill:#f2d9d9,stroke:#db4437,stroke-width:2px
     classDef appleAction fill:#e6e6e6,stroke:#000000,stroke-width:2px
-    classDef end fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
+    classDef endNodes fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
     
     class Method decision
     class Google,GRequest,GToken,FirebaseG googleAction
     class Apple,ANonce,AToken,FirebaseA appleAction
     class GAccount,AAccount,CheckUser decision
     class CreateUser,UpdateUser,CacheToken process
-    class Start,Cancel,Complete,End end
+    class Start,Cancel,Complete,End endNodes
 ```
 
 ## Session Management Flow
@@ -279,11 +279,11 @@ flowchart TD
     classDef decision fill:#d9e8f2,stroke:#6c8ebf,stroke-width:2px
     classDef error fill:#f2d9d9,stroke:#e74c3c,stroke-width:2px
     classDef success fill:#d9e8f2,stroke:#28a745,stroke-width:2px
-    classDef end fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
+    classDef endNodes fill:#e8d9f2,stroke:#8e44ad,stroke-width:2px
     
     class CheckToken,ValidateToken,RefreshSucceeded,BackgroundCheck,ForegroundCheck,TokenExpiry decision
     class RefreshToken,StartRefreshTimer,ClearSession,SuspendRefresh,ContinueRefresh,PeriodicRefresh process
     class Authenticated,ContinueRefresh success
     class NotAuthenticated,ClearSession error
-    class Start,ShowAuth,AppActivity,MaintainState end
+    class Start,ShowAuth,AppActivity,MaintainState endNodes
 ```

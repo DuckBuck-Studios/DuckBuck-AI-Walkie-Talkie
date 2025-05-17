@@ -154,7 +154,6 @@ classDiagram
     AuthStateProvider --> AuthSecurityManager
     FirebaseAuthService --> SessionManager
     AuthBottomSheet --> AuthStateProvider
-</code>
 ```
 
 ## Authentication Flow

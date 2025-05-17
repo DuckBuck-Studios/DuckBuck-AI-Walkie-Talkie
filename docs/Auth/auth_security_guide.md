@@ -153,14 +153,16 @@ Future<void> signOut() async {
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">firebase.googleapis.com</domain>
         <pin-set>
-            <!-- Google Trust Services certificates -->
-            <pin digest="SHA-256">7HIpactkIAq2Y49orFOOQKurWxmmSFZhBCoQYcRhJ3Y=</pin>
-            <!-- Backup pin -->
-            <pin digest="SHA-256">gM315HM+VKHGKiogCrDYVN5USXdQj3YOeZTocVIEDEI=</pin>
+            <!-- Primary pin (leaf certificate) -->
+            <pin digest="SHA-256">jYoTE/KICxVmNXPlhLcgJpD0FwK1sNupYdQSJg4RDos=</pin>
+            <!-- Backup pin (intermediate certificate) -->
+            <pin digest="SHA-256">YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=</pin>
         </pin-set>
     </domain-config>
 </network-security-config>
 ```
+
+> **Note on Certificate Pinning**: The primary pin is derived from the leaf certificate of the domain, while the backup pin is derived from an intermediate certificate in the same chain. The backup pin ensures the app continues to function when the leaf certificate is rotated, which happens periodically. Both pins are generated using OpenSSL commands that extract the public key hash.
 
 ### 5. Social Engineering
 
