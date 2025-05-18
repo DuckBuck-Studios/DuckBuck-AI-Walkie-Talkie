@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Default for most Android configurations -->
+    <integer name="google_play_services_version">12451000</integer>
+    <!-- Firebase App Check configuration -->
+    <string name="firebase_app_check_package_name">com.duckbuck.app</string>
+</resources>

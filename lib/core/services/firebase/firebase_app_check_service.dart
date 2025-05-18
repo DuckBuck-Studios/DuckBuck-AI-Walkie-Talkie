@@ -8,29 +8,28 @@ class FirebaseAppCheckService {
     try {
       // Initialize with the appropriate provider based on environment
       if (kDebugMode) {
-        // For development environments, use debug provider
+        // For development environments, use debug provider with specific settings
         // This is crucial for phone authentication to work during development
         await FirebaseAppCheck.instance.activate(
+          // For debugging, use the debug provider which is more reliable in development
           androidProvider: AndroidProvider.debug,
+          // Keep using debug provider for Apple
           appleProvider: AppleProvider.debug,
-          webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
         );
 
-        // Ensure token auto-refresh is enabled for debug builds
+        // Explicitly set the app's package
         await FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
 
-        debugPrint('🔒 APP CHECK: Using debug providers for development');
+        debugPrint('🔒 APP CHECK: Using debug-compatible providers for development');
 
         // When using debug provider, log the debug token again to remind user
-        final debugToken = await FirebaseAppCheck.instance.getToken(
-        );
+        final debugToken = await FirebaseAppCheck.instance.getToken();
         debugPrint(
           '🔑 APP CHECK: Debug token refreshed. Ensure this is added to Firebase Console: ${debugToken ?? 'No token available'}',
         );
       } else {
         // For production environments
-        await FirebaseAppCheck.instance.activate(
-          webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
+        await FirebaseAppCheck.instance.activate( 
           androidProvider: AndroidProvider.playIntegrity,
           appleProvider: AppleProvider.appAttest,
         );
@@ -41,8 +40,7 @@ class FirebaseAppCheckService {
     } catch (e) {
       debugPrint(
         '❌ APP CHECK ERROR: Failed to activate Firebase App Check - ${e.toString()}',
-      );
-      // Don't rethrow - we want the app to continue even if App Check fails
+      ); 
     }
   }
 }

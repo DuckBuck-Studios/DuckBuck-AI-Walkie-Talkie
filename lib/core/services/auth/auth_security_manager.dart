@@ -13,9 +13,11 @@ import '../logger/logger_service.dart';
 class AuthSecurityManager {
   final AuthServiceInterface _authService;
   final UserRepository _userRepository;
-  final LoggerService _logger = LoggerService();
   late SessionManager _sessionManager;
   static const String _tag = 'AUTH_SECURITY';
+  
+  // Get logger service from service locator
+  LoggerService get _logger => serviceLocator<LoggerService>();
   
   // Singleton implementation
   static final AuthSecurityManager _instance = AuthSecurityManager._internal();

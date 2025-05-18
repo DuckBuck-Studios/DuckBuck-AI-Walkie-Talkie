@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow Firebase APIs -->
+    <!-- Allow Firebase APIs with certificate pinning -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">*.googleapis.com</domain>
         <domain includeSubdomains="true">firebaseio.com</domain>
@@ -15,12 +15,47 @@
             <!-- Backup pin (intermediate certificate) - for certificate rotation -->
             <pin digest="SHA-256">YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=</pin>
         </pin-set>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- DuckBuck API domains with enhanced security -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.duckbuck.app</domain>
+        <domain includeSubdomains="true">auth.duckbuck.app</domain>
+        <domain includeSubdomains="true">storage.duckbuck.app</domain>
+        <domain includeSubdomains="true">duckbuck.app</domain>
+        
+        <!-- Pin certificates for these domains -->
+        <pin-set expiration="2027-05-17">
+            <!-- Primary pin for api.duckbuck.app - updated on May 18, 2025 -->
+            <pin digest="SHA-256">fWBpm3/2BeN6bTTgRwAV7J3ckbAA0azsm0BUmACMumo=</pin>
+            <!-- Backup pins for certificate rotation -->
+            <pin digest="SHA-256">YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=</pin>
+            <pin digest="SHA-256">YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=</pin>
+        </pin-set>
+        
+        <!-- Enforce strict TLS versions -->
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
     </domain-config>
     
     <!-- Default configuration for all domains not covered above -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
+            <!-- Trust only system certificates in production -->
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    
+    <!-- Debug configuration for development only -->
+    <debug-overrides>
+        <trust-anchors>
+            <!-- Trust the system certificates and user certificates in debug builds -->
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>

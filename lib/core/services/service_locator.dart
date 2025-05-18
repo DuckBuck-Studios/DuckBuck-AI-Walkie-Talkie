@@ -12,6 +12,7 @@ import 'firebase/firebase_app_check_service.dart';
 import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart';
 import 'friend/friend_service.dart';
+import 'security/app_security_service.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/message_repository.dart';
@@ -113,6 +114,11 @@ Future<void> setupServiceLocator() async {
   // Register authentication security manager
   serviceLocator.registerLazySingleton<AuthSecurityManager>(
     () => AuthSecurityManager(),
+  );
+  
+  // Register application security service
+  serviceLocator.registerLazySingleton<AppSecurityService>(
+    () => AppSecurityService(),
   );
 
   // Add more service registrations here as needed

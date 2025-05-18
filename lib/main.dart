@@ -14,6 +14,7 @@ import 'core/services/firebase/firebase_crashlytics_service.dart';
 import 'core/services/crashlytics_consent_manager.dart';
 import 'core/providers/crashlytics_consent_provider.dart';
 import 'core/services/auth/auth_security_manager.dart'; 
+import 'core/services/security/app_security_service.dart';
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +83,32 @@ void main() async {
 
     // Configure system UI overlay for consistent appearance
     AppTheme.configureSystemUIOverlay();
+
+    // Initialize the security service
+    try {
+      final securityService = serviceLocator<AppSecurityService>();
+      final securityInitialized = await securityService.initialize();
+      if (!securityInitialized) {
+        debugPrint('⚠️ Security services initialized with warnings');
+      } else {
+        debugPrint('🔒 Security services initialized successfully');
+      }
+    } catch (e) {
+      debugPrint('❌ Error initializing security services: $e');
+      // Continue with reduced security, but log the issue
+      try {
+        final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
+        crashlytics.recordError(
+          e,
+          null,
+          reason: 'Security initialization failure',
+          fatal: false,
+          information: {'startup_stage': 'security_initialization'},
+        );
+      } catch (_) {
+        // Silently continue if logging fails
+      }
+    }
 
     // Initialize Crashlytics consent manager
     try {
