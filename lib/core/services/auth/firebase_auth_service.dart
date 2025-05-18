@@ -63,58 +63,10 @@ class FirebaseAuthService implements AuthServiceInterface {
     }
   }
 
-  /// Convert FirebaseAuthException to our AuthException
-  AuthException _handleException(FirebaseAuthException e) {
-    String code;
-    String message = e.message ?? 'An unknown error occurred';
-
-    switch (e.code) {
-      case 'invalid-email':
-        code = AuthErrorCodes.invalidCredential;
-        message = 'The email address is not valid.';
-        break;
-      case 'wrong-password':
-        code = AuthErrorCodes.wrongPassword;
-        message = 'Your password is incorrect.';
-        break;
-      case 'user-not-found':
-        code = AuthErrorCodes.userNotFound;
-        message = 'No user found with this email address.';
-        break;
-      case 'user-disabled':
-        code = AuthErrorCodes.userDisabled;
-        message = 'This user account has been disabled.';
-        break;
-      case 'too-many-requests':
-        code = AuthErrorCodes.tooManyRequests;
-        message = 'Too many requests. Try again later.';
-        break;
-      case 'operation-not-allowed':
-        code = AuthErrorCodes.operationNotAllowed;
-        message = 'This sign in method is not allowed.';
-        break;
-      case 'invalid-verification-code':
-        code = AuthErrorCodes.invalidVerificationCode;
-        message = 'The verification code is invalid.';
-        break;
-      case 'invalid-verification-id':
-        code = AuthErrorCodes.invalidVerificationId;
-        message = 'The verification ID is invalid.';
-        break;
-      case 'account-exists-with-different-credential':
-        code = AuthErrorCodes.accountExistsWithDifferentCredential;
-        message = 'An account already exists with the same email but different sign-in credentials.';
-        break;
-      case 'network-request-failed':
-        code = AuthErrorCodes.networkError;
-        message = 'Network error. Please check your connection and try again.';
-        break;
-      default:
-        code = AuthErrorCodes.unknown;
-        break;
-    }
-
-    return AuthException(code, message, e);
+  /// Convert FirebaseAuthException to our AuthException using standardized error handler
+  AuthException _handleException(FirebaseAuthException e, {AuthMethod? method}) {
+    // Using our centralized error handler for consistency
+    return AuthErrorMessages.handleError(e, authMethod: method);
   }
 
   // Email/password authentication removed as per new requirements
@@ -171,16 +123,13 @@ class FirebaseAuthService implements AuthServiceInterface {
       _logger.e(_tag, 'Google sign-in process failed: ${e.toString()}');
       
       if (e is FirebaseAuthException) {
-        throw _handleException(e);
+        throw _handleException(e, method: AuthMethod.google);
       } else if (e is AuthException) {
         rethrow;
       }
       
-      throw AuthException(
-        AuthErrorCodes.googleSignInFailed,
-        'Google sign-in failed',
-        e,
-      );
+      // Use standardized error handling
+      throw AuthErrorMessages.handleError(e, authMethod: AuthMethod.google);
     }
   }
 

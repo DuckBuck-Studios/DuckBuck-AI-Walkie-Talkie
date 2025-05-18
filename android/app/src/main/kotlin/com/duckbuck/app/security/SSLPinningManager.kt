@@ -63,6 +63,7 @@ class SSLPinningManager {
             // Add all pins to the certificate pinner
             certificatePins.forEach { (domain, pins) ->
                 pins.forEach { pin ->
+                    Log.d(TAG, "Adding certificate pin for domain: $domain, pin: $pin")
                     certificatePinner.add(domain, pin)
                 }
             }
@@ -85,6 +86,13 @@ class SSLPinningManager {
             try {
                 // Log a warning that we're using a less secure client for development
                 Log.w(TAG, "⚠️ Using development OkHttpClient - DO NOT USE IN PRODUCTION")
+                
+                // Add logs at different levels to help diagnose logging issues
+                Log.v(TAG, "VERBOSE - Testing verbose log level")
+                Log.d(TAG, "DEBUG - Creating development OkHttpClient for testing")
+                Log.i(TAG, "INFO - Setting up development configuration")
+                Log.w(TAG, "WARNING - Development mode may expose security vulnerabilities")
+                Log.e(TAG, "ERROR - This is a test error log to verify logging works")
                 
                 // Create a trust manager that does not validate certificate chains but logs details
                 // WARNING: This should ONLY be used in DEBUG builds

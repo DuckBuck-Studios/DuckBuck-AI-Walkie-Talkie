@@ -13,10 +13,11 @@ import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart';
 import 'friend/friend_service.dart';
 import 'security/app_security_service.dart';
+import 'api/api_service.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/message_repository.dart';
-import 'message/message_cache_service.dart'; 
+import 'message/message_cache_service.dart';
 import 'logger/logger_service.dart';
 
 
@@ -113,7 +114,19 @@ Future<void> setupServiceLocator() async {
    
   // Register authentication security manager
   serviceLocator.registerLazySingleton<AuthSecurityManager>(
-    () => AuthSecurityManager(),
+    () => AuthSecurityManager(
+      authService: serviceLocator<AuthServiceInterface>(),
+      userRepository: serviceLocator<UserRepository>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+  
+  // Register API service
+  serviceLocator.registerLazySingleton<ApiService>(
+    () => ApiService(
+      authService: serviceLocator<AuthServiceInterface>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
   );
   
   // Register application security service

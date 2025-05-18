@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+
 /// Custom exception for authentication-related errors
 class AuthException implements Exception {
   /// Error code for categorizing the error
@@ -186,5 +188,79 @@ class AuthErrorMessages {
       default:
         return baseMessage;
     }
+  }
+  
+  /// Standardized error handling for all authentication methods
+  /// This helps centralize error mapping from Firebase exceptions to our app-specific exceptions
+  static AuthException handleError(dynamic error, {AuthMethod? authMethod}) {
+    // If it's already our custom AuthException, just ensure authMethod is set
+    if (error is AuthException) {
+      if (error.authMethod == null && authMethod != null) {
+        return AuthException(
+          error.code, 
+          error.message,
+          error.originalError,
+          authMethod
+        );
+      }
+      return error;
+    }
+    
+    // Firebase Auth exception handling
+    if (error is FirebaseAuthException) {
+      String code;
+      String message;
+      
+      switch (error.code) {
+        // Map Firebase error codes to our standardized error codes
+        case 'network-request-failed':
+          code = AuthErrorCodes.networkError;
+          message = 'Network connection error. Please check your internet connection.';
+          break;
+        case 'too-many-requests':
+          code = AuthErrorCodes.tooManyRequests;
+          message = 'Too many attempts. Please try again later.';
+          break;
+        case 'user-disabled':
+          code = AuthErrorCodes.userDisabled;
+          message = 'This account has been disabled by an administrator.';
+          break;
+        case 'requires-recent-login':
+          code = AuthErrorCodes.requiresRecentLogin;
+          message = 'This operation requires recent authentication. Please log in again.';
+          break;
+        default:
+          // Use specific auth method error codes when available
+          if (authMethod == AuthMethod.google) {
+            code = AuthErrorCodes.googleSignInFailed;
+            message = 'Google sign-in failed: ${error.message}';
+          } else if (authMethod == AuthMethod.apple) {
+            code = AuthErrorCodes.appleSignInFailed;
+            message = 'Apple sign-in failed: ${error.message}';
+          } else if (authMethod == AuthMethod.phone) {
+            code = AuthErrorCodes.phoneAuthFailed;
+            message = 'Phone authentication failed: ${error.message}';
+          } else {
+            code = AuthErrorCodes.unknown;
+            message = error.message ?? 'An authentication error occurred';
+          }
+      }
+      
+      return AuthException(code, message, error, authMethod);
+    }
+    
+    // For all other errors
+    String code = AuthErrorCodes.unknown;
+    String message = error.toString();
+    
+    if (authMethod == AuthMethod.google) {
+      code = AuthErrorCodes.googleSignInFailed;
+    } else if (authMethod == AuthMethod.apple) {
+      code = AuthErrorCodes.appleSignInFailed;
+    } else if (authMethod == AuthMethod.phone) {
+      code = AuthErrorCodes.phoneAuthFailed;
+    }
+    
+    return AuthException(code, message, error, authMethod);
   }
 }

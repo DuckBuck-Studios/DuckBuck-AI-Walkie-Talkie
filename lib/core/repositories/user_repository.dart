@@ -10,6 +10,7 @@ import '../services/notifications/notifications_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
+import '../services/api/api_service.dart';
 
 /// Repository to handle user data operations
 class UserRepository {
@@ -19,6 +20,7 @@ class UserRepository {
   final LoggerService _logger = LoggerService();
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
+  final ApiService _apiService;
   
   static const String _tag = 'USER_REPO'; // Tag for logs
 
@@ -28,9 +30,11 @@ class UserRepository {
     FirebaseFirestore? firestore,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
+    ApiService? apiService,
   }) : _firestore = firestore ?? serviceLocator<FirebaseDatabaseService>().firestoreInstance,
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
-       _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>();
+       _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
+       _apiService = apiService ?? serviceLocator<ApiService>();
 
   /// Get the current authenticated user
   UserModel? get currentUser {
@@ -44,22 +48,40 @@ class UserRepository {
     final firebaseUser = authService.currentUser;
     if (firebaseUser == null) return null;
     
+    // Track cache hit/miss for analytics
+    bool cacheHit = false;
+    
     // Check if we have valid cached user data
     final prefService = PreferencesService.instance;
     if (prefService.isCachedUserDataValid()) {
       final cachedData = prefService.getCachedUserData();
       if (cachedData != null && cachedData['uid'] == firebaseUser.uid) {
-        _logger.d(_tag, 'Using cached user data from preferences');
-        return UserModel.fromMap(cachedData);
+        // Check if cache is too old (more than 1 hour)
+        final lastUpdated = cachedData['_last_updated'] as int?;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (lastUpdated != null && now - lastUpdated < 3600000) { // 1 hour in ms
+          _logger.d(_tag, 'Using cached user data from preferences');
+          cacheHit = true;
+          return UserModel.fromMap(cachedData);
+        }
       }
     }
     
     // If no valid cached data, create from Firebase user
     final user = UserModel.fromFirebaseUser(firebaseUser);
     
-    // Cache the user data
+    // Cache the user data with timestamp
     try {
-      await prefService.cacheUserData(user.toMap());
+      final userMap = user.toMap();
+      userMap['_last_updated'] = DateTime.now().millisecondsSinceEpoch;
+      await prefService.cacheUserData(userMap);
+      _logger.d(_tag, 'User data refreshed and cached');
+      
+      // Log cache performance for analytics
+      _analytics.logEvent(
+        name: 'user_cache_performance',
+        parameters: {'cache_hit': cacheHit},
+      );
     } catch (e) {
       _logger.w(_tag, 'Failed to cache user data: ${e.toString()}');
     }
@@ -133,6 +155,30 @@ class UserRepository {
         isNewUser: isNewToFirestore,
       );
       
+      // Only send login notification for returning users, not for new users
+      // New users will get welcome email after profile completion
+      if (!isNewToFirestore) {
+        // Capture user data for background email sending
+        final userEmail = user.email ?? '';
+        final userName = user.displayName ?? 'User';
+        final userMetadata = user.metadata;
+        final loginTime = DateTime.now().toString();
+        
+        // Fire and forget email sending in the background (non-blocking)
+        Future(() {
+          _apiService.sendLoginNotificationEmail(
+            email: userEmail,
+            username: userName,
+            loginTime: loginTime,
+            metadata: userMetadata,
+          ).then((success) {
+            _logger.i(_tag, success ? 'Login notification sent successfully' : 'Failed to send login notification');
+          });
+        });
+      } else {
+        _logger.i(_tag, 'Skipping welcome email for new Google user - will send after profile completion');
+      }
+      
       // Set user ID in Crashlytics
       await _crashlytics.setUserIdentifier(user.uid);
       // Log user identifying info (non-PII)
@@ -204,6 +250,30 @@ class UserRepository {
         userId: user.uid,
         isNewUser: isNewToFirestore,
       );
+      
+      // Only send login notification for returning users, not for new users
+      // New users will get welcome email after profile completion
+      if (!isNewToFirestore) {
+        // Capture user data for background email sending
+        final userEmail = user.email ?? '';
+        final userName = user.displayName ?? 'User';
+        final userMetadata = user.metadata;
+        final loginTime = DateTime.now().toString();
+        
+        // Fire and forget email sending in the background (non-blocking)
+        Future(() {
+          _apiService.sendLoginNotificationEmail(
+            email: userEmail,
+            username: userName,
+            loginTime: loginTime,
+            metadata: userMetadata,
+          ).then((success) {
+            _logger.i(_tag, success ? 'Login notification sent successfully' : 'Failed to send login notification');
+          });
+        });
+      } else {
+        _logger.i(_tag, 'Skipping welcome email for new Apple user - will send after profile completion');
+      }
       
       // Set user ID in Crashlytics
       await _crashlytics.setUserIdentifier(user.uid);

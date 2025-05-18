@@ -152,4 +152,10 @@ class SessionManager {
     
     return remaining.isNegative ? Duration.zero : remaining;
   }
+  
+  /// Dispose of resources when the session manager is no longer needed
+  void dispose() {
+    _sessionTimer?.cancel();
+    _isTimerRunning = false;
+  }
 }

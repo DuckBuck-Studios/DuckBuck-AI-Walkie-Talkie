@@ -101,11 +101,7 @@ dependencies {
     
     // AppCompat dependency for SecurityVerificationActivity
     implementation("androidx.appcompat:appcompat:1.6.1")
-    
-    // Add explicit dependencies for Play Integrity and App Check
-    implementation("com.google.android.play:integrity:1.2.0")
-    implementation("com.google.firebase:firebase-appcheck-playintegrity:17.1.2")
-    implementation("com.google.firebase:firebase-appcheck-debug:17.1.2")
+     
     
     // Security-related dependencies
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
@@ -114,6 +110,9 @@ dependencies {
     
     // SafetyNet for additional device integrity checks
     implementation("com.google.android.gms:play-services-safetynet:18.0.1")
+    
+    // Google Play Integrity API
+    implementation("com.google.android.play:integrity:1.2.0")
     
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

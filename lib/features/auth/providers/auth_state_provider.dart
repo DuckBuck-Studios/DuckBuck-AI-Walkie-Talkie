@@ -1,6 +1,7 @@
 import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../../../core/models/user_model.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
@@ -20,6 +21,7 @@ class AuthStateProvider extends ChangeNotifier {
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
+  StreamSubscription<UserModel?>? _authSubscription;
 
   /// Creates a new AuthStateProvider
   AuthStateProvider({
@@ -37,8 +39,10 @@ class AuthStateProvider extends ChangeNotifier {
     // Initialize notification service
     _notificationsService.initialize();
 
-    // Listen for auth changes
-    _userRepository.userStream.listen((user) {
+    // Listen for auth changes - properly store subscription for disposal
+    _authSubscription = _userRepository.userStream.listen((user) {
+      // Only notify if user actually changed to avoid excessive rebuilds
+      final userChanged = _currentUser?.uid != user?.uid;
       _currentUser = user;
 
       // When user logs in, register FCM token and update login state in preferences
@@ -48,7 +52,10 @@ class AuthStateProvider extends ChangeNotifier {
         PreferencesService.instance.setLoggedIn(true);
       }
 
-      notifyListeners();
+      // Only notify listeners if something meaningful changed
+      if (userChanged) {
+        notifyListeners();
+      }
     });
 
     // Load current user immediately if available
@@ -353,8 +360,14 @@ class AuthStateProvider extends ChangeNotifier {
       debugPrint('🔐 AUTH PROVIDER: User onboarding marked as complete');
     } catch (e) {
       _errorMessage = e.toString();
-      debugPrint('🔐 AUTH PROVIDER ERROR: Failed to mark onboarding complete: $e');
       rethrow;
     }
+  }
+  
+  @override
+  void dispose() {
+    // Cancel auth subscription to prevent memory leaks
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

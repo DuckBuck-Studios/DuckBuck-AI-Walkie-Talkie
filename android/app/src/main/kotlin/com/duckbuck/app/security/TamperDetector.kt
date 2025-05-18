@@ -142,8 +142,7 @@ class TamperDetector(private val context: Context) {
      */
     private fun verifyAppInfo(): Boolean {
         try {
-            val applicationInfo = context.applicationInfo
-            // Get package info but we'll just use it for logging here
+            val applicationInfo = context.applicationInfo 
             context.packageManager.getPackageInfo(context.packageName, 0)
             
             // Check for suspicious flags

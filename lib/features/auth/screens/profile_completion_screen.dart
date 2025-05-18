@@ -9,6 +9,7 @@ import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/firebase/firebase_storage_service.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
+import 'package:duckbuck/core/services/api/api_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/features/auth/providers/auth_state_provider.dart';
 
@@ -224,6 +225,50 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
 
       // Mark user onboarding as complete in Firestore
       await authProvider.markUserOnboardingComplete();
+      
+      // Send welcome email for new social auth users without blocking the UI flow
+      final user = authProvider.currentUser;
+      if (user != null && user.metadata != null && 
+          (user.metadata!['authMethod'] == 'google' || user.metadata!['authMethod'] == 'apple')) {
+        
+        // Get updated user name (preferring the manually entered name)
+        final userName = updatingName ? _nameController.text.trim() : (user.displayName ?? 'User');
+        final userEmail = user.email ?? '';
+        final userMetadata = user.metadata;
+        
+        // Fire and forget email sending in the background
+        Future(() {
+          try {
+            // Get service locator instance to access API service
+            final apiService = serviceLocator<ApiService>();
+            
+            // Send welcome email with updated user info without awaiting
+            apiService.sendWelcomeEmail(
+              email: userEmail,
+              username: userName,
+              metadata: userMetadata,
+            ).then((success) {
+              _analyticsService.logEvent(
+                name: 'welcome_email_sent',
+                parameters: {
+                  'success': success ? '1' : '0',
+                  'auth_method': userMetadata!['authMethod'] ?? 'unknown',
+                  'has_custom_name': updatingName ? '1' : '0',
+                  'timestamp': DateTime.now().toIso8601String(),
+                },
+              );
+              
+              if (success) {
+                debugPrint('✅ Welcome email sent successfully to $userEmail with name: $userName');
+              } else {
+                debugPrint('❌ Failed to send welcome email to $userEmail');
+              }
+            });
+          } catch (e) {
+            debugPrint('❌ Error sending welcome email: $e');
+          }
+        });
+      }
 
       // Hide loading indicator
       setState(() {

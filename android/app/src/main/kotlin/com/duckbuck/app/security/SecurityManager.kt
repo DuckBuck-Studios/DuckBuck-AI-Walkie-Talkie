@@ -113,8 +113,7 @@ class SecurityManager(private val context: Context, private val activity: Activi
                 logSSLPinningDomains()
             }
             
-            // Configure App Check with Google Play Integrity
-            integrityChecker.configureAppCheck(isDevelopment)
+            // App Check configuration removed - now managed by Dart side
             
             // Verify secure storage is working
             val prefsValid = testSecurePreferences()

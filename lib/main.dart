@@ -177,8 +177,14 @@ Future<void> _syncAuthState() async {
     debugPrint(
       'Auth state mismatch detected and fixed: Cleared invalid login state',
     );
+  } else if (firebaseUser != null && !isLoggedInPrefs) {
+    // Firebase says logged in but SharedPrefs says logged out - update preferences
+    await PreferencesService.instance.setLoggedIn(true);
+    debugPrint(
+      'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state',
+    );
   } else {
-    // Update shared preferences to match Firebase auth state
+    // States match, ensure they're both up to date
     await PreferencesService.instance.setLoggedIn(firebaseUser != null);
     debugPrint(
       'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}',

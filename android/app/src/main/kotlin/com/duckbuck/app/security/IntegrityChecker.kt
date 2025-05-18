@@ -6,7 +6,6 @@ import android.util.Log
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityTokenRequest
 import com.google.android.play.core.integrity.IntegrityTokenResponse
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -73,20 +72,7 @@ class IntegrityChecker(private val context: Context) {
         }
     }
     
-    /**
-     * Configure Firebase App Check with Play Integrity provider
-     * @param isDevelopmentMode Whether to use debug mode (testing) or production mode
-     */
-    fun configureAppCheck(isDevelopmentMode: Boolean = false) {
-        try {
-            // When using Play Integrity with Firebase App Check,
-            // we don't need to implement the complete flow here
-            // as Firebase handles most of it. This is just a helper method.
-            Log.d(tag, "Configured App Check with Play Integrity (DevMode: $isDevelopmentMode)")
-        } catch (e: Exception) {
-            Log.e(tag, "Error configuring App Check: ${e.message}", e)
-        }
-    }
+    // App Check configuration removed - now managed by Dart side
 
     /**
      * Generate a local nonce for testing purposes.

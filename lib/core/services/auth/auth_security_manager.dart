@@ -13,19 +13,41 @@ import '../logger/logger_service.dart';
 class AuthSecurityManager {
   final AuthServiceInterface _authService;
   final UserRepository _userRepository;
+  final LoggerService _logger;
   late SessionManager _sessionManager;
   static const String _tag = 'AUTH_SECURITY';
   
-  // Get logger service from service locator
-  LoggerService get _logger => serviceLocator<LoggerService>();
+  // Singleton implementation with improved dependency injection for testability
+  static final AuthSecurityManager _instance = AuthSecurityManager._internal(
+    authService: serviceLocator<AuthServiceInterface>(),
+    userRepository: serviceLocator<UserRepository>(),
+    logger: serviceLocator<LoggerService>(),
+  );
   
-  // Singleton implementation
-  static final AuthSecurityManager _instance = AuthSecurityManager._internal();
-  factory AuthSecurityManager() => _instance;
+  factory AuthSecurityManager({
+    AuthServiceInterface? authService,
+    UserRepository? userRepository,
+    LoggerService? logger,
+  }) {
+    if (authService != null || userRepository != null || logger != null) {
+      // If dependencies are provided, create a new instance for testing/custom use
+      return AuthSecurityManager._internal(
+        authService: authService ?? serviceLocator<AuthServiceInterface>(),
+        userRepository: userRepository ?? serviceLocator<UserRepository>(),
+        logger: logger ?? serviceLocator<LoggerService>(),
+      );
+    }
+    // Otherwise return the singleton instance
+    return _instance;
+  }
   
-  AuthSecurityManager._internal() 
-    : _authService = serviceLocator<AuthServiceInterface>(),
-      _userRepository = serviceLocator<UserRepository>();
+  AuthSecurityManager._internal({
+    required AuthServiceInterface authService,
+    required UserRepository userRepository,
+    required LoggerService logger,
+  }) : _authService = authService,
+       _userRepository = userRepository,
+       _logger = logger;
   
   /// Initialize the security manager
   Future<void> initialize({required Function() onSessionExpired}) async {
@@ -99,6 +121,28 @@ class AuthSecurityManager {
   /// Get remaining session time
   Duration get remainingSessionTime => _sessionManager.remainingTime;
   
-  /// Check if session is active
-  bool get isSessionActive => _sessionManager.isSessionActive;
+  /// Dispose resources to prevent memory leaks
+  void dispose() {
+    _sessionManager.dispose();
+    _logger.d(_tag, 'Auth security manager resources released');
+  }
+  
+  /// Validate and update session timeout duration
+  /// Returns true if timeout was updated successfully
+  Future<bool> updateSessionTimeout(int seconds) async {
+    // Ensure timeout value is within reasonable bounds (5 min to 4 hours)
+    if (seconds < 300 || seconds > 14400) {
+      _logger.w(_tag, 'Invalid session timeout value: $seconds seconds');
+      return false;
+    }
+    
+    try {
+      await _sessionManager.updateSessionTimeout(seconds);
+      _logger.d(_tag, 'Session timeout updated to $seconds seconds');
+      return true;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to update session timeout', e);
+      return false;
+    }
+  }
 }

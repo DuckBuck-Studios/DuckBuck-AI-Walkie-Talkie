@@ -39,6 +39,7 @@ dependencies:
   pin_code_fields: ^8.0.1
   pinput: ^5.0.1
   sms_autofill: ^2.4.1
+  dio: ^5.8.0+1
 
 dev_dependencies:
   flutter_test:
