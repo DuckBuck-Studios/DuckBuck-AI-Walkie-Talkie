@@ -15,6 +15,7 @@ import 'core/services/crashlytics_consent_manager.dart';
 import 'core/providers/crashlytics_consent_provider.dart';
 import 'core/services/auth/auth_security_manager.dart'; 
 import 'core/services/security/app_security_service.dart';
+import 'core/repositories/user_repository.dart';
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -244,10 +245,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Handle session timeout by logging the user out
     if (!mounted) return;
     
-    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
-    authProvider.signOut().then((_) {
+    // Use serviceLocator to get the UserRepository directly instead of using Provider
+    // This avoids the Provider dependency in this context
+    final userRepository = serviceLocator<UserRepository>();
+    userRepository.signOut().then((_) {
       if (!mounted) return;
       
+      // Show session expired message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Session expired. Please sign in again.'),
