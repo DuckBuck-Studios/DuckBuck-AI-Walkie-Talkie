@@ -10,14 +10,12 @@ import 'firebase/firebase_analytics_service.dart';
 import 'firebase/firebase_crashlytics_service.dart';
 import 'firebase/firebase_app_check_service.dart';
 import 'crashlytics_consent_manager.dart';
-import 'notifications/notifications_service.dart';
-import 'friend/friend_service.dart';
+import 'notifications/notifications_service.dart'; 
 import 'security/app_security_service.dart';
 import 'api/api_service.dart';
-import '../repositories/user_repository.dart';
-import '../repositories/friend_repository.dart';
-import '../repositories/message_repository.dart';
-import 'message/message_cache_service.dart';
+import 'user/user_service_interface.dart';
+import 'user/firebase_user_service.dart';
+import '../repositories/user_repository.dart';  
 import 'logger/logger_service.dart';
 
 
@@ -80,35 +78,10 @@ Future<void> setupServiceLocator() async {
   serviceLocator.registerLazySingleton<UserRepository>(
     () => UserRepository(
       authService: serviceLocator<AuthServiceInterface>(),
+      userService: serviceLocator<UserServiceInterface>(),
       analytics: serviceLocator<FirebaseAnalyticsService>(),
-    ),
-  );
-  
-  // Register friend service
-  serviceLocator.registerLazySingleton<FriendService>(
-    () => FriendService(databaseService: serviceLocator<FirebaseDatabaseService>()),
-  );
-  
-  // Register friend repository
-  serviceLocator.registerLazySingleton<FriendRepository>(
-    () => FriendRepository(
-      friendService: serviceLocator<FriendService>(),
-      userRepository: serviceLocator<UserRepository>(),
-    ),
-  );
-  
-  // Register message cache service
-  serviceLocator.registerLazySingleton<MessageCacheService>(
-    () => MessageCacheService(),
-  );
-  
-  // Register message repository
-  serviceLocator.registerLazySingleton<MessageRepository>(
-    () => MessageRepository(
-      databaseService: serviceLocator<FirebaseDatabaseService>(),
-      storageService: serviceLocator<FirebaseStorageService>(),
-      friendService: serviceLocator<FriendService>(),
-      cacheService: serviceLocator<MessageCacheService>(),
+      crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
+      apiService: serviceLocator<ApiService>(),
     ),
   );
    
@@ -132,6 +105,14 @@ Future<void> setupServiceLocator() async {
   // Register application security service
   serviceLocator.registerLazySingleton<AppSecurityService>(
     () => AppSecurityService(),
+  );
+  
+  // Register user service
+  serviceLocator.registerLazySingleton<UserServiceInterface>(
+    () => FirebaseUserService(
+      databaseService: serviceLocator<FirebaseDatabaseService>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
   );
 
   // Add more service registrations here as needed

@@ -93,9 +93,13 @@ class SecurityManager(private val context: Context, private val activity: Activi
             
             // Verify app signature
             val signatureValid = verifyAppSignature()
-            if (!signatureValid && !isDevelopment) {
-                Log.e(TAG, "App signature verification failed")
-                return false
+            if (!signatureValid) {
+                if (isDevelopment) {
+                    Log.w(TAG, "App signature verification failed but continuing in development mode")
+                } else {
+                    Log.e(TAG, "App signature verification failed in production mode")
+                    return false
+                }
             }
             
             // Check for root/jailbreak
@@ -163,7 +167,8 @@ class SecurityManager(private val context: Context, private val activity: Activi
         try {
             when (call.method) {
                 "performSecurityChecks" -> {
-                    val passed = performSecurityChecks()
+                    val isDevelopment = call.argument<Boolean>("isDevelopment") ?: false
+                    val passed = performSecurityChecks(isDevelopment)
                     result.success(passed)
                 }
                 "enableScreenCaptureProtection" -> {
@@ -240,6 +245,10 @@ class SecurityManager(private val context: Context, private val activity: Activi
                     val signatureValid = verifyAppSignature()
                     result.success(signatureValid)
                 }
+                "getAppSignatureHash" -> {
+                    val signature = getAppSignatureHash()
+                    result.success(signature)
+                }
                 "requestIntegrityToken" -> {
                     val nonce = call.argument<String>("nonce")
                     
@@ -291,12 +300,19 @@ class SecurityManager(private val context: Context, private val activity: Activi
 
     /**
      * Perform security checks for the app
+     * @param isDevelopment Set to true if running in a development environment
      * @return True if all checks pass, false otherwise
      */
-    private fun performSecurityChecks(): Boolean {
+    private fun performSecurityChecks(isDevelopment: Boolean = false): Boolean {
         try {
             // Check if app signatures are valid
             val signatureValid = verifyAppSignature()
+            if (!signatureValid && !isDevelopment) {
+                Log.e(TAG, "App signature verification failed in production mode")
+                return false
+            } else if (!signatureValid) {
+                Log.w(TAG, "App signature verification failed but continuing in development mode")
+            }
             
             // Check if secure preferences are working
             val prefsValid = testSecurePreferences()
@@ -578,6 +594,14 @@ class SecurityManager(private val context: Context, private val activity: Activi
         return tamperDetector.verifyAppSignature()
     }
     
+    /**
+     * Get the app's signature hash for debugging purposes
+     * @return The signature hash string
+     */
+    fun getAppSignatureHash(): String {
+        return tamperDetector.getAppSignature()
+    }
+
     /**
      * Test SSL pinning by making a secure request to a known endpoint
      */

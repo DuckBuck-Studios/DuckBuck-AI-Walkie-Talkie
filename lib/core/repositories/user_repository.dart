@@ -11,12 +11,12 @@ import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
 import '../services/api/api_service.dart';
+import '../services/user/user_service_interface.dart';
 
 /// Repository to handle user data operations
 class UserRepository {
   final AuthServiceInterface authService;
-  final FirebaseFirestore _firestore;
-  final String _userCollection = 'users';
+  final UserServiceInterface _userService;
   final LoggerService _logger = LoggerService();
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
@@ -27,11 +27,11 @@ class UserRepository {
   /// Creates a new UserRepository
   UserRepository({
     required this.authService, 
-    FirebaseFirestore? firestore,
+    UserServiceInterface? userService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
     ApiService? apiService,
-  }) : _firestore = firestore ?? serviceLocator<FirebaseDatabaseService>().firestoreInstance,
+  }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
        _apiService = apiService ?? serviceLocator<ApiService>();
@@ -661,16 +661,10 @@ class UserRepository {
   /// Get user data from Firestore
   Future<UserModel?> getUserData(String uid) async {
     try {
-      final doc = await _firestore.collection(_userCollection).doc(uid).get();
-      if (!doc.exists) return null;
-
-      return UserModel.fromMap(doc.data()!);
+      return await _userService.getUserData(uid);
     } catch (e) {
-      throw AuthException(
-        AuthErrorCodes.unknown,
-        'Failed to get user data',
-        e
-      );
+      _logger.e(_tag, 'Failed to get user data: ${e.toString()}');
+      rethrow;
     }
   }
   
@@ -688,100 +682,56 @@ class UserRepository {
         }
       }
       
-      // If no valid cached data, fetch from Firestore
-      final docRef = _firestore.collection(_userCollection).doc(uid);
+      // If no valid cached data, fetch from service
+      final user = await _userService.getUserWithSelectiveData(uid, fields);
       
-      // Use Firebase's field selection for more efficient queries
-      final doc = await docRef.get(GetOptions(
-        source: Source.serverAndCache, // Try cache first, then server
-      ));
+      if (user != null) {
+        // Cache this data for future use
+        prefService.cacheUserData(user.toMap());
+      }
       
-      if (!doc.exists) return null;
-      
-      final userData = doc.data()!;
-      
-      // Cache this data for future use
-      prefService.cacheUserData(userData);
-      
-      return UserModel.fromMap(userData);
+      return user;
     } catch (e) {
       _logger.e(_tag, 'Failed to get selective user data', e);
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to get user data',
-        e
-      );
+      rethrow;
     }
   }
 
   /// Create user record in Firestore
   Future<void> _createUserData(UserModel user) async {
     try {
-      // Extract the provider ID from user metadata if available
+      await _userService.createUserData(user);
+      
       final providerId = user.metadata?['providerId'] as String? ?? 'unknown';
-      final authMethod = user.metadata?['authMethod'] as String? ?? 'unknown';
-      
-      // Convert user to map with only relevant fields based on auth method
-      final userMap = user.toMap();
-      
-      // Log which auth method is being used
-      _logger.i(_tag, 'Creating new user with auth method: $authMethod');
-      
-      await _firestore.collection(_userCollection).doc(user.uid).set({
-        ...userMap, // Now contains only relevant fields based on auth method
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isNewUser': true, // Explicitly mark as a new user 
-      });
-      
       _logger.i(_tag, 'Created new user with auth provider: $providerId');
     } catch (e) {
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to create user data',
-        e
-      );
+      _logger.e(_tag, 'Failed to create user data: ${e.toString()}');
+      rethrow;
     }
   }
 
   /// Update existing user record in Firestore
   Future<void> _updateUserData(UserModel user) async {
     try {
-      await _updateUserDataWithoutOverridingFCM(user);
-    } catch (e) {
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to update user data',
-        e
+      // First retrieve the current user data to get the fcmTokenData
+      final currentData = await _userService.getUserData(user.uid);
+      
+      // Create an updated user with preserved FCM data
+      final updatedUser = user.copyWith(
+        fcmTokenData: currentData?.fcmTokenData,
       );
-    }
-  }
-  
-  /// Update user data in Firestore without overriding FCM token data
-  Future<void> _updateUserDataWithoutOverridingFCM(UserModel user) async {
-    try {
-      // Get user map with only relevant fields based on auth method in metadata
-      final userMap = user.toMap();
       
-      // Then exclude fcmTokenData to prevent overwriting it
-      userMap.remove('fcmTokenData'); // Don't overwrite FCM token data
-      
-      await _firestore.collection(_userCollection).doc(user.uid).update({
-        ...userMap,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastLoggedIn': FieldValue.serverTimestamp(),
-      });
+      await _userService.updateUserData(updatedUser);
       
       final authMethod = user.metadata?['authMethod'] as String? ?? 'unknown';
       _logger.i(_tag, 'Updated user data with auth method: $authMethod');
     } catch (e) {
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to update user data',
-        e
-      );
+      _logger.e(_tag, 'Failed to update user data: ${e.toString()}');
+      rethrow;
     }
   }
+  
+  // Removed _updateUserDataWithoutOverridingFCM method as its logic is now in _updateUserData
 
   /// Create or update user data in Firestore
   /// Returns true if this is a new user (first time in Firestore)
@@ -790,30 +740,11 @@ class UserRepository {
       _logger.d(
         _tag, 'Checking if user ${user.uid} exists in Firestore',
       );
-      final doc =
-          await _firestore.collection(_userCollection).doc(user.uid).get();
-
-      if (doc.exists) {
-        _logger.d(
-          _tag, 'User ${user.uid} EXISTS in Firestore, updating data',
-        );
-        // Use the FCM-safe update method
-        await _updateUserDataWithoutOverridingFCM(user);
-        return false; // Existing user
-      } else {
-        _logger.d(
-          _tag, 'User ${user.uid} DOES NOT EXIST in Firestore, creating new user',
-        );
-        await _createUserData(user);
-        return true; // New user
-      }
+      
+      return await _userService.createOrUpdateUserData(user);
     } catch (e) {
       _logger.e(_tag, 'CHECKING USER EXISTENCE ERROR: ${e.toString()}');
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to create or update user data',
-        e
-      );
+      rethrow;
     }
   }
 
@@ -822,21 +753,9 @@ class UserRepository {
   /// Check if a user is new (doesn't exist in Firestore or has isNewUser flag)
   Future<bool> checkIfUserIsNew(String uid) async {
     try {
-      _logger.d(_tag, 'Checking if user $uid exists in Firestore');
-      final doc = await _firestore.collection(_userCollection).doc(uid).get();
-
-      // If document doesn't exist, user is definitely new
-      if (!doc.exists) {
-        _logger.i(_tag, 'User document does NOT exist in Firestore - user is new');
-        return true;
-      }
-
-      // If document exists but has isNewUser flag set to true, also consider as new
-      final data = doc.data();
-      final isMarkedAsNew = data != null && data['isNewUser'] == true;
+      _logger.d(_tag, 'Checking if user $uid is new');
       
-      _logger.d(_tag, 'User document exists, isNewUser flag: $isMarkedAsNew');
-      return isMarkedAsNew;
+      return await _userService.checkIfUserIsNew(uid);
     } catch (e) {
       _logger.e(_tag, 'USER REPO ERROR: ${e.toString()}');
       // In case of error, default to treating the user as new to ensure profile completion
@@ -858,10 +777,7 @@ class UserRepository {
         },
       );
       
-      await _firestore.collection(_userCollection).doc(uid).update({
-        'isNewUser': FieldValue.delete(), // Remove the isNewUser field entirely
-        'onboardingCompletedAt': FieldValue.serverTimestamp(),
-      });
+      await _userService.markUserOnboardingComplete(uid);
       
       // Set analytics user property to indicate completed onboarding
       await _analytics.setUserProperty(
@@ -881,11 +797,7 @@ class UserRepository {
         },
       );
       
-      throw AuthException(
-        AuthErrorCodes.databaseError,
-        'Failed to mark user onboarding as complete',
-        e
-      );
+      rethrow;
     }
   }
 }

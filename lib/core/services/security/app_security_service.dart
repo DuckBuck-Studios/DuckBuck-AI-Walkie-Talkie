@@ -39,11 +39,28 @@ class AppSecurityService {
   /// Returns true if all checks pass, false otherwise
   Future<bool> performSecurityChecks() async {
     try {
-      final result = await _channel.invokeMethod<bool>('performSecurityChecks');
+      // Pass whether we're in debug mode to the platform code
+      final bool isDebug = const bool.fromEnvironment('dart.vm.product') == false;
+      
+      final result = await _channel.invokeMethod<bool>('performSecurityChecks', {
+        'isDevelopment': isDebug,
+      });
+      
       if (result == true) {
         _logger.d(_tag, '✓ Security checks completed successfully');
       } else {
         _logger.w(_tag, '⚠️ Some security checks failed');
+        
+        // If in debug mode, log additional information about the signature verification
+        if (isDebug) {
+          try {
+            final signatureValid = await _channel.invokeMethod<bool>('verifyAppSignature') ?? false;
+            _logger.d(_tag, 'Debug mode - App signature verification: ${signatureValid ? 'passed' : 'failed'}');
+          } catch (e) {
+            // Just log and continue
+            _logger.d(_tag, 'Could not verify app signature separately: $e');
+          }
+        }
       }
       return result ?? false;
     } catch (e) {
@@ -56,12 +73,13 @@ class AppSecurityService {
   Future<bool> enableScreenCaptureProtection() async {
     try {
       final result = await _channel.invokeMethod<bool>('enableScreenCaptureProtection');
-      if (result == true) {
+      final success = result ?? false;
+      if (success) {
         _logger.i(_tag, '🔒 Screen capture protection enabled');
       } else {
         _logger.w(_tag, '⚠️ Failed to enable screen capture protection');
       }
-      return result ?? false;
+      return success;
     } catch (e) {
       _logger.e(_tag, '❌ Failed to enable screen capture protection', e);
       return false;
@@ -72,10 +90,11 @@ class AppSecurityService {
   Future<bool> disableScreenCaptureProtection() async {
     try {
       final result = await _channel.invokeMethod<bool>('disableScreenCaptureProtection');
-      if (result == true) {
+      final success = result ?? false;
+      if (success) {
         _logger.d(_tag, 'Screen capture protection disabled');
       }
-      return result ?? false;
+      return success;
     } catch (e) {
       _logger.e(_tag, '❌ Failed to disable screen capture protection', e);
       return false;
@@ -159,6 +178,33 @@ class AppSecurityService {
     } catch (e) {
       _logger.e(_tag, '❌ Failed to clear all secure data', e);
       return false;
+    }
+  }
+  
+  /// Directly verify the app signature 
+  /// Useful for debugging signature issues in development
+  Future<String?> verifyAppSignatureWithDetails() async {
+    try {
+      final bool isDebug = const bool.fromEnvironment('dart.vm.product') == false;
+      if (!isDebug) {
+        _logger.w(_tag, 'App signature details should only be checked in debug mode');
+        return null;
+      }
+      
+      // Get actual signature hash
+      final signature = await _channel.invokeMethod<String>('getAppSignatureHash');
+      
+      // Check if it's valid
+      final isValid = await _channel.invokeMethod<bool>('verifyAppSignature') ?? false;
+      
+      final status = isValid ? 'valid ✓' : 'invalid ✗';
+      final result = 'App signature ($status): $signature';
+      
+      _logger.d(_tag, result);
+      return result;
+    } catch (e) {
+      _logger.e(_tag, '❌ Failed to verify app signature details', e);
+      return null;
     }
   }
 }
