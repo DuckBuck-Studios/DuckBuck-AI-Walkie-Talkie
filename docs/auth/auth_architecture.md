@@ -11,159 +11,193 @@ The architecture follows a layered design pattern with clear separation of conce
 
 ## Architecture Diagram
 
+> **Viewing Tip:** For optimal viewing, click the diagram to expand to full screen. You can zoom in/out and pan around to see details. The diagram uses color coding to distinguish between different layers of the architecture.
+
 ```mermaid
-graph TD
+%%{init: {'theme': 'neutral', 'flowchart': {'htmlLabels': true, 'curve': 'basis', 'padding': 30, 'useMaxWidth': false, 'diagramPadding': 30, 'rankSpacing': 80, 'nodeSpacing': 80}}}%%
+flowchart TD
+    %% Configuration for larger display
+    linkStyle default stroke-width:1.5px,fill:none
+    
     %% UI Layer
-    subgraph "UI Layer"
-        WS[Welcome Screen]
-        ABS[Auth Bottom Sheet]
-        PCS[Profile Completion Screen]
-        HS[Home Screen]
-        PS[Preferences Screen]
+    subgraph "UI Layer" ["UI Layer"]
+        direction LR
+        WS["Welcome Screen<br/>🏠"] --- ABS["Auth Bottom Sheet<br/>🔐"]
+        ABS --- PCS["Profile Completion<br/>👤"]
+        PCS --- HS["Home Screen<br/>📱"]
+        HS --- PS["Preferences<br/>⚙️"]
     end
     
     %% Provider Layer
-    subgraph "Provider Layer"
-        ASP[Auth State Provider]
-        USP[User Settings Provider]
+    subgraph "Provider Layer" ["Provider Layer"]
+        direction LR
+        ASP["Auth State Provider<br/>🔄"]
+        USP["User Settings Provider<br/>🛠️"]
+        ASP --- USP
     end
     
     %% Repository Layer
-    subgraph "Repository Layer"
-        UR[User Repository]
+    subgraph "Repository Layer" ["Repository Layer"]
+        UR["User Repository<br/>📂"]
     end
     
     %% Service Layer
-    subgraph "Service Layer"
+    subgraph "Service Layer" ["Service Layer"]
+        direction TB
         %% Auth Services
-        subgraph "Auth Services"
-            AuthService[Auth Service Interface]
-            FireAuth[Firebase Auth Service]
-            SecManager[Auth Security Manager]
-            SessManager[Session Manager]
+        subgraph "Auth Services" ["Auth Services"]
+            direction LR
+            AuthService["Auth Service<br/>Interface<br/>🔑"] --- FireAuth["Firebase Auth<br/>Service<br/>🔥"]
+            FireAuth --- SecManager["Auth Security<br/>Manager<br/>🛡️"]
+            SecManager --- SessManager["Session<br/>Manager<br/>⏱️"]
         end
         
         %% User Data Services
-        subgraph "User Services"
-            UserService[User Service Interface]
-            FireUser[Firebase User Service]
-            PrefService[Preferences Service]
+        subgraph "User Services" ["User Services"]
+            direction LR
+            UserService["User Service<br/>Interface<br/>👥"] --- FireUser["Firebase User<br/>Service<br/>📊"]
+            FireUser --- PrefService["Preferences<br/>Service<br/>💾"]
         end
         
         %% Support Services
-        subgraph "Support Services"
-            AnalService[Analytics Service]
-            ApiService[API Service]
-            CrashService[Crashlytics Service]
-            NotifService[Notifications Service]
-            LogService[Logger Service]
+        subgraph "Support Services" ["Support Services"]
+            direction LR
+            AnalService["Analytics<br/>Service<br/>📈"] --- ApiService["API<br/>Service<br/>🌐"]
+            ApiService --- CrashService["Crashlytics<br/>Service<br/>🐛"]
+            CrashService --- NotifService["Notifications<br/>Service<br/>🔔"]
+            NotifService --- LogService["Logger<br/>Service<br/>📝"]
         end
     end
     
     %% Model Layer
-    subgraph "Model Layer"
-        UserModel[User Model]
-        AuthExceptions[Auth Exceptions]
-        TokenModel[Auth Token Model]
+    subgraph "Model Layer" ["Model Layer"]
+        direction LR
+        UserModel["User Model<br/>👤"] --- AuthExceptions["Auth Exceptions<br/>⚠️"]
+        AuthExceptions --- TokenModel["Auth Token Model<br/>🔑"]
     end
     
     %% External Services
-    subgraph "External Services"
-        Firebase[Firebase Auth]
-        GoogleAuth[Google Sign-In SDK]
-        AppleAuth[Apple Sign-In SDK]
-        Firestore[Firestore]
-        FCM[Firebase Cloud Messaging]
+    subgraph "External Services" ["External Services"]
+        direction LR
+        Firebase["Firebase Auth<br/>🔥"] --- GoogleAuth["Google Sign-In<br/>SDK<br/>G"]
+        GoogleAuth --- AppleAuth["Apple Sign-In<br/>SDK<br/>🍎"]
+        AppleAuth --- Firestore["Firestore<br/>☁️"]
+        Firestore --- FCM["Firebase Cloud<br/>Messaging<br/>📨"]
     end
     
-    %% UI Flow
-    WS --> ABS
-    ABS --> PCS
-    PCS --> HS
-    WS -.-> HS
-    HS --> PS
+    %% UI Flow - Bold and colored connections
+    WS ===> ABS
+    ABS ===> PCS
+    PCS ===> HS
+    WS -..-> HS
+    HS ---> PS
     
-    %% Provider Dependencies
-    ABS --> ASP
-    PCS --> ASP
-    HS --> ASP
-    PS --> ASP
-    PS --> USP
+    %% Provider Dependencies - Using different arrow styles
+    ABS -.->|"uses"| ASP
+    PCS -.->|"uses"| ASP
+    HS -.->|"uses"| ASP
+    PS -.->|"uses"| ASP
+    PS -.->|"uses"| USP
     
-    %% Provider to Repository
-    ASP --> UR
-    ASP --> SecManager
-    ASP --> NotifService
-    USP --> UR
+    %% Provider to Repository - Thicker connections
+    ASP ===>|"manages"| UR
+    ASP -.->|"uses"| SecManager
+    ASP -.->|"uses"| NotifService
+    USP ===>|"uses"| UR
     
-    %% Repository Dependencies
-    UR --> AuthService
-    UR --> UserService
-    UR --> PrefService
-    UR --> AnalService
-    UR --> CrashService
-    UR --> LogService
-    UR --> ApiService
+    %% Repository Dependencies - Well-spaced connections
+    UR ====>|"auth"| AuthService
+    UR ====>|"user data"| UserService
+    UR --->|"local storage"| PrefService
+    UR --->|"tracking"| AnalService
+    UR --->|"error logging"| CrashService
+    UR --->|"diagnostics"| LogService
+    UR --->|"backend"| ApiService
     
-    %% Service Implementation
-    AuthService --> FireAuth
-    UserService --> FireUser
+    %% Service Implementation - Clear implementation connections
+    AuthService -.->|"implements"| FireAuth
+    UserService -.->|"implements"| FireUser
     
-    %% Service to External
-    FireAuth --> Firebase
-    FireAuth --> GoogleAuth
-    FireAuth --> AppleAuth
-    FireUser --> Firestore
-    NotifService --> FCM
+    %% Service to External - External service connections
+    FireAuth ===>|"uses"| Firebase
+    FireAuth --->|"integrates"| GoogleAuth
+    FireAuth --->|"integrates"| AppleAuth
+    FireUser ===>|"stores in"| Firestore
+    NotifService ===>|"sends via"| FCM
     
-    %% Security Components
-    SecManager --> AuthService
-    SecManager --> UR
-    SecManager --> SessManager
-    SecManager --> LogService
+    %% Security Components - Security relationships
+    SecManager -.->|"secures"| AuthService
+    SecManager -.->|"validates"| UR
+    SecManager ===>|"manages"| SessManager
+    SecManager --->|"logs via"| LogService
     
-    %% Models Usage
-    FireAuth --> UserModel
-    FireAuth --> TokenModel
-    FireUser --> UserModel
-    UR --> UserModel
-    UR --> TokenModel
-    ASP --> UserModel
-    SecManager --> TokenModel
-    FireAuth --> AuthExceptions
-    FireUser --> AuthExceptions
-    ASP --> AuthExceptions
+    %% Models Usage - Dotted lines for model usage
+    FireAuth -.-|"uses"| UserModel
+    FireAuth -.-|"uses"| TokenModel
+    FireUser -.-|"uses"| UserModel
+    UR -.-|"manages"| UserModel
+    UR -.-|"manages"| TokenModel
+    ASP -.-|"exposes"| UserModel
+    SecManager -.-|"validates"| TokenModel
+    FireAuth -.-|"throws"| AuthExceptions
+    FireUser -.-|"throws"| AuthExceptions
+    ASP -.-|"handles"| AuthExceptions
     
-    %% Data Flow for Sign-In
-    ABS -->|"1. Sign-In Request"| ASP
-    ASP -->|"2. Process Auth"| UR
-    UR -->|"3. Authenticate"| AuthService
-    AuthService -->|"4. Provider Auth"| Firebase
-    Firebase -->|"5. Auth Response"| AuthService
-    AuthService -->|"6. User Data"| UR
-    UR -->|"7. Create/Update User"| UserService
-    UserService -->|"8. Store User Data"| Firestore
-    UR -->|"9. Cache User"| PrefService
-    UR -->|"10. User Object"| ASP
-    ASP -->|"11. Auth State Update"| ABS
-    UR -->|"12. Analytics Event"| AnalService
-    UR -->|"13. Register Device"| NotifService
-    SecManager -->|"14. Initialize Session"| SessManager
+    %% Data Flow for Sign-In - Numbered sequential flow with curved lines
+    ABS -->|"1️⃣ Sign-In Request"| ASP
+    ASP -->|"2️⃣ Process Auth"| UR
+    UR -->|"3️⃣ Authenticate"| AuthService
+    AuthService -->|"4️⃣ Provider Auth"| Firebase
+    Firebase -->|"5️⃣ Auth Response"| AuthService
+    AuthService -->|"6️⃣ User Data"| UR
+    UR -->|"7️⃣ Create/Update User"| UserService
+    UserService -->|"8️⃣ Store User Data"| Firestore
+    UR -->|"9️⃣ Cache User"| PrefService
+    UR -->|"🔟 User Object"| ASP
+    ASP -->|"1️⃣1️⃣ Auth State Update"| ABS
+    UR -->|"1️⃣2️⃣ Analytics Event"| AnalService
+    UR -->|"1️⃣3️⃣ Register Device"| NotifService
+    SecManager -->|"1️⃣4️⃣ Initialize Session"| SessManager
     
-    %% Color coding
-    classDef uiLayer fill:#d0e0ff,stroke:#333,stroke-width:1px;
-    classDef providerLayer fill:#ffe0b0,stroke:#333,stroke-width:1px;
-    classDef repositoryLayer fill:#d5f5e3,stroke:#333,stroke-width:1px;
-    classDef serviceLayer fill:#ffd5d5,stroke:#333,stroke-width:1px;
-    classDef modelLayer fill:#e0d0ff,stroke:#333,stroke-width:1px;
-    classDef externalLayer fill:#f0f0f0,stroke:#333,stroke-width:1px;
+    %% Enhanced Color coding with gradient fills and better visibility
+    classDef uiLayer fill:#d0e0ff,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
+    classDef providerLayer fill:#ffe0b0,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
+    classDef repositoryLayer fill:#d5f5e3,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
+    classDef serviceLayer fill:#ffd5d5,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
+    classDef modelLayer fill:#e0d0ff,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
+    classDef externalLayer fill:#f0f0f0,stroke:#333,stroke-width:2px,color:#000,font-weight:bold,font-size:14px,border-radius:8px;
     
-    class WS,ABS,PCS,HS uiLayer;
-    class ASP providerLayer;
+    %% Apply styles to all components
+    class WS,ABS,PCS,HS,PS uiLayer;
+    class ASP,USP providerLayer;
     class UR repositoryLayer;
-    class AuthService,FireAuth,UserService,FireUser,PrefService,SecManager,SessManager,AnalService,ApiService,CrashService,NotifService serviceLayer;
-    class UserModel,AuthExceptions modelLayer;
-    class Firebase,GoogleAuth,AppleAuth,Firestore externalLayer;
+    class AuthService,FireAuth,UserService,FireUser,PrefService,SecManager,SessManager,AnalService,ApiService,CrashService,NotifService,LogService serviceLayer;
+    class UserModel,AuthExceptions,TokenModel modelLayer;
+    class Firebase,GoogleAuth,AppleAuth,Firestore,FCM externalLayer;
+    
+    %% Add section titles with larger font and styling
+    style "UI Layer" fill:none,stroke:#6495ED,stroke-width:2px,color:#6495ED,font-weight:bold,font-size:16px;
+    style "Provider Layer" fill:none,stroke:#FF8C00,stroke-width:2px,color:#FF8C00,font-weight:bold,font-size:16px;
+    style "Repository Layer" fill:none,stroke:#2E8B57,stroke-width:2px,color:#2E8B57,font-weight:bold,font-size:16px;
+    style "Service Layer" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:16px;
+    style "Auth Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
+    style "User Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
+    style "Support Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
+    style "Model Layer" fill:none,stroke:#9370DB,stroke-width:2px,color:#9370DB,font-weight:bold,font-size:16px;
+    style "External Services" fill:none,stroke:#A9A9A9,stroke-width:2px,color:#A9A9A9,font-weight:bold,font-size:16px;
+    
+    %% Add Legend
+    subgraph Legend ["Diagram Legend"]
+        direction LR
+        L1["Regular Component"]
+        L2["===> Main Data Flow"]
+        L3["---> Secondary Flow"]
+        L4["-..-> Optional Flow"]
+        L5["-.- Model Usage"]
+    end
+    
+    %% Style Legend
+    style Legend fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333,font-weight:bold
 ```
 
 ## Layer Responsibilities
