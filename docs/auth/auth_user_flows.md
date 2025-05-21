@@ -374,7 +374,24 @@ sequenceDiagram
     end
 ```
 
-### Password Reset Flow
+### Account Recovery Options
+
+> **Note**: DuckBuck does not use password-based authentication, as it only implements Google Sign-In, Apple Sign-In, and Phone Authentication. Therefore, there is no traditional password reset flow.
+
+#### Social Authentication Recovery
+
+For Google and Apple authentication, account recovery is handled by the respective authentication providers:
+
+- **Google Accounts**: Users manage recovery through their Google account settings
+- **Apple ID**: Users manage recovery through their Apple ID settings
+
+#### Phone Authentication Recovery
+
+For phone authentication, recovery is handled through the verification process:
+
+- User can re-verify their phone number to regain access
+- A new OTP is sent to the registered phone number
+- Once verified, the user regains access to their account
 
 ```mermaid
 sequenceDiagram
@@ -386,45 +403,34 @@ sequenceDiagram
     participant Analytics as Analytics Service
     participant External as External Auth
     
-    User->>UI: Taps "Forgot Password" 
-    UI->>UI: Navigate to Password Reset Screen
-    UI->>Analytics: screenView("password_reset_screen")
+    User->>UI: Taps "Can't access my account"
+    UI->>UI: Show authentication options
+    UI->>Analytics: screenView("account_recovery_screen")
     
-    User->>UI: Enters Email Address
-    UI->>UI: Validate Email Format
-    UI->>UI: Show loading indicator
-    UI->>Provider: resetPassword(email)
-    Provider->>Repository: resetPassword(email)
-    Repository->>Analytics: logEvent("password_reset_request")
-    Repository->>Auth: sendPasswordResetEmail(email)
-    Auth->>External: Firebase Password Reset
-    
-    alt Email Found
-        External-->>Auth: Reset Email Sent
-        Auth-->>Repository: Success
-        Repository-->>Provider: Success
-        Provider-->>UI: Success
-        UI->>UI: Hide loading indicator
-        UI->>UI: Show Success Message
-        UI->>Analytics: logEvent("password_reset_email_sent")
-    else Email Not Found
-        External-->>Auth: User Not Found Error
-        Auth-->>Repository: User Not Found Error
-        Repository-->>Provider: User Not Found Error
-        Provider-->>UI: User Not Found Error
-        UI->>UI: Hide loading indicator
-        UI->>UI: Show Error Message
-        UI->>Analytics: logEvent("password_reset_error", "user_not_found")
+    alt Phone Number Recovery
+        User->>UI: Enters Phone Number
+        UI->>UI: Validate Phone Format
+        UI->>UI: Show loading indicator
+        UI->>Provider: verifyPhoneNumber()
+        Provider->>Repository: verifyPhoneNumber()
+        Repository->>Analytics: logEvent("account_recovery_attempt")
+        Repository->>Auth: verifyPhoneNumber()
+        Auth->>External: Firebase Phone Auth
+        External-->>User: SMS with OTP
+        User->>UI: Enters OTP
+        UI->>Provider: verifyOtpAndSignIn()
+        Provider->>Repository: verifyOtpAndSignIn()
+        Repository->>Auth: verifyOtpAndSignIn()
+        Auth->>External: Firebase Verify OTP
+        External-->>Auth: UserCredential
+        Auth-->>Repository: UserCredential
+        Repository-->>Provider: Account recovered
+        Provider-->>UI: Account recovered
+        UI->>Analytics: logEvent("account_recovery_success")
+    else Social Auth Recovery
+        UI->>UI: Show social auth recovery message
+        UI->>UI: Redirect to respective provider
     end
-    
-    note over User,External: User receives email and clicks reset link
-    
-    User->>External: Opens Reset Link in Email
-    External->>External: Firebase Reset Page
-    User->>External: Enters New Password
-    External->>External: Password Updated
-    
-    note over User,UI: Next login uses new password
 ```
 
 ## Detailed Authentication Workflows

@@ -20,7 +20,7 @@ flowchart TD
     linkStyle default stroke-width:1.5px,fill:none
     
     %% UI Layer
-    subgraph "UI Layer" ["UI Layer"]
+    subgraph UI_Layer ["UI Layer"]
         direction LR
         WS["Welcome Screen<br/>🏠"] --- ABS["Auth Bottom Sheet<br/>🔐"]
         ABS --- PCS["Profile Completion<br/>👤"]
@@ -29,7 +29,7 @@ flowchart TD
     end
     
     %% Provider Layer
-    subgraph "Provider Layer" ["Provider Layer"]
+    subgraph Provider_Layer ["Provider Layer"]
         direction LR
         ASP["Auth State Provider<br/>🔄"]
         USP["User Settings Provider<br/>🛠️"]
@@ -37,15 +37,15 @@ flowchart TD
     end
     
     %% Repository Layer
-    subgraph "Repository Layer" ["Repository Layer"]
+    subgraph Repository_Layer ["Repository Layer"]
         UR["User Repository<br/>📂"]
     end
     
     %% Service Layer
-    subgraph "Service Layer" ["Service Layer"]
+    subgraph Service_Layer ["Service Layer"]
         direction TB
         %% Auth Services
-        subgraph "Auth Services" ["Auth Services"]
+        subgraph Auth_Services ["Auth Services"]
             direction LR
             AuthService["Auth Service<br/>Interface<br/>🔑"] --- FireAuth["Firebase Auth<br/>Service<br/>🔥"]
             FireAuth --- SecManager["Auth Security<br/>Manager<br/>🛡️"]
@@ -53,14 +53,14 @@ flowchart TD
         end
         
         %% User Data Services
-        subgraph "User Services" ["User Services"]
+        subgraph User_Services ["User Services"]
             direction LR
             UserService["User Service<br/>Interface<br/>👥"] --- FireUser["Firebase User<br/>Service<br/>📊"]
             FireUser --- PrefService["Preferences<br/>Service<br/>💾"]
         end
         
         %% Support Services
-        subgraph "Support Services" ["Support Services"]
+        subgraph Support_Services ["Support Services"]
             direction LR
             AnalService["Analytics<br/>Service<br/>📈"] --- ApiService["API<br/>Service<br/>🌐"]
             ApiService --- CrashService["Crashlytics<br/>Service<br/>🐛"]
@@ -70,14 +70,14 @@ flowchart TD
     end
     
     %% Model Layer
-    subgraph "Model Layer" ["Model Layer"]
+    subgraph Model_Layer ["Model Layer"]
         direction LR
         UserModel["User Model<br/>👤"] --- AuthExceptions["Auth Exceptions<br/>⚠️"]
         AuthExceptions --- TokenModel["Auth Token Model<br/>🔑"]
     end
     
     %% External Services
-    subgraph "External Services" ["External Services"]
+    subgraph External_Services ["External Services"]
         direction LR
         Firebase["Firebase Auth<br/>🔥"] --- GoogleAuth["Google Sign-In<br/>SDK<br/>G"]
         GoogleAuth --- AppleAuth["Apple Sign-In<br/>SDK<br/>🍎"]
@@ -176,18 +176,18 @@ flowchart TD
     class Firebase,GoogleAuth,AppleAuth,Firestore,FCM externalLayer;
     
     %% Add section titles with larger font and styling
-    style "UI Layer" fill:none,stroke:#6495ED,stroke-width:2px,color:#6495ED,font-weight:bold,font-size:16px;
-    style "Provider Layer" fill:none,stroke:#FF8C00,stroke-width:2px,color:#FF8C00,font-weight:bold,font-size:16px;
-    style "Repository Layer" fill:none,stroke:#2E8B57,stroke-width:2px,color:#2E8B57,font-weight:bold,font-size:16px;
-    style "Service Layer" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:16px;
-    style "Auth Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
-    style "User Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
-    style "Support Services" fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px;
-    style "Model Layer" fill:none,stroke:#9370DB,stroke-width:2px,color:#9370DB,font-weight:bold,font-size:16px;
-    style "External Services" fill:none,stroke:#A9A9A9,stroke-width:2px,color:#A9A9A9,font-weight:bold,font-size:16px;
+    style UI_Layer fill:none,stroke:#6495ED,stroke-width:2px,color:#6495ED,font-weight:bold,font-size:16px
+    style Provider_Layer fill:none,stroke:#FF8C00,stroke-width:2px,color:#FF8C00,font-weight:bold,font-size:16px
+    style Repository_Layer fill:none,stroke:#2E8B57,stroke-width:2px,color:#2E8B57,font-weight:bold,font-size:16px
+    style Service_Layer fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:16px
+    style Auth_Services fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px
+    style User_Services fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px
+    style Support_Services fill:none,stroke:#CD5C5C,stroke-width:2px,color:#CD5C5C,font-weight:bold,font-size:15px
+    style Model_Layer fill:none,stroke:#9370DB,stroke-width:2px,color:#9370DB,font-weight:bold,font-size:16px
+    style External_Services fill:none,stroke:#A9A9A9,stroke-width:2px,color:#A9A9A9,font-weight:bold,font-size:16px
     
     %% Add Legend
-    subgraph Legend ["Diagram Legend"]
+    subgraph Diagram_Legend ["Diagram Legend"]
         direction LR
         L1["Regular Component"]
         L2["===> Main Data Flow"]
@@ -197,7 +197,7 @@ flowchart TD
     end
     
     %% Style Legend
-    style Legend fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333,font-weight:bold
+    style Diagram_Legend fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333,font-weight:bold
 ```
 
 ## Layer Responsibilities
