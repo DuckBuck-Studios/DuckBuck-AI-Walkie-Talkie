@@ -39,7 +39,7 @@ class UserModel {
     } else if (providerId == 'apple.com') {
       authMethod = 'apple';
     }
-    
+
     return UserModel(
       uid: user.uid,
       // Only include email-related fields if not phone auth

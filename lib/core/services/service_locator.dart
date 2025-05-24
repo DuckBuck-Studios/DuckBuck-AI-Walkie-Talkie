@@ -14,8 +14,8 @@ import 'notifications/notifications_service.dart';
 import 'security/app_security_service.dart';
 import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
-import 'user/firebase_user_service.dart';
-import '../repositories/user_repository.dart';  
+import 'user/user_service.dart'; 
+import '../repositories/user_repository.dart'; 
 import 'logger/logger_service.dart';
 
 
@@ -109,11 +109,10 @@ Future<void> setupServiceLocator() async {
   
   // Register user service
   serviceLocator.registerLazySingleton<UserServiceInterface>(
-    () => FirebaseUserService(
+    () => UserService(
       databaseService: serviceLocator<FirebaseDatabaseService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );
-
-  // Add more service registrations here as needed
+   
 }

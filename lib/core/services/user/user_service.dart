@@ -4,18 +4,17 @@ import 'user_service_interface.dart';
 import '../logger/logger_service.dart';
 import '../service_locator.dart';
 import '../../exceptions/auth_exceptions.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Firebase implementation of the UserService interface
-class FirebaseUserService implements UserServiceInterface {
+class UserService implements UserServiceInterface {
   final FirebaseDatabaseService _databaseService;
   final LoggerService _logger;
   
   static const String _tag = 'USER_SERVICE';
   static const String _userCollection = 'users';
 
-  /// Creates a new FirebaseUserService
-  FirebaseUserService({
+  /// Creates a new UserService
+  UserService({
     FirebaseDatabaseService? databaseService,
     LoggerService? logger,
   }) : _databaseService = databaseService ?? serviceLocator<FirebaseDatabaseService>(),

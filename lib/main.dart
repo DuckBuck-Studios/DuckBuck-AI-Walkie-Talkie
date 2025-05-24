@@ -15,7 +15,7 @@ import 'core/services/crashlytics_consent_manager.dart';
 import 'core/providers/crashlytics_consent_provider.dart';
 import 'core/services/auth/auth_security_manager.dart'; 
 import 'core/services/security/app_security_service.dart';
-import 'core/repositories/user_repository.dart';
+import 'core/repositories/user_repository.dart'; 
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -283,7 +283,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             provider.initialize();
             return provider;
           },
-        ),
+        ), 
         // Add more app-wide providers here as needed
       ],
       child: MaterialApp(

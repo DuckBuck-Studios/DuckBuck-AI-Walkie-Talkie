@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+/// Re-export Firestore types that other services might need
+export 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, DocumentSnapshot, QuerySnapshot, WriteBatch, Transaction, Query;
+
 /// Service for handling Firebase Firestore operations
 class FirebaseDatabaseService {
   final FirebaseFirestore _firestore;
