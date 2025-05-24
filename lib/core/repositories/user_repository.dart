@@ -1,9 +1,7 @@
 import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth/auth_service_interface.dart';
-import '../models/user_model.dart';  // Account deletion functionality has been removed
-import '../services/firebase/firebase_database_service.dart';
+import '../models/user_model.dart';
 import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/notifications/notifications_service.dart';
@@ -522,55 +520,27 @@ class UserRepository {
   /// Sign out the current user
   Future<void> signOut() async {
     try {
-      // Get current user ID before signing out (important!)
+      // Get current user ID before signing out
       final userId = currentUser?.uid;
       
       if (userId != null) {
         try {
-          // Remove FCM token directly here
+          // Remove FCM token through notifications service
           _logger.i(_tag, 'Removing FCM token for user: $userId');
           final notificationsService = serviceLocator<NotificationsService>();
           await notificationsService.removeToken(userId);
           
-          // Verify token was properly cleared with direct Firestore check
-          try {
-            final firestore = serviceLocator<FirebaseDatabaseService>().firestoreInstance;
-            final verifyDoc = await firestore.collection('users').doc(userId).get(
-              GetOptions(source: Source.server)  // Force server read for verification
-            );
-            
-            final verifyData = verifyDoc.data();
-            if (verifyData != null && verifyData.containsKey('fcmTokenData')) {
-              final fcmData = verifyData['fcmTokenData'] as Map<String, dynamic>?;
-              if (fcmData != null && fcmData.containsKey('token') && fcmData['token'] != null) {
-                _logger.w(_tag, 'Token still exists after removal attempt, trying again');
-                // Token still exists - try removeToken again with fallback option
-                await notificationsService.removeToken(userId);
-              } else {
-                _logger.i(_tag, 'FCM token successfully nullified');
-              }
-            }
-          } catch (e) {
-            _logger.e(_tag, 'Error in token verification: ${e.toString()}');
-          }
+          // Token verification now happens in the notifications service
         } catch (e) {
-          _logger.e(_tag, 'Error removing FCM token: ${e.toString()}');
-          // Continue with sign out even if token removal fails
+          // Log but continue with sign out
+          _logger.w(_tag, 'Error removing FCM token during sign out: ${e.toString()}');
         }
       }
 
-      // Log user sign-out event before actual sign-out
-      if (userId != null) {
-        await _analytics.logEvent(
-          name: 'user_sign_out',
-          parameters: {
-            'user_id': userId,
-            'timestamp': DateTime.now().toIso8601String(),
-          },
-        );
-      }
+      // Clear analytics user ID
+      await _analytics.clearUserId();
       
-      // Clear user identifier from Crashlytics
+      // Clear crashlytics data
       await _crashlytics.clearKeys();
       await _crashlytics.setUserIdentifier('');
       await _crashlytics.log('User signed out');
