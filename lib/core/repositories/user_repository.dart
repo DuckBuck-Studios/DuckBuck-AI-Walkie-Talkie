@@ -537,8 +537,11 @@ class UserRepository {
         }
       }
 
-      // Clear analytics user ID
-      await _analytics.clearUserId();
+      // Log sign out event in analytics
+      await _analytics.logEvent(
+        name: 'sign_out',
+        parameters: {'user_id': userId ?? 'unknown'},
+      );
       
       // Clear crashlytics data
       await _crashlytics.clearKeys();

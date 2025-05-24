@@ -1,6 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../firebase/firebase_database_service.dart';
 import '../logger/logger_service.dart';
 
@@ -138,43 +137,50 @@ class NotificationsService {
       
       // 2. Update Firestore to set token to null but preserve the structure
       _logger.d(_tag, 'Updating token in Firestore');
-      final firestore = _databaseService.firestoreInstance;
-      final userRef = firestore.collection('users').doc(userId);
       
-      await userRef.update({
-        'fcmTokenData.token': null, 
-      });
-      _logger.d(_tag, 'FCM token value set to null');
+      await _databaseService.setDocument(
+        collection: 'users',
+        documentId: userId,
+        data: {
+          'fcmTokenData.token': null,
+          'fcmTokenData.lastUpdated': FieldValue.serverTimestamp(),
+        },
+        merge: true
+      );
 
-      // Simple verification
-      final verifyDoc = await userRef.get(GetOptions(source: Source.server));
-      final verifyData = verifyDoc.data();
-      if (verifyData != null && verifyData.containsKey('fcmTokenData')) {
-        final fcmData = verifyData['fcmTokenData'] as Map<String, dynamic>?;
-        if (fcmData != null && fcmData['token'] == null) {
+      // 3. Verify the token was properly cleared
+      final userData = await _databaseService.getDocument(
+        collection: 'users',
+        documentId: userId,
+      );
+
+      if (userData != null && userData['fcmTokenData'] != null) {
+        final fcmData = userData['fcmTokenData'] as Map<String, dynamic>;
+        if (fcmData['token'] == null) {
           _logger.i(_tag, '✅ Verified fcmTokenData.token is now null');
         } else {
           _logger.w(_tag, '⚠️ Token may not be properly cleared');
         }
       }
+
+      _logger.i(_tag, 'FCM token successfully removed for user: $userId');
     } catch (e) {
       _logger.e(_tag, 'Error in removeToken: ${e.toString()}');
-      // Simple fallback approach if the update fails
+      // If the primary update fails, try a simpler approach
       try {
-        final firestore = _databaseService.firestoreInstance;
-        final userRef = firestore.collection('users').doc(userId);
-        await userRef.set({
-          'fcmTokenData': {
-            'token': null, 
-          }
-        }, SetOptions(merge: true));
-        _logger.i(_tag, '✅ Fallback token clearing completed');
-      } catch (_) {
-        _logger.e(_tag, '❌ Fallback token clearing failed');
+        await _databaseService.setDocument(
+          collection: 'users',
+          documentId: userId,
+          data: {'fcmTokenData': null},
+          merge: true
+        );
+      } catch (fallbackError) {
+        _logger.e(_tag, 'Fallback token removal also failed: ${fallbackError.toString()}');
+        throw Exception('Failed to remove FCM token: ${e.toString()}');
       }
     }
   }
-
+  
   /// Helper to get the current platform name
   String _getPlatformName() {
     if (kIsWeb) return 'web';

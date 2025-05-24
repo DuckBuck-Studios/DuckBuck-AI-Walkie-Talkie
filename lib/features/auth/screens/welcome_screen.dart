@@ -7,7 +7,6 @@ import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/core/theme/widget_styles.dart';
-import 'package:duckbuck/core/widgets/safe_slide_action.dart'; // Import our custom widget
 import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
@@ -116,8 +115,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Slide action button with updated colors
-                    _buildSlideToAction(context, isIOS)
+                    // Continue button with platform-specific styling
+                    _buildContinueButton(context, isIOS)
                         .animate()
                         .fadeIn(delay: 400.ms, duration: 600.ms)
                         .slideY(begin: 0.2, end: 0.0),
@@ -219,84 +218,138 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  Widget _buildSlideToAction(BuildContext context, bool isIOS) {
+  Widget _buildContinueButton(BuildContext context, bool isIOS) {
     // Wrap in RepaintBoundary for better rendering performance
     return RepaintBoundary(
       child: Hero(
         // Use a Hero widget to create a smooth visual connection with the next screen
-        tag: 'slide_action',
+        tag: 'continue_button',
         child: Material(
           // Material is needed for proper Hero animation
           color: Colors.transparent,
-          child: SafeSlideAction(
-            height: isIOS ? 58 : 60,
-            sliderButtonIconSize: isIOS ? 22 : 24,
-            sliderRotate: false,
-            borderRadius: isIOS ? 18 : 16,
-            elevation: 0,
-            innerColor: AppColors.accentBlue,
-            outerColor: AppColors.surfaceBlack,
-            sliderButtonIcon: isIOS
-                ? const Icon(CupertinoIcons.arrow_right, color: Colors.white)
-                : const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-            text: 'Slide to get started',
-            textStyle: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: isIOS ? 16 : 18,
-              fontWeight: isIOS ? FontWeight.w600 : FontWeight.w500,
-              letterSpacing: 0.5,
-            ),
-            onSubmit: () {
-              // Provide haptic feedback for better physical feedback
-              HapticFeedback.mediumImpact();
-              
-              // Log analytics event
-              _analytics.logEvent(
-                name: 'start_onboarding',
-                parameters: {
-                  'source': 'welcome_screen',
-                  'timestamp': DateTime.now().toIso8601String(),
-                },
-              );
-              _logger.i(_tag, 'User started onboarding flow');
-              
-              // Reset onboarding progress before navigating to maintain a smooth flow
-              // By not awaiting this operation, we ensure the navigation happens immediately
-              PreferencesService.instance.setCurrentOnboardingStep(0);
-              
-              // Use pushReplacement with a combined fade and scale transition for smoother experience
-              Navigator.pushReplacement(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => 
-                    OnboardingContainer(
-                      onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
+          child: isIOS
+              ? CupertinoButton(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                  borderRadius: BorderRadius.circular(18),
+                  color: AppColors.accentBlue,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Get Started',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.arrow_right,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onPressed: () => _handleContinue(context),
+                )
+              : ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accentBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(0.0, 0.05);
-                    const end = Offset.zero;
-                    final tween = Tween(begin: begin, end: end).chain(
-                      CurveTween(curve: Curves.easeOutCubic)
-                    );
-                    final offsetAnimation = animation.drive(tween);
-                    
-                    return FadeTransition(
-                      opacity: CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
+                    elevation: 0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'GET STARTED',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.0,
+                          color: Colors.white,
+                        ),
                       ),
-                      child: SlideTransition(
-                        position: offsetAnimation,
-                        child: child,
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                    );
-                  },
-                  transitionDuration: const Duration(milliseconds: 400),
+                    ],
+                  ),
+                  onPressed: () => _handleContinue(context),
                 ),
-              );
-            },
-          ),
         ),
+      ),
+    );
+  }
+
+  void _handleContinue(BuildContext context) {
+    // Provide haptic feedback for better physical feedback
+    HapticFeedback.mediumImpact();
+    
+    // Log analytics event
+    _analytics.logEvent(
+      name: 'start_onboarding',
+      parameters: {
+        'source': 'welcome_screen',
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    _logger.i(_tag, 'User started onboarding flow');
+    
+    // Reset onboarding progress before navigating
+    PreferencesService.instance.setCurrentOnboardingStep(0);
+    
+    // Use pushReplacement with a combined fade and scale transition
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => 
+          OnboardingContainer(
+            onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
+          ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 0.05);
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end).chain(
+            CurveTween(curve: Curves.easeOutCubic)
+          );
+          final offsetAnimation = animation.drive(tween);
+          
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ),
+            child: SlideTransition(
+              position: offsetAnimation,
+              child: child,
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }

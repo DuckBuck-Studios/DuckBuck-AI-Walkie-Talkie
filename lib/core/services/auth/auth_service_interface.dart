@@ -49,4 +49,10 @@ abstract class AuthServiceInterface {
   /// Useful for sensitive operations that require recent authentication
   /// Returns true if credential is valid, false otherwise
   Future<bool> validateCredential(AuthCredential credential);
+  
+  /// Delete the current user account and related data
+  /// This will delete the user account from Firebase Auth
+  /// and clean up associated data (storage files, etc.)
+  /// Throws AuthException if deletion fails
+  Future<void> deleteUserAccount();
 }

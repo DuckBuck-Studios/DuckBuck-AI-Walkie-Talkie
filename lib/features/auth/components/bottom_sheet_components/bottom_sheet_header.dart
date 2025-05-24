@@ -28,7 +28,6 @@ class BottomSheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isIOS = Platform.isIOS;
-    final double screenWidth = MediaQuery.of(context).size.width;
     
     return Stack(
       children: [
@@ -36,19 +35,6 @@ class BottomSheetHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Centered handle indicator with improved styling
-            Center(
-              child: Container(
-                width: screenWidth * 0.12, // More compact width for better design
-                height: 5,
-                margin: EdgeInsets.only(top: 12, bottom: isIOS ? 20 : 22),
-                decoration: BoxDecoration(
-                  color: AppColors.accentBlue, // Using accent color for the bar
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-            ),
-            
             // Only show title if we really need it (will be hidden for auth options)
             if (title.isNotEmpty && title != 'Sign in to DuckBuck')
               Text(

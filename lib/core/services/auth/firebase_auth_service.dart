@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 import 'auth_service_interface.dart';
 import '../../exceptions/auth_exceptions.dart';
@@ -11,6 +11,8 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../logger/logger_service.dart';
 import '../../constants/auth_constants.dart';
+import '../firebase/firebase_database_service.dart';
+import '../service_locator.dart';
 
 /// Firebase implementation of the auth service interface
 class FirebaseAuthService implements AuthServiceInterface {
@@ -415,6 +417,83 @@ class FirebaseAuthService implements AuthServiceInterface {
     } catch (e) {
       _logger.e(_tag, 'Unexpected error during credential validation', e);
       return false;
+    }
+  }
+
+  @override
+  Future<void> deleteUserAccount() async {
+    // Variables accessible in all scopes
+    String? uid;
+    User? user;
+    
+    try {
+      user = _firebaseAuth.currentUser;
+      if (user == null) {
+        throw AuthException(
+          AuthErrorCodes.notLoggedIn,
+          'No user is currently signed in',
+        );
+      }
+      
+      _logger.i(_tag, 'Starting user account deletion process');
+      debugPrint('💥 DELETE: Starting user account deletion process');
+      
+      // Get user ID before deleting
+      uid = user.uid;
+      debugPrint('💥 DELETE: User ID to delete: $uid');
+      
+      // Get database service from service locator
+      final databaseService = serviceLocator<FirebaseDatabaseService>();
+      
+      // Debug: Print the Firestore instance being used to ensure it's correct
+      final firestoreInstance = databaseService.firestoreInstance;
+      debugPrint('💥 DELETE: Using Firestore instance: ${firestoreInstance.app.name}');
+      
+      // Trigger the Firebase Delete User Data Extension by writing to its trigger collection
+      // Use auto-discovery - we only need to provide the uid
+      // The extension will automatically discover and delete all user data
+      final deleteUserData = {
+        'uid': uid
+        // No 'paths' specified - relying on auto-discovery
+      };
+      
+      debugPrint('💥 DELETE: Writing to delete_users collection with data: $deleteUserData (using auto-discovery)');
+      
+      await databaseService.setDocument(
+        collection: 'delete_users',  // The standard trigger collection for the Firebase Delete User Data Extension
+        documentId: uid,
+        data: deleteUserData,
+        logOperation: true, // Log this important operation
+      );
+      _logger.i(_tag, 'User data marked for deletion via Firebase Delete User Data Extension (auto-discovery enabled)');
+      debugPrint('💥 DELETE: Document successfully written to delete_users collection');
+      
+      // First, sign the user out - this will remove their session completely
+      // This is important to prevent any further actions with their account
+      await signOut();
+      _logger.i(_tag, 'User signed out as part of deletion process');
+      
+      // Return success - the extension will handle both data cleanup AND auth account deletion
+      _logger.i(_tag, 'Account deletion process initiated successfully');
+      
+      // Note: We're relying on the Firebase Extension to handle the actual deletion
+      // This approach completely avoids the "requires-recent-login" error
+      // Auto-discovery is enabled, so all user data will be found and deleted without explicit paths
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error during account deletion: ${e.toString()}');
+      
+      if (e is FirebaseAuthException) {
+        throw AuthErrorMessages.handleError(e);
+      } else if (e is AuthException) {
+        rethrow;
+      } else {
+        throw AuthException(
+          AuthErrorCodes.unknown, 
+          'Failed to delete account: ${e.toString()}',
+          e,
+        );
+      }
     }
   }
 }

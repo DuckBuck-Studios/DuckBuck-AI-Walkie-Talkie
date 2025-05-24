@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../styles/onboarding_styles.dart';
@@ -160,28 +162,56 @@ class _OnboardingScreen3State extends State<OnboardingScreen3> {
   }
 
   Widget _buildPageIndicator({required bool isActive}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      height: 10,
-      width: isActive ? 24 : 10,
-      decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(5),
+    final bool isIOS = Platform.isIOS;
+    
+    return RepaintBoundary(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        height: isIOS ? 8 : 10,
+        width: isActive ? (isIOS ? 20 : 24) : (isIOS ? 8 : 10),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(isIOS ? 4 : 5),
+        ),
       ),
     );
   }
 
   Widget _buildSwipeIndicator() {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Swipe to continue',
-          style: TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        SizedBox(width: 8),
-        Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-      ],
+    final bool isIOS = Platform.isIOS;
+    
+    return RepaintBoundary(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (isIOS)
+            const Text(
+              'Swipe to continue',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+            )
+          else
+            const Text(
+              'SWIPE TO CONTINUE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.5,
+              ),
+            ),
+          SizedBox(width: isIOS ? 6 : 8),
+          Icon(
+            isIOS ? CupertinoIcons.arrow_right : Icons.arrow_forward_rounded,
+            color: Colors.white,
+            size: isIOS ? 16 : 18,
+          ),
+        ],
+      ),
     );
   }
 }

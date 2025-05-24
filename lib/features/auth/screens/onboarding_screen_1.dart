@@ -255,26 +255,48 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            'Swipe to continue',
-            style: TextStyle(
-              color: const Color.fromARGB(255, 80, 65, 65), 
-              fontSize: isIOS ? 15 : 16,
-              fontWeight: isIOS ? FontWeight.w500 : FontWeight.normal
+          if (isIOS)
+            const Text(
+              'Swipe to continue',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+            )
+          else
+            const Text(
+              'SWIPE TO CONTINUE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
+          SizedBox(width: isIOS ? 6 : 8),
           Icon(
-            isIOS ? CupertinoIcons.arrow_right : Icons.arrow_forward,
-            color: Colors.white, 
-            size: isIOS ? 18 : 20
+            isIOS ? CupertinoIcons.arrow_right : Icons.arrow_forward_rounded,
+            color: Colors.white,
+            size: isIOS ? 16 : 18,
           ),
         ],
       )
       .animate(target: _isReady ? 1 : 0)
       .fadeIn(delay: 1000.ms, duration: 600.ms)
       .then()
-      .animate(onPlay: (controller) => controller.repeat()),
+      .animate(
+        onPlay: (controller) => controller.repeat(),
+        effects: [
+          FadeEffect(
+            begin: 1.0,
+            end: 0.6,
+            duration: 800.ms,
+            curve: Curves.easeInOut,
+          ),
+        ],
+      ),
     );
   }
 }

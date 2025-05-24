@@ -32,10 +32,10 @@ class ApiService {
       // Log the API endpoint being used
       _logger.i(_tag, 'API Service initialized with endpoint: $_baseUrl');
       
-      // Configure Dio with appropriate timeout settings
-      _dio.options.connectTimeout = const Duration(seconds: 10);
-      _dio.options.receiveTimeout = const Duration(seconds: 10);
-      _dio.options.sendTimeout = const Duration(seconds: 10);
+      // Configure Dio with increased timeout settings for better reliability
+      _dio.options.connectTimeout = const Duration(seconds: 30);
+      _dio.options.receiveTimeout = const Duration(seconds: 30);
+      _dio.options.sendTimeout = const Duration(seconds: 30);
     }
 
   /// Checks if the user authenticated with Google or Apple
