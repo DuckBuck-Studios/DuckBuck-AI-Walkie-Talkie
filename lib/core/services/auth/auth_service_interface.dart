@@ -39,20 +39,17 @@ abstract class AuthServiceInterface {
     String smsCode,
   );
 
-  /// Sign out the current user
-  Future<void> signOut();
-
   /// Update user profile information
   Future<void> updateProfile({String? displayName, String? photoURL});
+  
+  /// Sign out the current user
+  Future<void> signOut();
+  
+  /// Delete the current user account and all associated data
+  Future<void> deleteUserAccount();
   
   /// Validate a credential to ensure it's still valid
   /// Useful for sensitive operations that require recent authentication
   /// Returns true if credential is valid, false otherwise
   Future<bool> validateCredential(AuthCredential credential);
-  
-  /// Delete the current user account and related data
-  /// This will delete the user account from Firebase Auth
-  /// and clean up associated data (storage files, etc.)
-  /// Throws AuthException if deletion fails
-  Future<void> deleteUserAccount();
 }

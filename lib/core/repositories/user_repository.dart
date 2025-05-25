@@ -4,7 +4,6 @@ import '../services/auth/auth_service_interface.dart';
 import '../models/user_model.dart';
 import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
-import '../services/notifications/notifications_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
@@ -517,50 +516,7 @@ class UserRepository {
     }
   }
 
-  /// Sign out the current user
-  Future<void> signOut() async {
-    try {
-      // Get current user ID before signing out
-      final userId = currentUser?.uid;
-      
-      if (userId != null) {
-        try {
-          // Remove FCM token through notifications service
-          _logger.i(_tag, 'Removing FCM token for user: $userId');
-          final notificationsService = serviceLocator<NotificationsService>();
-          await notificationsService.removeToken(userId);
-          
-          // Token verification now happens in the notifications service
-        } catch (e) {
-          // Log but continue with sign out
-          _logger.w(_tag, 'Error removing FCM token during sign out: ${e.toString()}');
-        }
-      }
 
-      // Log sign out event in analytics
-      await _analytics.logEvent(
-        name: 'sign_out',
-        parameters: {'user_id': userId ?? 'unknown'},
-      );
-      
-      // Clear crashlytics data
-      await _crashlytics.clearKeys();
-      await _crashlytics.setUserIdentifier('');
-      await _crashlytics.log('User signed out');
-      
-      // Sign out from Firebase Auth
-      await authService.signOut();
-
-      // Clear login state and reset all auth-related preferences
-      await PreferencesService.instance.setLoggedIn(false);
-      await PreferencesService.instance.clearAll();
-      
-      _logger.i(_tag, 'User signed out successfully');
-    } catch (e) {
-      _logger.e(_tag, 'Error during sign out: ${e.toString()}');
-      rethrow;
-    }
-  }
 
   /// Update user profile
   Future<void> updateProfile({String? displayName, String? photoURL}) async {
@@ -766,6 +722,77 @@ class UserRepository {
         name: 'onboarding_complete_error',
         parameters: {
           'user_id': uid,
+          'error': e.toString(),
+        },
+      );
+      
+      rethrow;
+    }
+  }
+
+  /// Sign out the current user
+  Future<void> signOut() async {
+    try {
+      // Get current user ID before signing out
+      final userId = currentUser?.uid;
+      
+      // Log sign out event in analytics
+      await _analytics.logEvent(
+        name: 'sign_out',
+        parameters: {'user_id': userId ?? 'unknown'},
+      );
+      
+      // Clear crashlytics data
+      await _crashlytics.clearKeys();
+      await _crashlytics.setUserIdentifier('');
+      await _crashlytics.log('User signed out');
+      
+      // Call auth service signOut (this handles FCM token removal and Firebase signOut)
+      await authService.signOut();
+
+      // Clear login state and reset all auth-related preferences
+      await PreferencesService.instance.setLoggedIn(false);
+      await PreferencesService.instance.clearAll();
+      
+      _logger.i(_tag, 'User signed out successfully');
+    } catch (e) {
+      _logger.e(_tag, 'Error during sign out: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// Delete the current user account and all associated data
+  Future<void> deleteUserAccount() async {
+    String? uid;
+    UserModel? user;
+    
+    try {
+      user = currentUser;
+      if (user == null) {
+        throw AuthException(
+          AuthErrorCodes.notLoggedIn,
+          'No user is currently signed in.',
+        );
+      }
+      
+      _logger.i(_tag, 'Starting user account deletion process');
+      
+      // Get user ID before deleting
+      uid = user.uid;
+      _logger.d(_tag, 'User ID to delete: $uid');
+      
+      // Call auth service deleteUserAccount (this handles API call and Firebase user deletion)
+      await authService.deleteUserAccount();
+      
+      _logger.i(_tag, 'User account deletion completed successfully');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to delete user account: ${e.toString()}');
+      
+      // Log deletion failure for analytics
+      await _analytics.logEvent(
+        name: 'account_deletion_failed',
+        parameters: {
+          'user_id': uid ?? 'unknown',
           'error': e.toString(),
         },
       );

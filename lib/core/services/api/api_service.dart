@@ -71,7 +71,7 @@ class ApiService {
       }
       
       final response = await _dio.post(
-        '$_baseUrl/api/email/send-welcome',
+        '$_baseUrl/api/users/send-welcome-email',
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -124,7 +124,7 @@ class ApiService {
       }
       
       final response = await _dio.post(
-        '$_baseUrl/api/email/send-login-notification',
+        '$_baseUrl/api/users/send-login-notification',
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -151,6 +151,45 @@ class ApiService {
       return false;
     } catch (e) {
       _logger.e(_tag, 'Error sending login notification email: $e');
+      return false;
+    }
+  }
+  
+  /// Delete user account from backend systems
+  /// Returns true if deletion was successful, false otherwise
+  Future<bool> deleteUser({
+    required String uid,
+    required String idToken,
+  }) async {
+    try {
+      _logger.i(_tag, 'Sending user deletion request to backend for user: $uid');
+      
+      final response = await _dio.delete(
+        '$_baseUrl/api/users/delete',
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+            'x-api-key': _apiKey,
+          },
+        ),
+        data: {
+          'uid': uid
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        _logger.i(_tag, 'User deletion completed successfully on backend for user: $uid');
+        return true;
+      } else {
+        _logger.e(_tag, 'Failed to delete user on backend. Status: ${response.statusCode}, Body: ${response.data}');
+        return false;
+      }
+    } on DioException catch (e) {
+      _logger.e(_tag, 'Dio error deleting user from backend: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_tag, 'Error deleting user from backend: $e');
       return false;
     }
   }

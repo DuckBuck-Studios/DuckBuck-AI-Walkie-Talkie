@@ -11,8 +11,9 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../logger/logger_service.dart';
 import '../../constants/auth_constants.dart';
-import '../firebase/firebase_database_service.dart';
 import '../service_locator.dart';
+import '../api/api_service.dart';
+import '../notifications/notifications_service.dart';
 
 /// Firebase implementation of the auth service interface
 class FirebaseAuthService implements AuthServiceInterface {
@@ -339,12 +340,33 @@ class FirebaseAuthService implements AuthServiceInterface {
   @override
   Future<void> signOut() async {
     try {
+      // Get current user ID before signing out
+      final user = _firebaseAuth.currentUser;
+      final uid = user?.uid;
+      
+      if (uid != null) {
+        _logger.i(_tag, 'Removing FCM token before sign out for user: $uid');
+        
+        // Get notifications service to remove FCM token
+        try {
+          // Use the service locator to get the notifications service
+          final notificationsService = serviceLocator<NotificationsService>();
+          await notificationsService.removeToken(uid);
+          _logger.i(_tag, 'FCM token successfully removed');
+        } catch (e) {
+          // Log error but continue with sign out process
+          _logger.e(_tag, 'Failed to remove FCM token: ${e.toString()}');
+        }
+      }
+      
       // Sign out from Google
       await _googleSignIn.signOut();
       
       // Sign out from Firebase
       await _firebaseAuth.signOut();
+      _logger.i(_tag, 'User successfully signed out');
     } catch (e) {
+      _logger.e(_tag, 'Failed to sign out: ${e.toString()}');
       throw AuthException(
         AuthErrorCodes.unknown,
         'Failed to sign out',
@@ -422,7 +444,7 @@ class FirebaseAuthService implements AuthServiceInterface {
 
   @override
   Future<void> deleteUserAccount() async {
-    // Variables accessible in all scopes
+    // This is a blocking operation that will not return until the backend confirms deletion
     String? uid;
     User? user;
     
@@ -442,43 +464,49 @@ class FirebaseAuthService implements AuthServiceInterface {
       uid = user.uid;
       debugPrint('💥 DELETE: User ID to delete: $uid');
       
-      // Get database service from service locator
-      final databaseService = serviceLocator<FirebaseDatabaseService>();
+      // Get API service from service locator for backend deletion request
+      final apiService = serviceLocator<ApiService>();
       
-      // Debug: Print the Firestore instance being used to ensure it's correct
-      final firestoreInstance = databaseService.firestoreInstance;
-      debugPrint('💥 DELETE: Using Firestore instance: ${firestoreInstance.app.name}');
+      _logger.i(_tag, 'Making API call to delete user data from backend');
+      debugPrint('💥 DELETE: Making API call to delete user data from backend');
       
-      // Trigger the Firebase Delete User Data Extension by writing to its trigger collection
-      // Use auto-discovery - we only need to provide the uid
-      // The extension will automatically discover and delete all user data
-      final deleteUserData = {
-        'uid': uid
-        // No 'paths' specified - relying on auto-discovery
-      };
+      // Get Firebase ID token for authorization
+      final idToken = await refreshIdToken(forceRefresh: true);
+      if (idToken == null) {
+        throw AuthException(
+          AuthErrorCodes.tokenRefreshFailed,
+          'Failed to get authentication token for account deletion',
+        );
+      }
       
-      debugPrint('💥 DELETE: Writing to delete_users collection with data: $deleteUserData (using auto-discovery)');
-      
-      await databaseService.setDocument(
-        collection: 'delete_users',  // The standard trigger collection for the Firebase Delete User Data Extension
-        documentId: uid,
-        data: deleteUserData,
-        logOperation: true, // Log this important operation
+      // Call the backend API to delete user data and wait for confirmation
+      // This is a blocking call that ensures the backend has completed deletion
+      final backendDeletionSuccess = await apiService.deleteUser(
+        uid: uid,
+        idToken: idToken,
       );
-      _logger.i(_tag, 'User data marked for deletion via Firebase Delete User Data Extension (auto-discovery enabled)');
-      debugPrint('💥 DELETE: Document successfully written to delete_users collection');
       
-      // First, sign the user out - this will remove their session completely
-      // This is important to prevent any further actions with their account
-      await signOut();
-      _logger.i(_tag, 'User signed out as part of deletion process');
+      // Verify the backend deletion was successful before proceeding
+      if (!backendDeletionSuccess) {
+        _logger.e(_tag, 'Backend user deletion failed, stopping the deletion process');
+        throw AuthException(
+          AuthErrorCodes.unknown,
+          'Failed to delete user data from backend services',
+        );
+      }
       
-      // Return success - the extension will handle both data cleanup AND auth account deletion
-      _logger.i(_tag, 'Account deletion process initiated successfully');
+      _logger.i(_tag, 'Backend confirmed successful user deletion');
+      debugPrint('💥 DELETE: Backend deletion confirmed successful');
       
-      // Note: We're relying on the Firebase Extension to handle the actual deletion
-      // This approach completely avoids the "requires-recent-login" error
-      // Auto-discovery is enabled, so all user data will be found and deleted without explicit paths
+      // Delete the Firebase user directly without token removal or signOut
+      // No need to remove FCM token as the backend should have cleaned up all user data
+      
+      // Delete the user from Firebase Auth
+      await user.delete();
+      _logger.i(_tag, 'Firebase user deleted successfully');
+      
+      _logger.i(_tag, 'Account deletion completed successfully');
+      debugPrint('💥 DELETE: Account deletion completed successfully');
       
     } catch (e) {
       _logger.e(_tag, 'Error during account deletion: ${e.toString()}');

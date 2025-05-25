@@ -8,6 +8,9 @@ import '../../../core/services/service_locator.dart';
 import '../../../core/services/notifications/notifications_service.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
 import '../../../core/services/auth/auth_security_manager.dart';
+import '../../../core/services/auth/auth_service_interface.dart';
+import '../../../core/services/firebase/firebase_analytics_service.dart';
+import '../../../core/services/firebase/firebase_crashlytics_service.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -18,6 +21,7 @@ class AuthStateProvider extends ChangeNotifier {
   final UserRepository _userRepository;
   final NotificationsService _notificationsService;
   final AuthSecurityManager _securityManager;
+  final AuthServiceInterface _authService;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -28,9 +32,11 @@ class AuthStateProvider extends ChangeNotifier {
     UserRepository? userRepository,
     NotificationsService? notificationsService,
     AuthSecurityManager? securityManager,
+    AuthServiceInterface? authService,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
        _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
-       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>() {
+       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>(),
+       _authService = authService ?? serviceLocator<AuthServiceInterface>() {
     _init();
   }
 
@@ -289,11 +295,43 @@ class AuthStateProvider extends ChangeNotifier {
     try {
       // End the user session first
       _securityManager.endUserSession();
+      debugPrint('🔐 AUTH PROVIDER: Ending user session...');
       
-      // Use the centralized sign-out method in UserRepository
-      // This handles FCM token clearing, auth signout, and preference clearing
-      debugPrint('🔐 AUTH PROVIDER: Using central UserRepository.signOut() method');
-      await _userRepository.signOut();
+      // Get current user ID before signing out for cleanup purposes
+      final userId = _currentUser?.uid;
+      
+      // Use AuthServiceInterface.signOut() for proper architecture flow: UI → Provider → Interface → Service
+      // This handles Firebase auth logout and FCM token removal
+      debugPrint('🔐 AUTH PROVIDER: Using AuthServiceInterface.signOut() for proper layering');
+      await _authService.signOut();
+      
+      // Handle app-level cleanup that the provider is responsible for
+      if (userId != null) {
+        try {
+          // Get analytics and crashlytics services for cleanup
+          final analytics = serviceLocator.get<FirebaseAnalyticsService>();
+          final crashlytics = serviceLocator.get<FirebaseCrashlyticsService>();
+          
+          // Log sign out event in analytics
+          await analytics.logEvent(
+            name: 'sign_out',
+            parameters: {'user_id': userId},
+          );
+          
+          // Clear crashlytics data
+          await crashlytics.clearKeys();
+          await crashlytics.setUserIdentifier('');
+          await crashlytics.log('User signed out');
+        } catch (e) {
+          // Log but continue with sign out
+          debugPrint('🔐 AUTH PROVIDER: Error during app-level cleanup: ${e.toString()}');
+        }
+      }
+      
+      // Clear login state and reset all auth-related preferences
+      await PreferencesService.instance.setLoggedIn(false);
+      await PreferencesService.instance.clearAll();
+      
       debugPrint('🔐 AUTH PROVIDER: User signed out successfully');
     } catch (e) {
       _errorMessage = e.toString();

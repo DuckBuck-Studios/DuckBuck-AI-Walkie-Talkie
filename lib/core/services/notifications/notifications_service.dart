@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import '../firebase/firebase_database_service.dart';
@@ -126,69 +127,70 @@ class NotificationsService {
 
   /// Delete FCM token when user logs out - removes from both local device and Firestore
   Future<void> removeToken(String userId) async {
-    try {
-      _logger.i(_tag, 'Removing FCM token for user: $userId');
-      
-      // 1. Delete the token from Firebase Messaging on device first
-      _logger.d(_tag, 'Deleting token from device');
-      await _firebaseMessaging.setAutoInitEnabled(false);
-      await _firebaseMessaging.deleteToken();
-      _logger.d(_tag, 'Device token deletion completed');
-      
-      // 2. Update Firestore to set token to null but preserve the structure
-      _logger.d(_tag, 'Updating token in Firestore');
-      
-      await _databaseService.setDocument(
-        collection: 'users',
-        documentId: userId,
-        data: {
-          'fcmTokenData.token': null,
-          'fcmTokenData.lastUpdated': FieldValue.serverTimestamp(),
+  try {
+    _logger.i(_tag, 'Removing FCM token for user: $userId');
+
+    // 1. Delete the token from Firebase Messaging on the device
+    _logger.d(_tag, 'Deleting token from device');
+    await _firebaseMessaging.deleteToken();
+    _logger.d(_tag, 'Device token deletion completed');
+
+    // 2. Update Firestore: set token inside fcmTokenData to null and remove rogue fields
+    _logger.d(_tag, 'Clearing FCM token data and rogue fields in Firestore for user: $userId');
+
+    await _databaseService.setDocument(
+      collection: 'users',
+      documentId: userId,
+      data: {
+        'fcmTokenData': {
+          'token': null,
         },
-        merge: true
-      );
+        'fcmTokenData.token': FieldValue.delete(), // remove incorrect dot-named field
+        'fcmTokenData.lastUpdated': FieldValue.delete(),
+      },
+      merge: true,
+    );
 
-      // 3. Verify the token was properly cleared
-      final userData = await _databaseService.getDocument(
-        collection: 'users',
-        documentId: userId,
-      );
+    // 3. Optional: Verify cleanup
+    final userData = await _databaseService.getDocument(
+      collection: 'users',
+      documentId: userId,
+    );
 
-      if (userData != null && userData['fcmTokenData'] != null) {
-        final fcmData = userData['fcmTokenData'] as Map<String, dynamic>;
-        if (fcmData['token'] == null) {
-          _logger.i(_tag, '✅ Verified fcmTokenData.token is now null');
-        } else {
-          _logger.w(_tag, '⚠️ Token may not be properly cleared');
-        }
+    final fcmTokenData = userData?['fcmTokenData'];
+    final bool nestedTokenNull = fcmTokenData is Map && fcmTokenData['token'] == null;
+    final bool rogueTokenRemoved = userData?['fcmTokenData.token'] == null;
+    final bool rogueLastUpdatedRemoved = userData?['fcmTokenData.lastUpdated'] == null;
+
+    if (nestedTokenNull && rogueTokenRemoved && rogueLastUpdatedRemoved) {
+      _logger.i(_tag, '✅ Verified FCM token data and rogue fields are cleared.');
+    } else {
+      String warning = '⚠️ Token data cleanup incomplete:';
+      if (!nestedTokenNull) {
+        warning += ' fcmTokenData.token is not null or missing.';
       }
-
-      _logger.i(_tag, 'FCM token successfully removed for user: $userId');
-    } catch (e) {
-      _logger.e(_tag, 'Error in removeToken: ${e.toString()}');
-      // If the primary update fails, try a simpler approach
-      try {
-        await _databaseService.setDocument(
-          collection: 'users',
-          documentId: userId,
-          data: {'fcmTokenData': null},
-          merge: true
-        );
-      } catch (fallbackError) {
-        _logger.e(_tag, 'Fallback token removal also failed: ${fallbackError.toString()}');
-        throw Exception('Failed to remove FCM token: ${e.toString()}');
+      if (!rogueTokenRemoved) {
+        warning += ' Rogue field "fcmTokenData.token" still exists.';
       }
+      if (!rogueLastUpdatedRemoved) {
+        warning += ' Rogue field "fcmTokenData.lastUpdated" still exists.';
+      }
+      _logger.w(_tag, warning);
     }
+
+    _logger.i(_tag, 'FCM token removal process completed for user: $userId');
+  } catch (e) {
+    _logger.e(_tag, 'Error in removeToken: ${e.toString()}');
+    throw Exception('Failed to remove FCM token: ${e.toString()}');
   }
+}
+
   
   /// Helper to get the current platform name
   String _getPlatformName() {
     if (kIsWeb) return 'web';
     if (defaultTargetPlatform == TargetPlatform.android) return 'android';
-    if (defaultTargetPlatform == TargetPlatform.iOS) return 'ios';
-    if (defaultTargetPlatform == TargetPlatform.macOS) return 'macos';
-    if (defaultTargetPlatform == TargetPlatform.windows) return 'windows';
-    if (defaultTargetPlatform == TargetPlatform.linux) return 'linux';
+    if (defaultTargetPlatform == TargetPlatform.iOS) return 'ios'; 
     return 'unknown';
   }
 }

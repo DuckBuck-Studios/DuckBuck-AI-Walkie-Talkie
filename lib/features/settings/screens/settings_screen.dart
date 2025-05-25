@@ -7,6 +7,7 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/models/user_model.dart';
 import '../../auth/providers/auth_state_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -45,11 +46,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Log the user out
+  // Log the user out using Provider pattern
   Future<void> _handleLogout() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signOut();
+      // Use the AuthStateProvider's signOut method instead of direct auth service call
+      // This ensures proper cleanup of FCM tokens and other state
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      await authProvider.signOut();
+      
       if (mounted) {
         Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
       }
@@ -159,19 +164,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        // User profile photo
+        // User profile photo with error handling
         Center(
-          child: user?.photoURL != null 
-            ? CircleAvatar(
-                radius: 50,
-                backgroundImage: NetworkImage(user!.photoURL!),
-                backgroundColor: Colors.grey[300],
-              )
-            : const CircleAvatar(
-                radius: 50,
-                backgroundColor: AppColors.accentBlue,
-                child: Icon(Icons.person, size: 50, color: Colors.white),
-              ),
+          child: user != null ? _buildProfileImageWidget(context, user) : const CircleAvatar(
+            radius: 50,
+            backgroundColor: AppColors.accentBlue,
+            child: Icon(Icons.person, size: 50, color: Colors.white),
+          ),
         ),
         
         const SizedBox(height: 20),
@@ -195,48 +194,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           
         const SizedBox(height: 30),
-        const Divider(),
-        
-        // Profile settings
-        ListTile(
-          leading: const Icon(Icons.account_circle),
-          title: const Text('Profile'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Profile settings coming soon')),
-            );
-          },
-        ),
-        
-        const Divider(),
-        
-        // Appearance settings
-        ListTile(
-          leading: const Icon(Icons.color_lens),
-          title: const Text('Appearance'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Appearance settings coming soon')),
-            );
-          },
-        ),
-        
-        const Divider(),
-        
-        // About App
-        ListTile(
-          leading: const Icon(Icons.info_outline),
-          title: const Text('About App'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('About app coming soon')),
-            );
-          },
-        ),
-        
         const Divider(),
         
         // Logout option
@@ -291,46 +248,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 30),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.account_circle), // Changed Icon
-          title: const Text('Profile (Demo)'), // Simplified
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            // Demo action
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Profile (Demo) tapped')),
-            );
-          },
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.color_lens), // Changed Icon
-          title: const Text('Appearance (Demo)'), // Simplified
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            // Demo action
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Appearance (Demo) tapped')),
-            );
-          },
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.info_outline), // Changed Icon
-          title: const Text('About App (Demo)'), // Simplified
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            // Demo action
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('About App (Demo) tapped')),
-            );
-          },
-        ),
-        const Divider(),
-        // Removed Logout ListTile as per request to remove signout from home, keeping settings simpler
       ],
+    );
+  }
+  
+  // Helper method to build profile image with error handling
+  Widget _buildProfileImageWidget(BuildContext context, UserModel user) {
+    if (user.photoURL == null) {
+      return const CircleAvatar(
+        radius: 50,
+        backgroundColor: AppColors.accentBlue,
+        child: Icon(Icons.person, size: 50, color: Colors.white),
+      );
+    }
+    
+    return CircleAvatar(
+      radius: 50,
+      backgroundColor: Colors.grey[300],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(50),
+        child: Image.network(
+          user.photoURL!,
+          width: 100,
+          height: 100,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('Error loading profile image: $error');
+            return const Icon(Icons.person, size: 50, color: Colors.white);
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
