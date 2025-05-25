@@ -390,15 +390,76 @@ class AuthStateProvider extends ChangeNotifier {
   /// Mark user's onboarding as complete (removes isNewUser flag)
   Future<void> markUserOnboardingComplete() async {
     if (_currentUser == null) {
-      throw Exception('No user is currently signed in');
+      throw AuthException(
+        AuthErrorCodes.notLoggedIn,
+        'No user is currently signed in',
+      );
     }
     
     try {
       await _userRepository.markUserOnboardingComplete(_currentUser!.uid);
       debugPrint('🔐 AUTH PROVIDER: User onboarding marked as complete');
     } catch (e) {
-      _errorMessage = e.toString();
+      debugPrint('🔐 AUTH PROVIDER: Error marking onboarding complete: ${e.toString()}');
       rethrow;
+    }
+  }
+
+  /// Delete the current user account and all associated data
+  /// 
+  /// This method follows proper architecture by using the UI → Provider → Repository pattern
+  /// It handles all cleanup including FCM tokens, Firestore data, and Firebase Auth deletion
+  Future<void> deleteUserAccount() async {
+    debugPrint('🔐 AUTH PROVIDER: Starting user account deletion process...');
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (_currentUser == null) {
+        throw AuthException(
+          AuthErrorCodes.notLoggedIn,
+          'No user is currently signed in',
+        );
+      }
+
+      final userIdToDelete = _currentUser!.uid;
+      debugPrint('🔐 AUTH PROVIDER: Deleting account for user: $userIdToDelete');
+      
+      // End the user session before deletion
+      _securityManager.endUserSession();
+      
+      // Cancel auth subscription FIRST to prevent any auth state change notifications during deletion
+      await _authSubscription?.cancel();
+      _authSubscription = null;
+      debugPrint('🔐 AUTH PROVIDER: Auth subscription canceled to prevent state conflicts');
+      
+      // Clear the current user state immediately to prevent any further operations
+      _currentUser = null;
+      
+      // Clear preferences and logout state immediately
+      await PreferencesService.instance.setLoggedIn(false);
+      await PreferencesService.instance.clearAll();
+      
+      // Delegate the actual deletion to the repository
+      // This handles: FCM token removal, Firestore deletion, backend cleanup, Firebase Auth deletion
+      await _userRepository.deleteUserAccount();
+      
+      debugPrint('🔐 AUTH PROVIDER: User account deletion completed successfully');
+      _errorMessage = null;
+      
+    } catch (e) {
+      debugPrint('🔐 AUTH PROVIDER: Account deletion failed: ${e.toString()}');
+      _errorMessage = e.toString();
+      
+      // If deletion failed, we need to restore the auth state
+      // Re-initialize the auth subscription
+      _init();
+      
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
   

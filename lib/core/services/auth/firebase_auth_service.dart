@@ -501,9 +501,22 @@ class FirebaseAuthService implements AuthServiceInterface {
       // Delete the Firebase user directly without token removal or signOut
       // No need to remove FCM token as the backend should have cleaned up all user data
       
-      // Delete the user from Firebase Auth
-      await user.delete();
-      _logger.i(_tag, 'Firebase user deleted successfully');
+      // Try to delete the user from Firebase Auth, but handle the case where
+      // the backend may have already deleted the Firebase Auth user
+      try {
+        await user.delete();
+        _logger.i(_tag, 'Firebase user deleted successfully');
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found') {
+          // This is expected - the backend already deleted the Firebase Auth user
+          _logger.i(_tag, 'Firebase user was already deleted by backend - this is expected');
+          debugPrint('💥 DELETE: Firebase user was already deleted by backend - this is expected');
+        } else {
+          // Some other Firebase Auth error occurred
+          _logger.e(_tag, 'Unexpected Firebase Auth error during user deletion: ${e.code} - ${e.message}');
+          throw AuthErrorMessages.handleError(e);
+        }
+      }
       
       _logger.i(_tag, 'Account deletion completed successfully');
       debugPrint('💥 DELETE: Account deletion completed successfully');

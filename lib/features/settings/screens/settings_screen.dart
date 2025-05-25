@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
 import '../../../core/navigation/app_routes.dart';
-import '../../../core/services/service_locator.dart';
-import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/models/user_model.dart';
 import '../../auth/providers/auth_state_provider.dart';
@@ -18,7 +16,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final AuthServiceInterface _authService = serviceLocator<AuthServiceInterface>();
   String _appVersion = '';
   String _buildNumber = '';
   bool _isLoading = false;
@@ -56,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await authProvider.signOut();
       
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        Navigator.pushReplacementNamed(context, AppRoutes.welcome);
       }
     } catch (e) {
       if (mounted) {
@@ -141,9 +138,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isDeleting = true);
     
     try {
-      await _authService.deleteUserAccount();
+      // Use the AuthStateProvider's deleteUserAccount method instead of direct auth service call
+      // This ensures proper cleanup of all state, FCM tokens, and follows the architecture pattern
+      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      await authProvider.deleteUserAccount();
+      
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.onboarding);
+        Navigator.pushReplacementNamed(context, AppRoutes.welcome);
       }
     } catch (e) {
       if (mounted) {

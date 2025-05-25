@@ -83,23 +83,7 @@ class AppRoutes {
         );
     }
   }
-
-  /// Get the initial route based on app state
-  static String getInitialRoute() {
-    final prefsService = PreferencesService.instance;
-
-    if (prefsService.hasCompletedOnboarding) {
-      // User completed the onboarding, go to home
-      return home;
-    } else if (prefsService.hasSeenWelcome &&
-        prefsService.currentOnboardingStep > 0) {
-      // User started onboarding but didn't complete it
-      return onboarding;
-    } else {
-      // User is new or reset everything
-      return welcome;
-    }
-  }
+   
 
   // Global navigator key to use for navigation from anywhere
   static final GlobalKey<NavigatorState> navigatorKey =
