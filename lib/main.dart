@@ -15,7 +15,6 @@ import 'core/services/crashlytics_consent_manager.dart';
 import 'core/providers/crashlytics_consent_provider.dart';
 import 'core/services/auth/auth_security_manager.dart'; 
 import 'core/services/security/app_security_service.dart';
-import 'core/repositories/user_repository.dart'; 
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -221,50 +220,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // User has returned to the app - update activity
-      _securityManager.updateUserActivity();
-    }
+  void didChangeAppLifecycleState(AppLifecycleState state) { 
   }
   
   Future<void> _initializeSecurityManager() async {
     _securityManager = serviceLocator<AuthSecurityManager>();
-    await _securityManager.initialize(
-      onSessionExpired: _handleSessionExpired,
-    );
-    
-    // Start session tracking if user is logged in
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _securityManager.startUserSession();
-    }
-  }
-  
-  void _handleSessionExpired() {
-    // Handle session timeout by logging the user out
-    if (!mounted) return;
-    
-    // Use serviceLocator to get the UserRepository directly instead of using Provider
-    // This avoids the Provider dependency in this context
-    final userRepository = serviceLocator<UserRepository>();
-    userRepository.signOut().then((_) {
-      if (!mounted) return;
-      
-      // Show session expired message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session expired. Please sign in again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      
-      // Navigate to welcome screen
-      AppRoutes.navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        AppRoutes.welcome,
-        (route) => false,
-      );
-    });
+    await _securityManager.initialize(); 
+     
   }
   
   @override

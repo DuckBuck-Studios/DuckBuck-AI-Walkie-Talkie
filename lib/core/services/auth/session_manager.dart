@@ -18,26 +18,21 @@ class SessionManager {
   // Internal state
   DateTime? _lastActivity;
   Timer? _sessionTimer;
-  final VoidCallback _onSessionExpired;
   final SharedPreferences _prefs;
   bool _isTimerRunning = false;
 
-  /// Creates a new SessionManager with the provided timeout duration and callback
+  /// Creates a new SessionManager with the provided timeout duration
   ///
-  /// [onSessionExpired] will be called when the session times out
   /// [sessionTimeoutSeconds] defines how long (in seconds) a session can be inactive
   /// before timing out. Defaults to 30 minutes.
   SessionManager({
-    required VoidCallback onSessionExpired,
     required SharedPreferences prefs,
     int sessionTimeoutSeconds = 1800, // 30 minutes default
-  }) : _onSessionExpired = onSessionExpired,
-       _prefs = prefs,
+  }) : _prefs = prefs,
        _sessionTimeout = Duration(seconds: sessionTimeoutSeconds);
   
   /// Factory constructor to create a SessionManager with SharedPreferences
   static Future<SessionManager> create({
-    required VoidCallback onSessionExpired,
     int sessionTimeoutSeconds = 1800,
   }) async {
     final prefs = await SharedPreferences.getInstance();
@@ -46,7 +41,6 @@ class SessionManager {
     final timeout = storedTimeout ?? sessionTimeoutSeconds;
     
     return SessionManager(
-      onSessionExpired: onSessionExpired,
       prefs: prefs,
       sessionTimeoutSeconds: timeout,
     );
@@ -83,6 +77,15 @@ class SessionManager {
   
   /// Check if the session has timed out based on last activity
   void _checkSession() {
+    // To prevent automatic logout, we will not call _onSessionExpired.
+    // The original logic is commented out below.
+    if (kDebugMode) {
+      // Adding a log to indicate that automatic session expiry is intentionally bypassed.
+      print('SESSION_MANAGER: Automatic session expiry check is active, but _onSessionExpired() will not be called to prevent auto-logout.');
+    }
+
+    // Original logic that would call _onSessionExpired():
+    /*
     if (_lastActivity == null) return;
     
     final now = DateTime.now();
@@ -91,8 +94,9 @@ class SessionManager {
     if (difference >= _sessionTimeout) {
       _sessionTimer?.cancel();
       _isTimerRunning = false;
-      _onSessionExpired();
+      _onSessionExpired(); // This line is responsible for triggering the auto-logout
     }
+    */
   }
   
   /// Save the last activity timestamp to SharedPreferences

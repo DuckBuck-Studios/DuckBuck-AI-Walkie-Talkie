@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import '../service_locator.dart';
 import 'auth_service_interface.dart';
-import 'session_manager.dart';
 import '../../repositories/user_repository.dart';
 import '../logger/logger_service.dart';
 
@@ -14,16 +13,15 @@ class AuthSecurityManager {
   final AuthServiceInterface _authService;
   final UserRepository _userRepository;
   final LoggerService _logger;
-  late SessionManager _sessionManager;
-  static const String _tag = 'AUTH_SECURITY';
-  
+  final String _tag = 'AuthSecurityManager';
+
   // Singleton implementation with improved dependency injection for testability
   static final AuthSecurityManager _instance = AuthSecurityManager._internal(
     authService: serviceLocator<AuthServiceInterface>(),
     userRepository: serviceLocator<UserRepository>(),
     logger: serviceLocator<LoggerService>(),
   );
-  
+
   factory AuthSecurityManager({
     AuthServiceInterface? authService,
     UserRepository? userRepository,
@@ -40,42 +38,59 @@ class AuthSecurityManager {
     // Otherwise return the singleton instance
     return _instance;
   }
-  
+
   AuthSecurityManager._internal({
     required AuthServiceInterface authService,
     required UserRepository userRepository,
     required LoggerService logger,
-  }) : _authService = authService,
-       _userRepository = userRepository,
-       _logger = logger;
-  
+  })  : _authService = authService,
+        _userRepository = userRepository,
+        _logger = logger;
+
   /// Initialize the security manager
-  Future<void> initialize({required Function() onSessionExpired}) async {
-    // Create session manager with timeout handling
-    _sessionManager = await SessionManager.create(
-      onSessionExpired: onSessionExpired,
-    );
-    
+  Future<void> initialize() async {
     _logger.d(_tag, 'Auth security manager initialized');
   }
-  
-  /// Start tracking user session
+
+  /// Start tracking user session (placeholder if SessionManager is removed)
   void startUserSession() {
-    _sessionManager.startSessionTimer();
-    _logger.d(_tag, 'User session tracking started');
+    _logger.d(_tag, 'User session started (tracking logic removed)');
   }
-  
-  /// Update user activity to prevent timeout
+
+  /// Update user activity (placeholder if SessionManager is removed)
   void updateUserActivity() {
-    _sessionManager.updateActivity();
+    _logger.d(_tag, 'User activity updated (tracking logic removed)');
   }
-  
-  /// End the user session
+
+  /// End the user session (placeholder if SessionManager is removed)
   void endUserSession() {
-    _sessionManager.clearSession();
-    _logger.d(_tag, 'User session ended');
+    _logger.d(_tag, 'User session ended (tracking logic removed)');
   }
-  
+
+  /// Check if the current session is active (placeholder if SessionManager is removed)
+  bool isSessionActive() {
+    _logger.d(_tag, 'Session active check (logic removed, returning false)');
+    return false; // Defaulting to false as session management is removed
+  }
+
+  /// Get the last activity time (placeholder if SessionManager is removed)
+  DateTime? getLastActivityTime() {
+    _logger.d(_tag, 'Get last activity time (logic removed, returning null)');
+    return null; // Defaulting to null
+  }
+
+  /// Get the session timeout duration (placeholder if SessionManager is removed)
+  Duration? getSessionTimeoutDuration() {
+    _logger.d(_tag, 'Get session timeout (logic removed, returning null)');
+    return null; // Defaulting to null
+  }
+
+  /// Set a new session timeout duration (placeholder if SessionManager is removed)
+  Future<void> setSessionTimeout(Duration timeout) async {
+    _logger.d(_tag,
+        'Set session timeout (logic removed): ${timeout.inSeconds} seconds');
+  }
+
   /// Check if the current auth token is valid and refresh if needed
   Future<String?> ensureValidToken() async {
     try {
@@ -85,7 +100,7 @@ class AuthSecurityManager {
       rethrow;
     }
   }
-  
+
   /// Force refresh the authentication token
   Future<String?> forceTokenRefresh() async {
     try {
@@ -95,7 +110,7 @@ class AuthSecurityManager {
       rethrow;
     }
   }
-  
+
   /// Validate a credential (useful before sensitive operations)
   Future<bool> validateCredential(AuthCredential credential) async {
     try {
@@ -105,44 +120,16 @@ class AuthSecurityManager {
       return false;
     }
   }
-  
+
   /// Get user with cached data for better performance
   Future<dynamic> getCurrentUserWithCache() async {
     try {
       return await _userRepository.getCurrentUserWithCache();
     } catch (e) {
       _logger.e(_tag, 'Failed to get cached user data', e);
-      
+
       // Fallback to standard method
       return _userRepository.currentUser;
-    }
-  }
-  
-  /// Get remaining session time
-  Duration get remainingSessionTime => _sessionManager.remainingTime;
-  
-  /// Dispose resources to prevent memory leaks
-  void dispose() {
-    _sessionManager.dispose();
-    _logger.d(_tag, 'Auth security manager resources released');
-  }
-  
-  /// Validate and update session timeout duration
-  /// Returns true if timeout was updated successfully
-  Future<bool> updateSessionTimeout(int seconds) async {
-    // Ensure timeout value is within reasonable bounds (5 min to 4 hours)
-    if (seconds < 300 || seconds > 14400) {
-      _logger.w(_tag, 'Invalid session timeout value: $seconds seconds');
-      return false;
-    }
-    
-    try {
-      await _sessionManager.updateSessionTimeout(seconds);
-      _logger.d(_tag, 'Session timeout updated to $seconds seconds');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to update session timeout', e);
-      return false;
     }
   }
 }
