@@ -102,6 +102,8 @@ class HomeScreenContent extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
+        // Remove back button by setting automaticallyImplyLeading to false
+        automaticallyImplyLeading: false,
       ),
       body: Center(
         child: Column(
@@ -111,15 +113,7 @@ class HomeScreenContent extends StatelessWidget {
               'Welcome to DuckBuck!',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Home Demo Action Tapped!')),
-                );
-              },
-              child: const Text('Home Demo Action'),
-            ),
+            // Removed the demo button as requested
           ],
         ),
       ),

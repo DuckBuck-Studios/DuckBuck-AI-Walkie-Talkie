@@ -6,6 +6,7 @@ import 'package:duckbuck/features/main_navigation.dart'; // Import MainNavigatio
 import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:duckbuck/core/legal/legal_document_screen.dart';
 import 'package:duckbuck/core/legal/legal_service.dart';
+import 'package:duckbuck/features/settings/screens/privacy_settings_screen.dart';
 
 /// Main app routes and navigation helper
 class AppRoutes {
@@ -16,6 +17,7 @@ class AppRoutes {
   static const String profileCompletion = '/profile_completion';
   static const String termsOfService = '/terms';
   static const String privacyPolicy = '/privacy';
+  static const String privacySettings = '/privacy_settings';
   // static const String friends = '/friends'; // No longer a top-level route, handled by HomeScreen
   // static const String settings = '/settings'; // No longer a top-level route, handled by HomeScreen
 
@@ -60,6 +62,11 @@ class AppRoutes {
                 title: 'Privacy Policy',
                 documentLoader: () => LegalService.instance.getPrivacyPolicy(),
               ),
+        );
+
+      case privacySettings:
+        return MaterialPageRoute(
+          builder: (_) => const PrivacySettingsScreen(),
         );
               
       // case friends: // Removed as it's part of HomeScreen's GNav

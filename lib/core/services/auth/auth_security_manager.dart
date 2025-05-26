@@ -56,41 +56,16 @@ class AuthSecurityManager {
   void startUserSession() {
     _logger.d(_tag, 'User session started (tracking logic removed)');
   }
-
-  /// Update user activity (placeholder if SessionManager is removed)
-  void updateUserActivity() {
-    _logger.d(_tag, 'User activity updated (tracking logic removed)');
-  }
+ 
 
   /// End the user session (placeholder if SessionManager is removed)
   void endUserSession() {
     _logger.d(_tag, 'User session ended (tracking logic removed)');
   }
-
-  /// Check if the current session is active (placeholder if SessionManager is removed)
-  bool isSessionActive() {
-    _logger.d(_tag, 'Session active check (logic removed, returning false)');
-    return false; // Defaulting to false as session management is removed
-  }
-
-  /// Get the last activity time (placeholder if SessionManager is removed)
-  DateTime? getLastActivityTime() {
-    _logger.d(_tag, 'Get last activity time (logic removed, returning null)');
-    return null; // Defaulting to null
-  }
-
-  /// Get the session timeout duration (placeholder if SessionManager is removed)
-  Duration? getSessionTimeoutDuration() {
-    _logger.d(_tag, 'Get session timeout (logic removed, returning null)');
-    return null; // Defaulting to null
-  }
-
-  /// Set a new session timeout duration (placeholder if SessionManager is removed)
-  Future<void> setSessionTimeout(Duration timeout) async {
-    _logger.d(_tag,
-        'Set session timeout (logic removed): ${timeout.inSeconds} seconds');
-  }
-
+ 
+ 
+ 
+ 
   /// Check if the current auth token is valid and refresh if needed
   Future<String?> ensureValidToken() async {
     try {
@@ -100,16 +75,7 @@ class AuthSecurityManager {
       rethrow;
     }
   }
-
-  /// Force refresh the authentication token
-  Future<String?> forceTokenRefresh() async {
-    try {
-      return await _authService.refreshIdToken(forceRefresh: true);
-    } catch (e) {
-      _logger.e(_tag, 'Token refresh failed', e);
-      rethrow;
-    }
-  }
+ 
 
   /// Validate a credential (useful before sensitive operations)
   Future<bool> validateCredential(AuthCredential credential) async {
