@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:duckbuck/features/home/screens/home_screen.dart'; 
+import 'package:duckbuck/features/friends/screens/friends_screen.dart';
 import 'package:duckbuck/features/settings/screens/settings_screen.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -16,8 +17,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   // Define the screens for the GNav
   static const List<Widget> _widgetOptions = <Widget>[
-    HomeScreen(),     // Actual HomeScreen widget for the first tab 
-    SettingsScreen(), // Settings screen (demo)
+    HomeScreen(),     // Home tab
+    FriendsScreen(),  // Friends tab
+    SettingsScreen(), // Settings tab
   ];
 
   @override
@@ -87,15 +89,15 @@ class _MainNavigationState extends State<MainNavigation> {
               color: Colors.grey[400]!, // Inactive icon/text color
               tabs: const [
                 GButton(
-                  icon: Icons.home_outlined, // Removed activeIcon
+                  icon: Icons.home_outlined,
                   text: 'Home',
                 ),
                 GButton(
-                  icon: Icons.people_outline, // Removed activeIcon
+                  icon: Icons.people_outline,
                   text: 'Friends',
                 ),
                 GButton(
-                  icon: Icons.settings_outlined, // Removed activeIcon
+                  icon: Icons.settings_outlined,
                   text: 'Settings',
                 ),
               ],

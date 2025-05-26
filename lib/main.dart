@@ -1,139 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
-import 'core/services/preferences_service.dart';
+
+import 'core/app/app_bootstrapper.dart';
+import 'core/app/provider_registry.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
-import 'core/services/service_locator.dart';
-import 'features/auth/providers/auth_state_provider.dart';
-import 'core/services/firebase/firebase_app_check_service.dart';
+import 'core/services/preferences_service.dart';
+import 'core/services/logger_service.dart';
+import 'core/services/auth/auth_security_manager.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
-import 'core/services/crashlytics_consent_manager.dart';
-import 'core/providers/crashlytics_consent_provider.dart';
-import 'core/services/auth/auth_security_manager.dart'; 
-import 'core/services/security/app_security_service.dart';
+import 'core/services/service_locator.dart';
+
+/// Main entry point for the application
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
   
+  final logger = LoggerService();
+  final bootstrapper = AppBootstrapper();
+  
   try {
+    // Initialize all app services using the bootstrapper
+    // This centralizes all initialization logic in one place
+    logger.info('main', '🚀 Starting DuckBuck app initialization');
+    await bootstrapper.initialize();
+    logger.info('main', '✅ App initialization complete');
 
-    // Initialize Firebase with error handling
-    try {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-      debugPrint('Firebase initialized successfully');
-    } catch (e) {
-      debugPrint('Failed to initialize Firebase: $e');
-      // Allow app to continue even if Firebase fails, with limited functionality
-    }
-
-    // Initialize Firebase Crashlytics with error handling
-    try {
-      final crashlyticsService = FirebaseCrashlyticsService();
-      await crashlyticsService.initialize();
-      
-      // Register for unhandled errors in Flutter/Dart
-      FlutterError.onError = crashlyticsService.instance.recordFlutterFatalError;
-      
-      // Register for unhandled errors in the platform/native side
-      PlatformDispatcher.instance.onError = (error, stack) {
-        crashlyticsService.recordError(error, stack, fatal: true);
-        return true;
-      };
-      
-      // Note: FirebaseCrashlyticsService is registered in setupServiceLocator()
-      debugPrint('Firebase Crashlytics initialized successfully');
-    } catch (e) {
-      debugPrint('Failed to initialize Firebase Crashlytics: $e');
-      // App can function without Crashlytics, but with reduced error reporting
-    }
-
-    // Initialize Firebase App Check with error handling
-    try {
-      final appCheckService = FirebaseAppCheckService();
-      await appCheckService.initialize();
-      debugPrint('Firebase App Check initialized successfully');
-    } catch (e) {
-      debugPrint('Failed to initialize Firebase App Check: $e');
-      // App can still function without App Check, but with reduced security
-    }
-
-    // Initialize shared preferences
-    try {
-      await PreferencesService.instance.init();
-      debugPrint('Preferences service initialized successfully');
-    } catch (e) {
-      debugPrint('Failed to initialize Preferences: $e');
-      // Critical error - app depends on preferences
-      rethrow;
-    }
-
-    // Setup service locator
-    try {
-      await setupServiceLocator();
-      debugPrint('Service locator initialized successfully');
-    } catch (e) {
-      debugPrint('Failed to setup service locator: $e');
-      // Critical error - app depends on services
-      rethrow;
-    }
-
-    // Configure system UI overlay for consistent appearance
-    AppTheme.configureSystemUIOverlay();
-
-    // Initialize the security service
-    try {
-      final securityService = serviceLocator<AppSecurityService>();
-      final securityInitialized = await securityService.initialize();
-      if (!securityInitialized) {
-        debugPrint('⚠️ Security services initialized with warnings');
-      } else {
-        debugPrint('🔒 Security services initialized successfully');
-      }
-    } catch (e) {
-      debugPrint('❌ Error initializing security services: $e');
-      // Continue with reduced security, but log the issue
-      try {
-        final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
-        crashlytics.recordError(
-          e,
-          null,
-          reason: 'Security initialization failure',
-          fatal: false,
-          information: {'startup_stage': 'security_initialization'},
-        );
-      } catch (_) {
-        // Silently continue if logging fails
-      }
-    }
-
-    // Initialize Crashlytics consent manager
-    try {
-      // Wait for the async singleton to be ready
-      await serviceLocator.isReady<CrashlyticsConsentManager>();
-      final crashlyticsConsentManager = serviceLocator<CrashlyticsConsentManager>();
-      await crashlyticsConsentManager.initialize();
-      debugPrint('Crashlytics consent manager initialized');
-    } catch (e) {
-      debugPrint('Error initializing Crashlytics consent manager: $e');
-      // Continue execution even if this fails
-    }
-
-    // Ensure authentication state is in sync
-    try {
-      await _syncAuthState();
-      debugPrint('Auth state synchronized successfully');
-    } catch (e) {
-      debugPrint('Error syncing auth state: $e');
-      // Handle but continue execution
-    }
+    // Start the application
     
     runApp(const MyApp());
   } catch (e, stack) {
-    debugPrint('Critical error during app initialization: $e');
+    logger.error('main', 'Critical error during app initialization: $e');
     
     // Try to log the error to Crashlytics if available
     try {
@@ -147,7 +45,7 @@ void main() async {
       );
     } catch (crashlyticsError) {
       // Crashlytics itself failed, just log to console
-      debugPrint('Failed to log to Crashlytics: $crashlyticsError');
+      logger.error('main', 'Failed to log to Crashlytics: $crashlyticsError');
     }
     
     // Show some kind of error UI or gracefully exit
@@ -163,34 +61,7 @@ void main() async {
   }
 }
 
-/// Sync authentication state between Firebase and SharedPreferences
-Future<void> _syncAuthState() async {
-  // Check if Firebase says we're logged in
-  final firebaseUser = FirebaseAuth.instance.currentUser;
-  final isLoggedInPrefs = PreferencesService.instance.isLoggedIn;
 
-  // If there's a mismatch between Firebase and SharedPreferences
-  if (firebaseUser == null && isLoggedInPrefs) {
-    // Firebase says logged out but SharedPrefs says logged in - fix by clearing all
-    await PreferencesService.instance.setLoggedIn(false);
-    await PreferencesService.instance.clearAll();
-    debugPrint(
-      'Auth state mismatch detected and fixed: Cleared invalid login state',
-    );
-  } else if (firebaseUser != null && !isLoggedInPrefs) {
-    // Firebase says logged in but SharedPrefs says logged out - update preferences
-    await PreferencesService.instance.setLoggedIn(true);
-    debugPrint(
-      'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state',
-    );
-  } else {
-    // States match, ensure they're both up to date
-    await PreferencesService.instance.setLoggedIn(firebaseUser != null);
-    debugPrint(
-      'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}',
-    );
-  }
-}
 
 /// Root application widget
 ///
@@ -232,22 +103,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        // Authentication state provider
-        ChangeNotifierProvider<AuthStateProvider>(
-          create: (_) => AuthStateProvider(),
-        ),
-        // Crashlytics consent provider
-        ChangeNotifierProvider<CrashlyticsConsentProvider>(
-          create: (_) {
-            final provider = CrashlyticsConsentProvider();
-            // Initialize in the background
-            provider.initialize();
-            return provider;
-          },
-        ), 
-        // Add more app-wide providers here as needed
-      ],
+      // Use the centralized provider registry to manage all app providers
+      // This makes it easier to add/remove providers and ensures consistency
+      providers: ProviderRegistry.getProviders(),
       child: MaterialApp(
         title: 'DuckBuck - Updated',
         theme: AppTheme.blackTheme,

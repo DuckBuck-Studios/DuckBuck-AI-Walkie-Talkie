@@ -32,7 +32,7 @@ class CrashlyticsConsentManager {
   /// Initialize and load stored user consent
   Future<void> initialize() async {
     // Check if user has already made a choice
-    final hasUserConsented = _prefs.toString().contains(_crashlyticsEnabledKey);
+    final hasUserConsented = _prefs.containsKey(_crashlyticsEnabledKey);
     
     if (!hasUserConsented) {
       // Default to disabled in debug mode and enabled in release mode
@@ -46,8 +46,7 @@ class CrashlyticsConsentManager {
   
   /// Set user consent for crash reporting
   Future<void> setUserConsent({required bool enabled}) async {
-    final sharedPrefs = await SharedPreferences.getInstance();
-    await sharedPrefs.setBool(_crashlyticsEnabledKey, enabled);
+    await _prefs.setBool(_crashlyticsEnabledKey, enabled);
     await _crashlytics.setCrashlyticsCollectionEnabled(enabled);
     
     _crashlytics.log('User ${enabled ? 'enabled' : 'disabled'} crash reporting');
@@ -55,8 +54,7 @@ class CrashlyticsConsentManager {
   
   /// Get current user consent status
   Future<bool> getUserConsent() async {
-    final sharedPrefs = await SharedPreferences.getInstance();
-    return sharedPrefs.getBool(_crashlyticsEnabledKey) ?? kReleaseMode;
+    return _prefs.getBool(_crashlyticsEnabledKey) ?? kReleaseMode;
   }
   
   /// Show a dialog to prompt the user for crash reporting consent
