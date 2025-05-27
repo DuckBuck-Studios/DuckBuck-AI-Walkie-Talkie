@@ -61,11 +61,16 @@ class ApiService {
     Dio? dio,
   }) : 
     _baseUrl = baseUrl ?? 'https://api.duckbuck.app',
-    _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY', 
-        defaultValue: 'b5735G58099503d10ab75a2d795bd19e03e07fa6059641ffac6546fe798b89Oc'),
+    _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
     _dio = dio ?? Dio() {
+      // Validate API key is provided
+      if (_apiKey.isEmpty) {
+        throw ArgumentError(
+          'API key is required. Set DUCKBUCK_API_KEY environment variable or pass apiKey parameter.'
+        );
+      }
       _setupDioConfiguration();
     }
   
