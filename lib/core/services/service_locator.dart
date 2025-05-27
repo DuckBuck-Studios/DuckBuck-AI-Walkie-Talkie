@@ -18,6 +18,8 @@ import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
 import '../repositories/user_repository.dart'; 
 import 'logger/logger_service.dart';
+import 'relationship/relationship_service_interface.dart';
+import 'relationship/relationship_service.dart';
 
 
 /// Global service locator instance
@@ -120,6 +122,16 @@ Future<void> setupServiceLocator() async {
   serviceLocator.registerLazySingleton<UserServiceInterface>(
     () => UserService(
       databaseService: serviceLocator<FirebaseDatabaseService>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+  
+  // Register relationship service
+  serviceLocator.registerLazySingleton<RelationshipServiceInterface>(
+    () => RelationshipService(
+      databaseService: serviceLocator<FirebaseDatabaseService>(),
+      userService: serviceLocator<UserServiceInterface>(),
+      authService: serviceLocator<AuthServiceInterface>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );
