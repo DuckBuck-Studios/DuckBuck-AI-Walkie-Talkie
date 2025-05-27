@@ -38,6 +38,66 @@ For detailed documentation:
 
 ## Getting Started
 
+### Prerequisites
+
+- Flutter SDK (latest stable version)
+- Dart SDK  
+- iOS development: Xcode and iOS Simulator
+- Android development: Android Studio and Android SDK
+
+### Quick Setup
+
+1. **Set up environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your DUCKBUCK_API_KEY
+   ```
+
+2. **Run in development:**
+   ```bash
+   ./scripts/run-dev.sh
+   ```
+
+3. **Build for production:**
+   ```bash
+   ./scripts/build.sh release
+   ```
+
+### Development Workflow
+
+The project includes production-ready scripts for streamlined development:
+
+#### Development Script
+```bash
+# Run on default device
+./scripts/run-dev.sh
+
+# Run on specific device
+./scripts/run-dev.sh "iPhone 15 Pro"
+./scripts/run-dev.sh "Pixel 7 API 34"
+```
+
+Features:
+- Automatic environment loading from `.env`
+- Device detection and selection
+- Hot reload enabled
+- Security verification (shows truncated API key)
+
+#### Build Script
+```bash
+./scripts/build.sh [debug|release|ios-debug|ios-release]
+```
+
+Features:
+- Environment validation
+- Secure environment variable passing
+- Multi-platform support
+- Optimized production builds
+
+For detailed configuration, see [Environment Setup Guide](docs/ENVIRONMENT_SETUP.md).
+
+### Development Resources
+
 This project is a starting point for a Flutter application.
 
 A few resources to get you started if this is your first Flutter project:
