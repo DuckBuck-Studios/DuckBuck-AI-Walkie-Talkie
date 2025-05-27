@@ -8,6 +8,7 @@ import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
 import '../services/api/api_service.dart';
+import '../services/notifications/email_notification_service.dart';
 import '../services/user/user_service_interface.dart';
 
 /// Repository to handle user data operations
@@ -18,6 +19,7 @@ class UserRepository {
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final ApiService _apiService;
+  final EmailNotificationService _emailService;
   
   static const String _tag = 'USER_REPO'; // Tag for logs
 
@@ -28,10 +30,12 @@ class UserRepository {
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
     ApiService? apiService,
+    EmailNotificationService? emailService,
   }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _apiService = apiService ?? serviceLocator<ApiService>();
+       _apiService = apiService ?? serviceLocator<ApiService>(),
+       _emailService = emailService ?? serviceLocator<EmailNotificationService>();
 
   /// Get the current authenticated user
   UserModel? get currentUser {
@@ -161,9 +165,9 @@ class UserRepository {
         final userMetadata = user.metadata;
         final loginTime = DateTime.now().toString();
         
-        // Fire and forget email sending in the background (non-blocking)
+        // Fire and forget email sending in the background using the centralized email service
         Future(() {
-          _apiService.sendLoginNotificationEmail(
+          _emailService.sendLoginNotificationEmail(
             email: userEmail,
             username: userName,
             loginTime: loginTime,
@@ -257,9 +261,9 @@ class UserRepository {
         final userMetadata = user.metadata;
         final loginTime = DateTime.now().toString();
         
-        // Fire and forget email sending in the background (non-blocking)
+        // Fire and forget email sending in the background using the centralized email service
         Future(() {
-          _apiService.sendLoginNotificationEmail(
+          _emailService.sendLoginNotificationEmail(
             email: userEmail,
             username: userName,
             loginTime: loginTime,
@@ -297,6 +301,31 @@ class UserRepository {
     required void Function(String) codeAutoRetrievalTimeout,
   }) async {
     try {
+      _logger.i(_tag, 'Starting phone verification for number: $phoneNumber');
+      
+      // Check if the phone number is rate limited
+      final (isLimited, timeoutRemaining) = isPhoneNumberRateLimited(phoneNumber);
+      if (isLimited) {
+        _logger.w(_tag, 'Phone verification rate limited: must wait $timeoutRemaining more seconds');
+        
+        // Log rate limiting in analytics
+        await _analytics.logAuthFailure(
+          authMethod: 'phone',
+          reason: 'Rate limited',
+          errorCode: 'too_many_attempts',
+        );
+        
+        verificationFailed(
+          AuthException(
+            AuthErrorCodes.tooManyRequests,
+            'Too many verification attempts. Please wait ${_formatTimeRemaining(timeoutRemaining)} before trying again.',
+            null,
+            AuthMethod.phone,
+          ),
+        );
+        return;
+      }
+      
       // Log phone verification started
       await _analytics.logPhoneVerificationStarted(
         phoneNumber: phoneNumber,
@@ -331,13 +360,47 @@ class UserRepository {
       rethrow;
     }
   }
+  
+  /// Format a time duration in seconds into a user-friendly string
+  String _formatTimeRemaining(int seconds) {
+    if (seconds < 60) {
+      return '$seconds seconds';
+    } else if (seconds < 3600) {
+      final minutes = (seconds / 60).floor();
+      return '$minutes ${minutes == 1 ? 'minute' : 'minutes'}';
+    } else {
+      final hours = (seconds / 3600).floor();
+      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    }
+  }
 
   /// Verify phone OTP code and sign in
   Future<(UserModel, bool)> verifyOtpAndSignIn({
     required String verificationId,
     required String smsCode,
+    required String phoneNumber,
   }) async {
     try {
+      // Check if OTP verification attempts are rate limited for this number
+      final (isLimited, timeoutRemaining) = isOtpVerificationRateLimited(phoneNumber);
+      if (isLimited) {
+        _logger.w(_tag, 'OTP verification rate limited for $phoneNumber: must wait $timeoutRemaining more seconds');
+        
+        // Log rate limiting event
+        await _analytics.logAuthFailure(
+          authMethod: 'phone_otp',
+          reason: 'Rate limited',
+          errorCode: 'too_many_attempts',
+        );
+        
+        throw AuthException(
+          AuthErrorCodes.tooManyRequests,
+          'Too many verification attempts. Please wait ${_formatTimeRemaining(timeoutRemaining)} before trying again.',
+          null,
+          AuthMethod.phone,
+        );
+      }
+      
       // Log OTP verification attempt
       await _analytics.logAuthAttempt(
         authMethod: 'phone_otp',
@@ -799,5 +862,121 @@ class UserRepository {
       
       rethrow;
     }
+  }
+
+  // Track phone verification attempts to implement rate limiting
+  final Map<String, List<DateTime>> _phoneVerificationAttempts = {};
+  final Map<String, List<DateTime>> _otpVerificationAttempts = {};
+  
+  /// Check if a phone number is rate limited for verification attempts
+  /// Returns true if rate limited, false if allowed to proceed
+  /// Also returns the remaining timeout in seconds
+  (bool isLimited, int timeoutRemaining) isPhoneNumberRateLimited(String phoneNumber) {
+    // Normalize phone number by removing spaces and non-digits except +
+    final normalizedNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
+    
+    // Check if phone verification attempts are rate limited
+    final attempts = _phoneVerificationAttempts[normalizedNumber] ?? [];
+    final now = DateTime.now();
+    
+    // Initialize attempts list if it doesn't exist
+    if (!_phoneVerificationAttempts.containsKey(normalizedNumber)) {
+      _phoneVerificationAttempts[normalizedNumber] = [];
+      return (false, 0); // First attempt, not rate limited
+    }
+    
+    // Remove attempts older than 1 hour
+    _phoneVerificationAttempts[normalizedNumber] = attempts.where((attempt) {
+      return now.difference(attempt).inHours < 1;
+    }).toList();
+    
+    final recentAttempts = _phoneVerificationAttempts[normalizedNumber]!.length;
+    if (recentAttempts == 0) return (false, 0); // No attempts in last hour
+    
+    int timeoutSeconds;
+    
+    // Determine timeout based on frequency of attempts
+    if (recentAttempts <= 2) {
+      timeoutSeconds = 0;  // No timeout for first 2 attempts
+    } else if (recentAttempts <= 5) {
+      timeoutSeconds = 30; // 30 seconds timeout after 5 attempts
+    } else if (recentAttempts <= 10) {
+      timeoutSeconds = 60; // 1 minute timeout after 10 attempts
+    } else if (recentAttempts <= 15) { 
+      timeoutSeconds = 300; // 5 minutes timeout after 15 attempts
+    } else {
+      timeoutSeconds = 3600; // 1 hour timeout after more attempts (potential attack)
+    }
+    
+    // Check if most recent attempt is within timeout period
+    if (_phoneVerificationAttempts[normalizedNumber]!.isNotEmpty) {
+      final lastAttempt = _phoneVerificationAttempts[normalizedNumber]!.last;
+      final secondsSinceLastAttempt = now.difference(lastAttempt).inSeconds;
+      
+      if (secondsSinceLastAttempt < timeoutSeconds) {
+        final timeoutRemaining = timeoutSeconds - secondsSinceLastAttempt;
+        _logger.w(_tag, 'Phone verification rate limited: $recentAttempts attempts for $normalizedNumber, must wait $timeoutRemaining more seconds');
+        return (true, timeoutRemaining);
+      }
+    }
+    
+    // Record this attempt
+    _phoneVerificationAttempts[normalizedNumber]!.add(now);
+    return (false, 0); // Not rate limited
+  }
+  
+  /// Check if OTP verification for a phone number is rate limited
+  /// Returns true if rate limited, false if allowed to proceed
+  /// Also returns the remaining timeout in seconds  
+  (bool isLimited, int timeoutRemaining) isOtpVerificationRateLimited(String phoneNumber) {
+    // Normalize phone number by removing spaces and non-digits except +
+    final normalizedNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
+    
+    // Check if OTP verification attempts are rate limited
+    final attempts = _otpVerificationAttempts[normalizedNumber] ?? [];
+    final now = DateTime.now();
+    
+    // Initialize attempts list if it doesn't exist
+    if (!_otpVerificationAttempts.containsKey(normalizedNumber)) {
+      _otpVerificationAttempts[normalizedNumber] = [];
+      return (false, 0); // First attempt, not rate limited
+    }
+    
+    // Remove attempts older than 1 hour
+    _otpVerificationAttempts[normalizedNumber] = attempts.where((attempt) {
+      return now.difference(attempt).inHours < 1;
+    }).toList();
+    
+    final recentAttempts = _otpVerificationAttempts[normalizedNumber]!.length;
+    if (recentAttempts == 0) return (false, 0); // No attempts in last hour
+    
+    int timeoutSeconds;
+    
+    // OTP verification should have stricter rate limiting since it's more security-sensitive
+    if (recentAttempts <= 2) {
+      timeoutSeconds = 0;  // No timeout for first 2 attempts
+    } else if (recentAttempts <= 5) {
+      timeoutSeconds = 60; // 1 minute timeout after 5 attempts
+    } else if (recentAttempts <= 8) {
+      timeoutSeconds = 300; // 5 minutes timeout after 8 attempts
+    } else {
+      timeoutSeconds = 3600; // 1 hour timeout after more attempts (potential attack)
+    }
+    
+    // Check if most recent attempt is within timeout period
+    if (_otpVerificationAttempts[normalizedNumber]!.isNotEmpty) {
+      final lastAttempt = _otpVerificationAttempts[normalizedNumber]!.last;
+      final secondsSinceLastAttempt = now.difference(lastAttempt).inSeconds;
+      
+      if (secondsSinceLastAttempt < timeoutSeconds) {
+        final timeoutRemaining = timeoutSeconds - secondsSinceLastAttempt;
+        _logger.w(_tag, 'OTP verification rate limited: $recentAttempts attempts for $normalizedNumber, must wait $timeoutRemaining more seconds');
+        return (true, timeoutRemaining);
+      }
+    }
+    
+    // Record this attempt
+    _otpVerificationAttempts[normalizedNumber]!.add(now);
+    return (false, 0); // Not rate limited
   }
 }

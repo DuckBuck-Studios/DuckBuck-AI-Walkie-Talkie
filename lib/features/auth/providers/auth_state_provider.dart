@@ -217,6 +217,7 @@ class AuthStateProvider extends ChangeNotifier {
   Future<(UserModel, bool)> verifyOtpAndSignIn({
     required String verificationId,
     required String smsCode,
+    required String phoneNumber,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -226,6 +227,7 @@ class AuthStateProvider extends ChangeNotifier {
       final (user, isNewUser) = await _userRepository.verifyOtpAndSignIn(
         verificationId: verificationId,
         smsCode: smsCode,
+        phoneNumber: phoneNumber,
       );
 
       debugPrint(

@@ -10,6 +10,8 @@ import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart'
 import 'package:duckbuck/core/services/firebase/firebase_storage_service.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/services/api/api_service.dart';
+import 'package:duckbuck/core/services/notifications/email_notification_service.dart';
+import 'package:duckbuck/core/services/logger/logger_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/features/auth/providers/auth_state_provider.dart';
 
@@ -37,6 +39,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   // Services
   late final FirebaseStorageService _storageService;
   late final FirebaseAnalyticsService _analyticsService;
+  late final LoggerService _logger;
 
   @override
   void initState() {
@@ -45,6 +48,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     // Initialize services
     _storageService = serviceLocator<FirebaseStorageService>();
     _analyticsService = serviceLocator<FirebaseAnalyticsService>();
+    _logger = serviceLocator<LoggerService>();
 
     // Log screen view for analytics
     _analyticsService.logScreenView(
@@ -236,14 +240,14 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         final userEmail = user.email ?? '';
         final userMetadata = user.metadata;
         
-        // Fire and forget email sending in the background
+        // Fire and forget email sending in the background using the centralized email service
         Future(() {
           try {
-            // Get service locator instance to access API service
-            final apiService = serviceLocator<ApiService>();
+            // Get service locator instance to access email notification service
+            final emailService = serviceLocator<EmailNotificationService>();
             
             // Send welcome email with updated user info without awaiting
-            apiService.sendWelcomeEmail(
+            emailService.sendWelcomeEmail(
               email: userEmail,
               username: userName,
               metadata: userMetadata,
