@@ -1,154 +1,283 @@
-# DuckBuck Authentication Architecture
+# DuckBuck Authentication Architecture - Enhanced
 
 ## Overview
 
-The DuckBuck authentication system implements a secure, multi-provider authentication flow that supports:
-- Google Sign-In
-- Apple Sign-In
-- Phone Authentication with OTP verification
+The DuckBuck authentication system implements a **production-ready, secure, multi-provider authentication flow** that supports:
+- **Google Sign-In** with email notifications
+- **Apple Sign-In** with privacy relay support
+- **Phone Authentication** with OTP verification and rate limiting
 
-The architecture follows a layered design pattern with clear separation of concerns to ensure maintainability, scalability, and testability. This structured approach enables robust security features, comprehensive error handling, and a smooth user experience while maintaining code quality.
+The architecture follows a **layered design pattern** with clear separation of concerns, comprehensive security features, and robust error handling. This structured approach enables enterprise-level security, comprehensive monitoring, optimized performance, and exceptional user experience while maintaining high code quality and maintainability.
 
-## Architecture Diagram
+## Enhanced Architecture Diagram
 
-> **Viewing Tip:** For optimal viewing, click the diagram to expand to full screen. You can zoom in/out and pan around to see details. The diagram uses color coding to distinguish between different layers of the architecture.
+> **Viewing Tip:** Click the diagram to expand to full screen. The diagram uses advanced color coding and flow visualization to show the complete authentication ecosystem including all recent enhancements.
 
 ```mermaid
-%%{init: {'theme': 'neutral', 'flowchart': {'htmlLabels': true, 'curve': 'basis', 'padding': 30, 'useMaxWidth': false, 'diagramPadding': 30, 'rankSpacing': 80, 'nodeSpacing': 80}}}%%
+%%{init: {'theme': 'neutral', 'flowchart': {'htmlLabels': true, 'curve': 'basis', 'padding': 30, 'useMaxWidth': false, 'diagramPadding': 30, 'rankSpacing': 100, 'nodeSpacing': 100}}}%%
 flowchart TD
-    %% Configuration for larger display
-    linkStyle default stroke-width:1.5px,fill:none
+    %% Configuration for enhanced display
+    linkStyle default stroke-width:2px,fill:none
     
-    %% UI Layer
-    subgraph UI_Layer ["UI Layer"]
-        direction LR
-        WS["Welcome Screen<br/>🏠"] --- ABS["Auth Bottom Sheet<br/>🔐"]
-        ABS --- PCS["Profile Completion<br/>👤"]
-        PCS --- HS["Home Screen<br/>📱"]
-        HS --- PS["Preferences<br/>⚙️"]
-    end
-    
-    %% Provider Layer
-    subgraph Provider_Layer ["Provider Layer"]
-        direction LR
-        ASP["Auth State Provider<br/>🔄"]
-        USP["User Settings Provider<br/>🛠️"]
-        ASP --- USP
-    end
-    
-    %% Repository Layer
-    subgraph Repository_Layer ["Repository Layer"]
-        UR["User Repository<br/>📂"]
-    end
-    
-    %% Service Layer
-    subgraph Service_Layer ["Service Layer"]
+    %% UI Layer - Enhanced with rate limiting feedback
+    subgraph UI_Layer ["🎨 UI Layer - User Interface"]
         direction TB
-        %% Auth Services
-        subgraph Auth_Services ["Auth Services"]
-            direction LR
-            AuthService["Auth Service<br/>Interface<br/>🔑"] --- FireAuth["Firebase Auth<br/>Service<br/>🔥"]
-            FireAuth --- SecManager["Auth Security<br/>Manager<br/>🛡️"]
-            SecManager --- SessManager["Session<br/>Manager<br/>⏱️"]
+        subgraph Auth_Screens ["Authentication Screens"]
+            WS["Welcome Screen<br/>🏠<br/>Entry Point"] 
+            ABS["Auth Bottom Sheet<br/>🔐<br/>Multi-Provider Auth<br/>Rate Limit Display"]
+            OTP["OTP Verification<br/>📱<br/>SMS Auto-Fill<br/>Rate Limit Handling"]
+        end
+        subgraph Post_Auth ["Post-Authentication"]
+            PCS["Profile Completion<br/>👤<br/>Email Integration"] 
+            HS["Home Screen<br/>📱<br/>Authenticated State"]
+            PS["Preferences<br/>⚙️<br/>Settings Management"]
+        end
+    end
+    
+    %% Provider Layer - Enhanced state management
+    subgraph Provider_Layer ["🔄 Provider Layer - State Management"]
+        direction TB
+        ASP["Auth State Provider<br/>🔄<br/>Centralized Auth State<br/>Real-time Updates<br/>Error Handling"]
+        USP["User Settings Provider<br/>🛠️<br/>User Preferences<br/>Cache Management"]
+        
+        subgraph Provider_Features ["Enhanced Features"]
+            RateLimit["Rate Limiting State<br/>⏱️<br/>OTP Attempt Tracking<br/>Timeout Display"]
+            ErrorState["Error State Management<br/>⚠️<br/>User-Friendly Messages<br/>Recovery Actions"]
+        end
+    end
+    
+    %% Repository Layer - Enhanced coordination
+    subgraph Repository_Layer ["📂 Repository Layer - Business Logic Coordination"]
+        UR["User Repository<br/>📂<br/>Enhanced Coordination<br/>Rate Limiting<br/>Email Integration<br/>Security Validation"]
+    end
+    
+    %% Service Layer - Significantly Enhanced
+    subgraph Service_Layer ["🛠️ Service Layer - Core Services"]
+        direction TB
+        
+        %% Auth Services - Enhanced Security
+        subgraph Auth_Services ["🔑 Authentication Services"]
+            direction TB
+            AuthService["Auth Service Interface<br/>🔑<br/>Multi-Provider Support"] 
+            FireAuth["Firebase Auth Service<br/>🔥<br/>Enhanced Error Handling<br/>Token Management"]
+            SecManager["Auth Security Manager<br/>🛡️<br/>Enhanced Token Refresh<br/>Adaptive Timeouts<br/>Retry Logic<br/>Validation"]
+            SessManager["Session Manager<br/>⏱️<br/>Session Lifecycle<br/>Security Timeouts"]
+        end
+        
+        %% Enhanced Communication Services
+        subgraph Communication_Services ["📧 Communication Services"]
+            direction TB
+            EmailService["Email Notification Service<br/>📧<br/>Fire-and-Forget<br/>Welcome Emails<br/>Login Notifications"]
+            ApiService["Enhanced API Service<br/>🌐<br/>Circuit Breaker<br/>Rate Limiting<br/>Token Caching<br/>Retry Logic<br/>Environment Config"]
         end
         
         %% User Data Services
-        subgraph User_Services ["User Services"]
-            direction LR
-            UserService["User Service<br/>Interface<br/>👥"] --- FireUser["Firebase User<br/>Service<br/>📊"]
-            FireUser --- PrefService["Preferences<br/>Service<br/>💾"]
+        subgraph User_Services ["👥 User Data Services"]
+            direction TB
+            UserService["User Service Interface<br/>👥<br/>Profile Management"] 
+            FireUser["Firebase User Service<br/>📊<br/>Firestore Integration<br/>Data Validation"]
+            PrefService["Preferences Service<br/>💾<br/>Secure Local Storage<br/>Cache Management"]
         end
         
-        %% Support Services
-        subgraph Support_Services ["Support Services"]
-            direction LR
-            AnalService["Analytics<br/>Service<br/>📈"] --- ApiService["API<br/>Service<br/>🌐"]
-            ApiService --- CrashService["Crashlytics<br/>Service<br/>🐛"]
-            CrashService --- NotifService["Notifications<br/>Service<br/>🔔"]
-            NotifService --- LogService["Logger<br/>Service<br/>📝"]
+        %% Support Services - Enhanced
+        subgraph Support_Services ["📈 Support & Monitoring"]
+            direction TB
+            AnalService["Analytics Service<br/>📈<br/>Consolidated Logging<br/>Auth Journey Tracking"] 
+            CrashService["Crashlytics Service<br/>🐛<br/>Error Reporting<br/>Security Monitoring"]
+            NotifService["Notifications Service<br/>🔔<br/>FCM Token Management<br/>Device Registration"]
+            LogService["Logger Service<br/>📝<br/>Structured Logging<br/>Security Events<br/>Performance Metrics"]
         end
     end
     
-    %% Model Layer
-    subgraph Model_Layer ["Model Layer"]
-        direction LR
-        UserModel["User Model<br/>👤"] --- AuthExceptions["Auth Exceptions<br/>⚠️"]
-        AuthExceptions --- TokenModel["Auth Token Model<br/>🔑"]
+    %% Model Layer - Enhanced data structures
+    subgraph Model_Layer ["📋 Model Layer - Data Structures"]
+        direction TB
+        UserModel["Enhanced User Model<br/>👤<br/>Multi-Auth Support<br/>Metadata Handling"] 
+        AuthExceptions["Enhanced Auth Exceptions<br/>⚠️<br/>Detailed Error Codes<br/>User-Friendly Messages<br/>Security Context"]
+        TokenModel["Auth Token Model<br/>🔑<br/>Secure Token Handling<br/>Refresh Management"]
+        RateLimitModel["Rate Limiting Model<br/>⏱️<br/>Attempt Tracking<br/>Timeout Calculation"]
     end
     
-    %% External Services
-    subgraph External_Services ["External Services"]
-        direction LR
-        Firebase["Firebase Auth<br/>🔥"] --- GoogleAuth["Google Sign-In<br/>SDK<br/>G"]
-        GoogleAuth --- AppleAuth["Apple Sign-In<br/>SDK<br/>🍎"]
-        AppleAuth --- Firestore["Firestore<br/>☁️"]
-        Firestore --- FCM["Firebase Cloud<br/>Messaging<br/>📨"]
+    %% External Services - Enhanced integrations
+    subgraph External_Services ["🌐 External Services & APIs"]
+        direction TB
+        subgraph Firebase_Stack ["Firebase Services"]
+            Firebase["Firebase Auth<br/>🔥<br/>Core Authentication"] 
+            Firestore["Firestore Database<br/>☁️<br/>User Data Storage"]
+            FCM["Firebase Cloud Messaging<br/>📨<br/>Push Notifications"]
+            Analytics["Firebase Analytics<br/>📊<br/>Event Tracking"]
+        end
+        subgraph Auth_Providers ["Authentication Providers"]
+            GoogleAuth["Google Sign-In SDK<br/>G<br/>OAuth Integration"]
+            AppleAuth["Apple Sign-In SDK<br/>🍎<br/>Privacy Relay Support"]
+            SMSProvider["SMS Provider<br/>📱<br/>OTP Delivery"]
+        end
+        subgraph Backend_APIs ["Backend Services"]
+            BackendAPI["DuckBuck Backend API<br/>🖥️<br/>Email Services<br/>User Management<br/>Environment Config"]
+        end
     end
+                
+    %% ==========================================
+    %% ENHANCED FLOW CONNECTIONS
+    %% ==========================================
     
-    %% UI Flow - Bold and colored connections
-    WS ===> ABS
-    ABS ===> PCS
-    PCS ===> HS
-    WS -..-> HS
-    HS ---> PS
+    %% UI Navigation Flow - Primary user journey
+    WS ==>|"Start Auth"| ABS
+    ABS ==>|"OTP Required"| OTP
+    OTP ==>|"Verified"| PCS
+    ABS ==>|"Social Auth"| PCS
+    PCS ==>|"Complete"| HS
+    WS -.->|"Direct (if authenticated)"| HS
+    HS --->|"Settings"| PS
     
-    %% Provider Dependencies - Using different arrow styles
+    %% Provider State Management - Enhanced with new features
     ABS -.->|"uses"| ASP
+    OTP -.->|"uses"| ASP
     PCS -.->|"uses"| ASP
     HS -.->|"uses"| ASP
     PS -.->|"uses"| ASP
     PS -.->|"uses"| USP
+    ASP -.->|"manages"| RateLimit
+    ASP -.->|"handles"| ErrorState
     
-    %% Provider to Repository - Thicker connections
-    ASP ===>|"manages"| UR
-    ASP -.->|"uses"| SecManager
-    ASP -.->|"uses"| NotifService
-    USP ===>|"uses"| UR
+    %% Repository Integration - Enhanced coordination
+    ASP ===>|"orchestrates"| UR
+    USP ===>|"persists via"| UR
+    UR -.->|"validates with"| SecManager
+    UR -.->|"sends via"| EmailService
     
-    %% Repository Dependencies - Well-spaced connections
-    UR ====>|"auth"| AuthService
+    %% Service Dependencies - Enhanced architecture
+    UR ====>|"authentication"| AuthService
     UR ====>|"user data"| UserService
+    UR ====>|"email notifications"| EmailService
     UR --->|"local storage"| PrefService
     UR --->|"tracking"| AnalService
-    UR --->|"error logging"| CrashService
+    UR --->|"error reporting"| CrashService
     UR --->|"diagnostics"| LogService
-    UR --->|"backend"| ApiService
+    UR --->|"backend communication"| ApiService
     
-    %% Service Implementation - Clear implementation connections
+    %% Enhanced Auth Service Implementation
     AuthService -.->|"implements"| FireAuth
     UserService -.->|"implements"| FireUser
+    FireAuth ====>|"security"| SecManager
+    SecManager ===>|"sessions"| SessManager
     
-    %% Service to External - External service connections
-    FireAuth ===>|"uses"| Firebase
+    %% Communication Service Integration
+    EmailService ====>|"uses"| ApiService
+    EmailService --->|"logs via"| LogService
+    ApiService ====>|"communicates with"| BackendAPI
+    ApiService --->|"monitors via"| LogService
+    
+    %% External Service Connections - Enhanced
+    FireAuth ===>|"authenticates via"| Firebase
     FireAuth --->|"integrates"| GoogleAuth
     FireAuth --->|"integrates"| AppleAuth
+    FireAuth --->|"sends OTP via"| SMSProvider
     FireUser ===>|"stores in"| Firestore
     NotifService ===>|"sends via"| FCM
+    AnalService ===>|"tracks via"| Analytics
     
-    %% Security Components - Security relationships
-    SecManager -.->|"secures"| AuthService
-    SecManager -.->|"validates"| UR
-    SecManager ===>|"manages"| SessManager
-    SecManager --->|"logs via"| LogService
+    %% Enhanced Security Flow
+    SecManager -.->|"validates"| TokenModel
+    SecManager -.->|"enforces"| RateLimitModel
+    SecManager --->|"logs security events"| LogService
+    SecManager -.->|"protects"| UR
     
-    %% Models Usage - Dotted lines for model usage
+    %% Model Usage - Enhanced data flow
     FireAuth -.-|"uses"| UserModel
-    FireAuth -.-|"uses"| TokenModel
-    FireUser -.-|"uses"| UserModel
-    UR -.-|"manages"| UserModel
-    UR -.-|"manages"| TokenModel
-    ASP -.-|"exposes"| UserModel
-    SecManager -.-|"validates"| TokenModel
+    FireAuth -.-|"manages"| TokenModel
     FireAuth -.-|"throws"| AuthExceptions
-    FireUser -.-|"throws"| AuthExceptions
+    FireUser -.-|"stores"| UserModel
+    UR -.-|"coordinates"| UserModel
+    UR -.-|"handles"| TokenModel
+    UR -.-|"enforces"| RateLimitModel
+    ASP -.-|"exposes"| UserModel
     ASP -.-|"handles"| AuthExceptions
+    EmailService -.-|"uses"| UserModel
     
-    %% Data Flow for Sign-In - Numbered sequential flow with curved lines
-    ABS -->|"1️⃣ Sign-In Request"| ASP
-    ASP -->|"2️⃣ Process Auth"| UR
-    UR -->|"3️⃣ Authenticate"| AuthService
-    AuthService -->|"4️⃣ Provider Auth"| Firebase
-    Firebase -->|"5️⃣ Auth Response"| AuthService
+    %% Enhanced Data Flow for Authentication - Detailed numbered flow
+    ABS -->|"1️⃣ Auth Request"| ASP
+    ASP -->|"2️⃣ Rate Limit Check"| UR
+    UR -->|"3️⃣ Validate Request"| SecManager
+    SecManager -->|"4️⃣ Process Auth"| AuthService
+    AuthService -->|"5️⃣ Provider Auth"| Firebase
+    Firebase -->|"6️⃣ Auth Response"| AuthService
+    AuthService -->|"7️⃣ Security Validation"| SecManager
+    SecManager -->|"8️⃣ Validated User"| UR
+    UR -->|"9️⃣ Store User Data"| UserService
+    UserService -->|"🔟 Persist to DB"| Firestore
+    UR -->|"1️⃣1️⃣ Send Email"| EmailService
+    EmailService -->|"1️⃣2️⃣ API Call"| ApiService
+    ApiService -->|"1️⃣3️⃣ Email Request"| BackendAPI
+    UR -->|"1️⃣4️⃣ Cache Locally"| PrefService
+    UR -->|"1️⃣5️⃣ Register Device"| NotifService
+    NotifService -->|"1️⃣6️⃣ FCM Token"| FCM
+    UR -->|"1️⃣7️⃣ Track Event"| AnalService
+    AnalService -->|"1️⃣8️⃣ Log Analytics"| Analytics
+    UR -->|"1️⃣9️⃣ Update State"| ASP
+    ASP -->|"2️⃣0️⃣ UI Update"| PCS
+    
+    %% ==========================================
+    %% ENHANCED STYLING
+    %% ==========================================
+    
+    %% Enhanced Color Coding with Professional Gradients
+    classDef uiLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef providerLayer fill:#fff3e0,stroke:#f57c00,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef repositoryLayer fill:#e8f5e8,stroke:#388e3c,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef authServiceLayer fill:#ffebee,stroke:#d32f2f,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef commServiceLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef userServiceLayer fill:#e0f2f1,stroke:#00796b,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef supportServiceLayer fill:#fff8e1,stroke:#ffa000,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef modelLayer fill:#f1f8e9,stroke:#689f38,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef externalLayer fill:#fafafa,stroke:#424242,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    classDef enhancedFeature fill:#e8eaf6,stroke:#3f51b5,stroke-width:3px,color:#000,font-weight:bold,font-size:14px,border-radius:10px;
+    
+    %% Apply Enhanced Styles
+    class WS,ABS,OTP,PCS,HS,PS uiLayer;
+    class ASP,USP providerLayer;
+    class RateLimit,ErrorState enhancedFeature;
+    class UR repositoryLayer;
+    class AuthService,FireAuth,SecManager,SessManager authServiceLayer;
+    class EmailService,ApiService commServiceLayer;
+    class UserService,FireUser,PrefService userServiceLayer;
+    class AnalService,CrashService,NotifService,LogService supportServiceLayer;
+    class UserModel,AuthExceptions,TokenModel,RateLimitModel modelLayer;
+    class Firebase,GoogleAuth,AppleAuth,SMSProvider,Firestore,FCM,Analytics,BackendAPI externalLayer;
+    
+    %% Enhanced Section Styling
+    style UI_Layer fill:none,stroke:#1976d2,stroke-width:3px,color:#1976d2,font-weight:bold,font-size:18px
+    style Auth_Screens fill:none,stroke:#1565c0,stroke-width:2px,color:#1565c0,font-weight:bold,font-size:16px
+    style Post_Auth fill:none,stroke:#1565c0,stroke-width:2px,color:#1565c0,font-weight:bold,font-size:16px
+    style Provider_Layer fill:none,stroke:#f57c00,stroke-width:3px,color:#f57c00,font-weight:bold,font-size:18px
+    style Provider_Features fill:none,stroke:#ef6c00,stroke-width:2px,color:#ef6c00,font-weight:bold,font-size:16px
+    style Repository_Layer fill:none,stroke:#388e3c,stroke-width:3px,color:#388e3c,font-weight:bold,font-size:18px
+    style Service_Layer fill:none,stroke:#6a1b9a,stroke-width:3px,color:#6a1b9a,font-weight:bold,font-size:18px
+    style Auth_Services fill:none,stroke:#d32f2f,stroke-width:2px,color:#d32f2f,font-weight:bold,font-size:16px
+    style Communication_Services fill:none,stroke:#7b1fa2,stroke-width:2px,color:#7b1fa2,font-weight:bold,font-size:16px
+    style User_Services fill:none,stroke:#00796b,stroke-width:2px,color:#00796b,font-weight:bold,font-size:16px
+    style Support_Services fill:none,stroke:#ffa000,stroke-width:2px,color:#ffa000,font-weight:bold,font-size:16px
+    style Model_Layer fill:none,stroke:#689f38,stroke-width:3px,color:#689f38,font-weight:bold,font-size:18px
+    style External_Services fill:none,stroke:#424242,stroke-width:3px,color:#424242,font-weight:bold,font-size:18px
+    style Firebase_Stack fill:none,stroke:#ff6f00,stroke-width:2px,color:#ff6f00,font-weight:bold,font-size:16px
+    style Auth_Providers fill:none,stroke:#2e7d32,stroke-width:2px,color:#2e7d32,font-weight:bold,font-size:16px
+    style Backend_APIs fill:none,stroke:#1565c0,stroke-width:2px,color:#1565c0,font-weight:bold,font-size:16px
+    
+    %% Enhanced Legend with new features
+    subgraph Enhanced_Legend ["🔍 Enhanced Architecture Legend"]
+        direction TB
+        L1["🔵 Regular Component"]
+        L2["===> Primary Data Flow"]
+        L3["---> Secondary Flow"]
+        L4["-..-> State Management"]
+        L5["-.- Model & Data Usage"]
+        L6["🔄 Rate Limiting"]
+        L7["📧 Email Integration"]
+        L8["🛡️ Security Enhancement"]
+        L9["📊 Analytics & Monitoring"]
+    end
+    
+    style Enhanced_Legend fill:#f8f9fa,stroke:#333,stroke-width:2px,color:#333,font-weight:bold,font-size:14px
     AuthService -->|"6️⃣ User Data"| UR
     UR -->|"7️⃣ Create/Update User"| UserService
     UserService -->|"8️⃣ Store User Data"| Firestore
@@ -328,113 +457,377 @@ The model layer defines the data structures used across the authentication syste
 - Support mapping between external (Firebase) and internal data structures
 - Provide immutability for security-critical data objects
 
+## Enhanced Authentication Features
+
+### Rate Limiting System
+
+The authentication system now includes comprehensive rate limiting to prevent abuse and ensure security:
+
+#### Rate Limiting Features:
+- **Phone Number Rate Limiting**: Prevents spam calls for OTP generation
+- **OTP Verification Rate Limiting**: Prevents brute force OTP attacks
+- **Graduated Timeouts**: Increasing timeout periods based on failed attempts
+- **User-Friendly Display**: Human-readable timeout messages for users
+
+#### Rate Limiting Implementation:
+
+**Phone Number Rate Limiting:**
+```dart
+/// Checks if a phone number is rate limited for OTP requests
+/// Returns (isLimited, timeoutRemainingInSeconds)
+(bool isLimited, int timeoutRemaining) isPhoneNumberRateLimited(String phoneNumber)
+```
+
+**OTP Verification Rate Limiting:**
+```dart
+/// Checks if OTP verification is rate limited for a phone number
+/// Returns (isLimited, timeoutRemainingInSeconds)  
+(bool isLimited, int timeoutRemaining) isOtpVerificationRateLimited(String phoneNumber)
+```
+
+**Timeout Calculation Strategy:**
+- First attempt: No timeout
+- Second attempt: 1 minute timeout
+- Third attempt: 5 minutes timeout
+- Fourth attempt: 15 minutes timeout
+- Fifth+ attempts: 30 minutes timeout
+
+### Email Notification System
+
+A dedicated EmailNotificationService has been implemented for seamless user communication:
+
+#### Email Service Features:
+- **Fire-and-Forget Operations**: Non-blocking email sending
+- **Welcome Emails**: Automated welcome messages for new users
+- **Login Notifications**: Security notifications for authentication events
+- **Device Information**: Includes device and location details in notifications
+- **Error Resilience**: Graceful handling of email service failures
+
+#### Email Service Implementation:
+
+**Service Interface:**
+```dart
+class EmailNotificationService {
+  /// Sends welcome email to new users (fire-and-forget)
+  void sendWelcomeEmail({
+    required String userEmail,
+    required String userName,
+    String? deviceName,
+    String? location,
+  });
+
+  /// Sends login notification email (fire-and-forget)
+  void sendLoginNotificationEmail({
+    required String userEmail,
+    required String userName,
+    required String authMethod,
+    String? deviceName,
+    String? location,
+  });
+}
+```
+
+### Enhanced API Service
+
+The API service has been completely overhauled for production readiness:
+
+#### Production Features:
+- **Circuit Breaker Pattern**: Prevents cascading failures
+- **Rate Limiting**: Enforces minimum request intervals
+- **Token Caching**: Avoids unnecessary token refreshes
+- **Retry Logic**: Exponential backoff for failed requests
+- **Request/Response Interceptors**: Comprehensive logging and monitoring
+- **Environment Configuration**: Secure API key management
+
+#### API Service Implementation:
+
+**Circuit Breaker Pattern:**
+```dart
+class CircuitBreaker {
+  final int failureThreshold = 5;
+  final Duration timeout = Duration(minutes: 1);
+  CircuitBreakerState _state = CircuitBreakerState.closed;
+  int _failureCount = 0;
+  DateTime? _lastFailureTime;
+}
+```
+
+**Rate Limiting:**
+```dart
+class RateLimiter {
+  final Duration minInterval = Duration(milliseconds: 100);
+  DateTime? _lastRequestTime;
+  
+  Future<void> waitIfNeeded() async {
+    if (_lastRequestTime != null) {
+      final elapsed = DateTime.now().difference(_lastRequestTime!);
+      if (elapsed < minInterval) {
+        await Future.delayed(minInterval - elapsed);
+      }
+    }
+  }
+}
+```
+
+### Environment Configuration Security
+
+API keys and sensitive configuration are now managed through environment variables:
+
+#### Security Features:
+- **Environment Variable Loading**: API keys loaded from environment
+- **Build-time Validation**: Ensures required keys are present
+- **Development Scripts**: Automated environment loading for development
+- **Production Security**: Secure deployment with environment injection
+
+#### Environment Setup:
+
+**Development Configuration:**
+```bash
+# .env file (gitignored)
+DUCKBUCK_API_KEY=your_actual_api_key_here
+```
+
+**Runtime Loading:**
+```dart
+class ApiService {
+  late final String _apiKey;
+  
+  ApiService({String? apiKey}) {
+    _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY');
+    if (_apiKey.isEmpty) {
+      throw ArgumentError('API key must be provided either directly or via DUCKBUCK_API_KEY environment variable');
+    }
+  }
+}
+```
+
+### Enhanced Security Manager
+
+The AuthSecurityManager has been significantly enhanced with production-ready features:
+
+#### Security Manager Features:
+- **Enhanced Token Refresh**: Adaptive timeout and retry mechanisms
+- **Credential Validation**: Comprehensive validation of all authentication credentials
+- **Security Event Logging**: Detailed logging of all security-related events
+- **Retry Logic**: Intelligent retry mechanisms for failed operations
+
+#### Security Manager Implementation:
+
+**Enhanced Token Refresh:**
+```dart
+class AuthSecurityManager {
+  Future<bool> ensureValidToken() async {
+    // Enhanced validation with retry logic
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Adaptive timeout based on attempt number
+        final timeout = Duration(seconds: baseTimeout * attempt);
+        return await _performTokenRefresh().timeout(timeout);
+      } catch (e) {
+        if (attempt == maxRetries) rethrow;
+        await Future.delayed(Duration(seconds: attempt * 2)); // Exponential backoff
+      }
+    }
+  }
+}
+```
+
+### Consolidated Analytics
+
+Analytics logging has been consolidated to prevent redundancy and improve performance:
+
+#### Analytics Improvements:
+- **Repository-Level Logging**: All authentication events logged at repository level
+- **Removed UI-Level Redundancy**: Eliminated duplicate analytics calls from UI components
+- **Meaningful Event Tracking**: Focus on business-relevant authentication events
+- **Performance Optimization**: Reduced analytics overhead during authentication flows
+
+#### Analytics Events:
+- **Authentication Method Selection**: Which auth method user chooses
+- **Authentication Success/Failure**: Outcome of authentication attempts
+- **Profile Completion**: User onboarding completion rates
+- **Rate Limiting Events**: When users hit rate limits
+- **Email Notification Events**: Success/failure of email sends
+
+### Logger Service Integration
+
+Comprehensive logging has been implemented throughout the authentication system:
+
+#### Logging Features:
+- **Structured Logging**: Consistent log format across all components
+- **Security Event Logging**: Detailed security-related event tracking
+- **Performance Metrics**: Authentication performance monitoring
+- **Error Context**: Rich error context for debugging
+
+#### Logger Implementation:
+```dart
+class LoggerService {
+  void logAuthAttempt(String method, String? phoneNumber) {
+    log('AUTH_ATTEMPT', {
+      'method': method,
+      'phoneNumber': phoneNumber?.replaceRange(3, 7, '****'),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+  
+  void logSecurityEvent(String event, Map<String, dynamic> context) {
+    log('SECURITY_EVENT', {
+      'event': event,
+      'context': context,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+}
+```
+
 ## Authentication Flows
 
-### Google Authentication Flow
+### Enhanced Google Authentication Flow
 
 1. **Initiation**: User taps Google sign-in button in Auth Bottom Sheet
 2. **UI State Update**: Auth Bottom Sheet shows loading indicator and disables inputs
 3. **Provider Handling**: Auth State Provider delegates to User Repository
-4. **Authentication Request**: User Repository calls Auth Service to perform Google sign-in
-5. **SDK Interaction**: Firebase Auth Service launches Google Sign-In SDK
-6. **User Consent**: User grants permissions through Google's consent dialog
-7. **External Auth**: Google SDK returns authentication credential
-8. **Firebase Authentication**: Credential is exchanged with Firebase for UserCredential
-9. **User Creation/Retrieval**: User Repository checks if user exists in Firestore
-10. **Analytics Event**: First-time sign-in or return user event is logged
-11. **Profile Data Sync**: User profile information is synchronized with Firestore
-12. **FCM Token Registration**: Device token is registered for push notifications
-13. **Local Caching**: User information is securely cached in preferences
-14. **Session Initialization**: Session Manager initializes new user session
-15. **State Update**: Auth State Provider updates with new user information
-16. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
+4. **Rate Limiting Check**: User Repository validates no recent failed attempts (if applicable)
+5. **Authentication Request**: User Repository calls Auth Service to perform Google sign-in
+6. **SDK Interaction**: Firebase Auth Service launches Google Sign-In SDK
+7. **User Consent**: User grants permissions through Google's consent dialog
+8. **External Auth**: Google SDK returns authentication credential
+9. **Firebase Authentication**: Credential is exchanged with Firebase for UserCredential
+10. **Security Validation**: AuthSecurityManager validates the authentication result
+11. **User Creation/Retrieval**: User Repository checks if user exists in Firestore
+12. **Welcome Email**: EmailNotificationService sends welcome email for new users (fire-and-forget)
+13. **Login Notification**: EmailNotificationService sends login notification for existing users (fire-and-forget)
+14. **Analytics Event**: First-time sign-in or return user event is logged
+15. **Profile Data Sync**: User profile information is synchronized with Firestore
+16. **FCM Token Registration**: Device token is registered for push notifications
+17. **Local Caching**: User information is securely cached in preferences
+18. **Session Initialization**: Session Manager initializes new user session
+19. **State Update**: Auth State Provider updates with new user information
+20. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
 
-### Apple Authentication Flow
+### Enhanced Apple Authentication Flow
 
 1. **Initiation**: User taps Apple sign-in button in Auth Bottom Sheet
 2. **UI State Update**: Auth Bottom Sheet shows loading indicator and disables inputs
 3. **Provider Handling**: Auth State Provider delegates to User Repository
-4. **Authentication Request**: User Repository calls Auth Service to perform Apple sign-in
-5. **SDK Interaction**: Firebase Auth Service launches Apple Sign-In dialog
-6. **User Consent**: User grants permissions through Apple's consent dialog
-7. **Privacy Relay**: Apple's private email relay processes user information
-8. **External Auth**: Apple SDK returns authentication credential
-9. **Firebase Authentication**: Credential is exchanged with Firebase for UserCredential
-10. **User Creation/Retrieval**: User Repository checks if user exists in Firestore
-11. **Analytics Event**: First-time sign-in or return user event is logged
-12. **Profile Data Handling**: Private email is properly handled if user selected "Hide My Email"
-13. **FCM Token Registration**: Device token is registered for push notifications
-14. **Local Caching**: User information is securely cached in preferences
-15. **Session Initialization**: Session Manager initializes new user session
-16. **State Update**: Auth State Provider updates with new user information
-17. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
+4. **Rate Limiting Check**: User Repository validates no recent failed attempts (if applicable)
+5. **Authentication Request**: User Repository calls Auth Service to perform Apple sign-in
+6. **SDK Interaction**: Firebase Auth Service launches Apple Sign-In dialog
+7. **User Consent**: User grants permissions through Apple's consent dialog
+8. **Privacy Relay**: Apple's private email relay processes user information
+9. **External Auth**: Apple SDK returns authentication credential
+10. **Firebase Authentication**: Credential is exchanged with Firebase for UserCredential
+11. **Security Validation**: AuthSecurityManager validates the authentication result
+12. **User Creation/Retrieval**: User Repository checks if user exists in Firestore
+13. **Welcome Email**: EmailNotificationService sends welcome email for new users (fire-and-forget)
+14. **Login Notification**: EmailNotificationService sends login notification for existing users (fire-and-forget)
+15. **Analytics Event**: First-time sign-in or return user event is logged
+16. **Profile Data Handling**: Private email is properly handled if user selected "Hide My Email"
+17. **FCM Token Registration**: Device token is registered for push notifications
+18. **Local Caching**: User information is securely cached in preferences
+19. **Session Initialization**: Session Manager initializes new user session
+20. **State Update**: Auth State Provider updates with new user information
+21. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
 
-### Phone Authentication Flow
+### Enhanced Phone Authentication Flow
 
 1. **Initiation**: User enters phone number in Auth Bottom Sheet
 2. **Phone Validation**: Client-side validation of phone number format
-3. **UI State Update**: Auth Bottom Sheet shows loading indicator and disables inputs
-4. **Verification Start**: Auth State Provider delegates to User Repository to start phone verification
-5. **Auth Request**: User Repository calls Auth Service to start phone verification
-6. **OTP Request**: Firebase Auth sends OTP to user's phone
-7. **Analytics Event**: Phone verification attempt is logged
-8. **UI Update**: Bottom sheet transitions to OTP input mode
-9. **Auto-Detection**: SMS Retriever API attempts to auto-fill code on Android
-10. **Code Entry**: User enters received OTP code manually if needed
-11. **UI Validation**: Client validates code format before submission
-12. **Code Verification**: Auth Service verifies the OTP code with Firebase
-13. **Security Check**: App performs additional security validations for phone auth
-14. **User Creation/Retrieval**: User data is created or retrieved based on verification result
-15. **FCM Token Registration**: Device token is registered for push notifications
-16. **Local Caching**: User information is securely cached in preferences
-17. **Session Initialization**: Session Manager initializes new user session
-18. **State Update**: Auth State Provider updates with new user information
-19. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
+3. **Rate Limiting Check**: User Repository checks if phone number is rate limited for OTP requests
+4. **Rate Limit Display**: UI displays timeout message if rate limited, prevents submission
+5. **UI State Update**: Auth Bottom Sheet shows loading indicator and disables inputs (if not rate limited)
+6. **Verification Start**: Auth State Provider delegates to User Repository to start phone verification
+7. **Auth Request**: User Repository calls Auth Service to start phone verification
+8. **OTP Request**: Firebase Auth sends OTP to user's phone
+9. **Analytics Event**: Phone verification attempt is logged
+10. **UI Update**: Bottom sheet transitions to OTP input mode
+11. **Auto-Detection**: SMS Retriever API attempts to auto-fill code on Android
+12. **Code Entry**: User enters received OTP code manually if needed
+13. **UI Validation**: Client validates code format before submission
+14. **OTP Rate Limiting Check**: User Repository checks if OTP verification is rate limited
+15. **Rate Limit Display**: UI displays timeout message if OTP verification is rate limited
+16. **Code Verification**: Auth Service verifies the OTP code with Firebase (if not rate limited)
+17. **Security Check**: AuthSecurityManager performs additional security validations for phone auth
+18. **User Creation/Retrieval**: User data is created or retrieved based on verification result
+19. **Welcome Email**: EmailNotificationService sends welcome email for new users (fire-and-forget)
+20. **Login Notification**: EmailNotificationService sends login notification for existing users (fire-and-forget)
+21. **FCM Token Registration**: Device token is registered for push notifications
+22. **Local Caching**: User information is securely cached in preferences
+23. **Session Initialization**: Session Manager initializes new user session
+24. **State Update**: Auth State Provider updates with new user information
+25. **Navigation**: UI navigates to Profile Completion (new user) or Home Screen (existing user)
 
-## Security Features
+## Enhanced Security Features
 
-### Token Management
+### Advanced Token Management
 
-- Automatic token refresh using Firebase's internal mechanisms
-- Proactive token refresh before expiration to prevent auth gaps
-- Token validation for all sensitive operations
-- Secure token storage with platform-specific encryption
-- Token rotation policies to limit credential lifetime
-- ID token and refresh token separate handling
-- Token revocation on suspicious activities
+- **Enhanced Token Refresh**: Adaptive timeout and retry mechanisms with exponential backoff
+- **Proactive Token Refresh**: Prevents authentication gaps through early token renewal
+- **Token Validation**: Comprehensive validation for all sensitive operations
+- **Secure Token Storage**: Platform-specific encryption for token persistence
+- **Token Rotation Policies**: Automatic rotation to limit credential lifetime
+- **Separate Token Handling**: Distinct management of ID tokens and refresh tokens
+- **Token Revocation**: Immediate revocation capability for suspicious activities
+- **Token Caching**: Intelligent caching to avoid unnecessary refresh operations
 
-### Session Handling
+### Enhanced Session Handling
 
-- Session timeout management via SessionManager
-- Configurable session duration based on authentication method
-- Automatic logout on session expiration
-- Activity tracking to prevent premature session expiration
-- Force logout capability for security incidents
-- Multi-device session awareness
-- Session continuity across app updates
-- Graduated timeout based on operation sensitivity
+- **Adaptive Session Timeout**: Variable session duration based on authentication method and user behavior
+- **Configurable Session Duration**: Different timeouts for different security contexts
+- **Automatic Logout**: Secure logout on session expiration with proper cleanup
+- **Activity Tracking**: Prevents premature session expiration during active use
+- **Force Logout Capability**: Emergency logout for security incidents
+- **Multi-device Session Awareness**: Coordination across multiple user devices
+- **Session Continuity**: Maintains sessions across app updates and restarts
+- **Graduated Timeout**: Different timeout periods based on operation sensitivity
 
-### Data Protection
+### Comprehensive Rate Limiting
 
-- Encrypted local storage using EncryptedSharedPreferences
-- Secure memory handling for sensitive information
-- Selective persistence of authentication data
-- Auth method-specific data handling (different fields for phone vs. social auth)
-- Minimal privilege principle in stored credentials
-- Auto-clearing of sensitive fields from memory
-- Screen security (prevent screenshots of auth screens)
-- Biometric protection for locally stored credentials
+- **Phone Number Rate Limiting**: Prevents abuse of OTP generation with graduated timeouts
+- **OTP Verification Rate Limiting**: Brute force protection for OTP verification
+- **Graduated Timeout Strategy**: Increasing timeout periods based on failed attempts
+- **User-Friendly Feedback**: Clear messaging about rate limit status and timeout periods
+- **Intelligent Reset**: Automatic rate limit reset after successful authentication
+- **Cross-Device Rate Limiting**: Rate limits applied across all user devices
+- **Analytics Integration**: Rate limiting events tracked for monitoring and analysis
 
-### Security Verification
+### Enhanced Data Protection
 
-- App signature verification via TamperDetector
-- Certificate pinning for network communications
-- Device integrity checks for jailbreak/root detection
-- Emulator and simulator detection
-- Runtime environment validation
-- Secure random number generation for cryptographic operations
-- Library integrity verification
-- Debug mode detection
+- **Encrypted Local Storage**: Advanced encryption using EncryptedSharedPreferences
+- **Secure Memory Handling**: Automatic clearing of sensitive information from memory
+- **Selective Data Persistence**: Intelligent decisions about what data to cache locally
+- **Auth Method-Specific Handling**: Different security policies for different authentication methods
+- **Minimal Privilege Principle**: Storing only essential credentials with minimal permissions
+- **Auto-clearing Mechanisms**: Automatic cleanup of sensitive fields from memory
+- **Screen Security**: Prevention of screenshots during authentication flows
+- **Biometric Protection**: Optional biometric protection for locally stored credentials
+
+### Advanced Security Verification
+
+- **App Signature Verification**: Real-time verification via TamperDetector
+- **Certificate Pinning**: Enhanced network communications security
+- **Device Integrity Checks**: Detection of jailbreak/root and emulator environments
+- **Runtime Environment Validation**: Comprehensive validation of execution environment
+- **Secure Random Generation**: Cryptographically secure random number generation
+- **Library Integrity Verification**: Validation of all security-critical libraries
+- **Debug Mode Detection**: Enhanced security in production environments
+- **API Key Security**: Environment-based configuration for secure key management
+
+### Circuit Breaker Implementation
+
+- **Failure Threshold Management**: Automatic circuit opening after repeated failures
+- **Adaptive Recovery**: Intelligent recovery strategies based on failure patterns
+- **Request Monitoring**: Comprehensive monitoring of all authentication requests
+- **Fallback Mechanisms**: Graceful degradation when services are unavailable
+- **Health Check Integration**: Regular health checks for all authentication services
+
+### API Security Enhancements
+
+- **Request Rate Limiting**: Minimum intervals between API requests
+- **Request/Response Interceptors**: Comprehensive logging and monitoring
+- **Retry Logic**: Exponential backoff for failed API requests
+- **Token Caching**: Intelligent caching to reduce unnecessary API calls
+- **Error Classification**: Intelligent classification of temporary vs permanent errors
 
 ## Exception Handling
 
