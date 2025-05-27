@@ -7,7 +7,6 @@ import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
-import '../services/api/api_service.dart';
 import '../services/notifications/email_notification_service.dart';
 import '../services/user/user_service_interface.dart';
 
@@ -18,7 +17,6 @@ class UserRepository {
   final LoggerService _logger = LoggerService();
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
-  final ApiService _apiService;
   final EmailNotificationService _emailService;
   
   static const String _tag = 'USER_REPO'; // Tag for logs
@@ -29,12 +27,10 @@ class UserRepository {
     UserServiceInterface? userService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
-    ApiService? apiService,
     EmailNotificationService? emailService,
   }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _apiService = apiService ?? serviceLocator<ApiService>(),
        _emailService = emailService ?? serviceLocator<EmailNotificationService>();
 
   /// Get the current authenticated user
@@ -172,9 +168,8 @@ class UserRepository {
             username: userName,
             loginTime: loginTime,
             metadata: userMetadata,
-          ).then((success) {
-            _logger.i(_tag, success ? 'Login notification sent successfully' : 'Failed to send login notification');
-          });
+          );
+          _logger.i(_tag, 'Login notification sent to $userEmail');
         });
       } else {
         _logger.i(_tag, 'Skipping welcome email for new Google user - will send after profile completion');
@@ -268,9 +263,8 @@ class UserRepository {
             username: userName,
             loginTime: loginTime,
             metadata: userMetadata,
-          ).then((success) {
-            _logger.i(_tag, success ? 'Login notification sent successfully' : 'Failed to send login notification');
-          });
+          );
+          _logger.i(_tag, 'Login notification sent to $userEmail');
         });
       } else {
         _logger.i(_tag, 'Skipping welcome email for new Apple user - will send after profile completion');

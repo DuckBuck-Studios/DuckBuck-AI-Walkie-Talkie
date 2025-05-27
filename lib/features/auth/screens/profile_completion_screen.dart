@@ -9,7 +9,6 @@ import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/firebase/firebase_storage_service.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
-import 'package:duckbuck/core/services/api/api_service.dart';
 import 'package:duckbuck/core/services/notifications/email_notification_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
@@ -168,7 +167,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
 
       return downloadUrl;
     } catch (e) {
-      debugPrint('Error uploading profile image: $e');
+      _logger.e('ProfileCompletion', 'Error uploading profile image: $e');
       rethrow;
     }
   }
@@ -217,16 +216,6 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         photoURL: photoURL,
       );
 
-      // Log successful profile update
-      _analyticsService.logEvent(
-        name: 'profile_update_success',
-        parameters: {
-          'updated_photo': updatingPhoto ? '1' : '0', // Convert boolean to string
-          'updated_name': updatingName ? '1' : '0', // Convert boolean to string
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
-
       // Mark user onboarding as complete in Firestore
       await authProvider.markUserOnboardingComplete();
       
@@ -246,30 +235,26 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
             // Get service locator instance to access email notification service
             final emailService = serviceLocator<EmailNotificationService>();
             
-            // Send welcome email with updated user info without awaiting
+            // Send welcome email with updated user info (fire-and-forget)
             emailService.sendWelcomeEmail(
               email: userEmail,
               username: userName,
               metadata: userMetadata,
-            ).then((success) {
-              _analyticsService.logEvent(
-                name: 'welcome_email_sent',
-                parameters: {
-                  'success': success ? '1' : '0',
-                  'auth_method': userMetadata!['authMethod'] ?? 'unknown',
-                  'has_custom_name': updatingName ? '1' : '0',
-                  'timestamp': DateTime.now().toIso8601String(),
-                },
-              );
-              
-              if (success) {
-                debugPrint('✅ Welcome email sent successfully to $userEmail with name: $userName');
-              } else {
-                debugPrint('❌ Failed to send welcome email to $userEmail');
-              }
-            });
+            );
+            
+            // Log welcome email attempt
+            _analyticsService.logEvent(
+              name: 'welcome_email_sent',
+              parameters: {
+                'auth_method': userMetadata!['authMethod'] ?? 'unknown',
+                'has_custom_name': updatingName ? '1' : '0',
+                'timestamp': DateTime.now().toIso8601String(),
+              },
+            );
+            
+            _logger.i('ProfileCompletion', 'Welcome email sent to $userEmail with name: $userName');
           } catch (e) {
-            debugPrint('❌ Error sending welcome email: $e');
+            _logger.e('ProfileCompletion', 'Error sending welcome email: $e');
           }
         });
       }

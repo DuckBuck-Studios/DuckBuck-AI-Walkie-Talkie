@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -8,8 +7,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/navigation/app_routes.dart';
-import '../../../core/services/service_locator.dart';
-import '../../../core/services/firebase/firebase_analytics_service.dart';
 import '../providers/auth_state_provider.dart';
 import 'bottom_sheet_components/index.dart';
 
@@ -100,38 +97,17 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       _isGoogleLoading || _isAppleLoading || 
       _isPhoneVerificationLoading || _isOtpVerificationLoading;
   
-  // Track when the code was first sent
-  DateTime _codeFirstSentTime = DateTime.now();
-  
   // Track resend code count
   int _codeResendCount = 0;
-  
-  // Analytics service
-  late final FirebaseAnalyticsService _analytics;
   
   @override
   void initState() {
     super.initState();
     
-    // Initialize services
-    _analytics = serviceLocator<FirebaseAnalyticsService>();
-    
     // Initialize animation controller for transitions
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
-    );
-    
-    // Log sheet opened event
-    _logBottomSheetOpened();
-  }
-  
-  void _logBottomSheetOpened() {
-    _analytics.logEvent(
-      name: 'auth_sheet_opened',
-      parameters: {
-        'timestamp': DateTime.now().toIso8601String(),
-      },
     );
   }
   
@@ -151,28 +127,10 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     setState(() => _isGoogleLoading = true);
     HapticFeedback.mediumImpact();
     
-    // Log Google sign-in attempt from UI
-    _analytics.logEvent(
-      name: 'auth_google_button_clicked',
-      parameters: {
-        'source': 'auth_bottom_sheet',
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    
     try {
       // Get auth provider and attempt sign in
       final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
       final (user, isNewUser) = await authProvider.signInWithGoogle();
-      
-      // Log successful Google sign-in UI flow completion
-      _analytics.logEvent(
-        name: 'auth_google_success_ui',
-        parameters: {
-          'is_new_user': isNewUser ? '1' : '0',
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
       
       if (mounted) {
         setState(() => _isGoogleLoading = false);
@@ -180,38 +138,14 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // Log new user flow start
-          _analytics.logEvent(
-            name: 'profile_completion_navigation',
-            parameters: {
-              'auth_method': 'google',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           // New user goes to profile completion
           Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
         } else {
-          // Log returning user flow
-          _analytics.logEvent(
-            name: 'home_screen_navigation',
-            parameters: {
-              'auth_method': 'google',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           // Returning user goes to home
           Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
       }
     } catch (e) {
-      // Log failed Google sign-in UI flow
-      _analytics.logEvent(
-        name: 'auth_google_failure_ui',
-        parameters: {
-          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
       
       if (mounted) {
         setState(() => _isGoogleLoading = false);
@@ -232,15 +166,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     
     HapticFeedback.mediumImpact();
     
-    // Log phone auth method selection
-    _analytics.logEvent(
-      name: 'auth_phone_button_clicked',
-      parameters: {
-        'source': 'auth_bottom_sheet',
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    
     setState(() {
       _currentStage = AuthStage.phoneEntry;
     });
@@ -254,28 +179,10 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     setState(() => _isAppleLoading = true);
     HapticFeedback.mediumImpact();
     
-    // Log Apple sign-in attempt from UI
-    _analytics.logEvent(
-      name: 'auth_apple_button_clicked',
-      parameters: {
-        'source': 'auth_bottom_sheet',
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    
     try {
       // Get auth provider and attempt sign in
       final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
       final (user, isNewUser) = await authProvider.signInWithApple();
-      
-      // Log successful Apple sign-in UI flow completion
-      _analytics.logEvent(
-        name: 'auth_apple_success_ui',
-        parameters: {
-          'is_new_user': isNewUser ? '1' : '0',
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
       
       if (mounted) {
         setState(() => _isAppleLoading = false);
@@ -283,38 +190,14 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // Log new user flow start
-          _analytics.logEvent(
-            name: 'profile_completion_navigation',
-            parameters: {
-              'auth_method': 'apple',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           // New user goes to profile completion
           Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
         } else {
-          // Log returning user flow
-          _analytics.logEvent(
-            name: 'home_screen_navigation',
-            parameters: {
-              'auth_method': 'apple',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           // Returning user goes to home
           Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
       }
     } catch (e) {
-      // Log failed Apple sign-in UI flow
-      _analytics.logEvent(
-        name: 'auth_apple_failure_ui',
-        parameters: {
-          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
       
       if (mounted) {
         setState(() => _isAppleLoading = false);
@@ -333,26 +216,10 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     // Validate phone number with country code
     final fullPhoneNumber = "$_countryCode${_phoneController.text}";
     
-    // Log phone submission attempt
-    _analytics.logEvent(
-      name: 'phone_number_submit',
-      parameters: {
-        'country_code': _countryCode,
-        'phone_length': _phoneController.text.length.toString(),
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
+
     
     if (_phoneController.text.isEmpty || _phoneController.text.length < 10) {
-      // Log validation error
-      _analytics.logEvent(
-        name: 'phone_validation_failed',
-        parameters: {
-          'reason': 'too_short',
-          'length': _phoneController.text.length.toString(),
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
+
       
       // Show validation error
       HapticFeedback.heavyImpact();
@@ -376,21 +243,13 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       await authProvider.verifyPhoneNumber(
         phoneNumber: fullPhoneNumber,
         onCodeSent: (String verificationId, int? resendToken) {
-          // Log code sent success
-          _analytics.logEvent(
-            name: 'verification_code_sent',
-            parameters: {
-              'has_resend_token': resendToken != null ? '1' : '0',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
+
           
           if (mounted) {
             setState(() {
               _verificationId = verificationId;
               _isPhoneVerificationLoading = false;
               _currentStage = AuthStage.otpVerification;
-              _codeFirstSentTime = DateTime.now(); // Set first sent time
               _codeResendCount = 0; // Reset resend count
             });
             
@@ -403,15 +262,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           }
         },
         onError: (String error) {
-          // Log verification error
-          _analytics.logEvent(
-            name: 'phone_verification_error',
-            parameters: {
-              'error': error.substring(0, math.min(error.length, 100)),
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
-          
           if (mounted) {
             setState(() => _isPhoneVerificationLoading = false);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -423,14 +273,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           }
         },
         onVerified: () {
-          // Log auto-verification success
-          _analytics.logEvent(
-            name: 'auto_verification_success',
-            parameters: {
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
-          
           // Auto-verification succeeded, close bottom sheet
           if (mounted) {
             setState(() => _isPhoneVerificationLoading = false);
@@ -440,15 +282,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         },
       );
     } catch (e) {
-      // Log verification exception
-      _analytics.logEvent(
-        name: 'phone_verification_exception',
-        parameters: {
-          'error': e.toString().substring(0, math.min(e.toString().length, 100)),
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
-      
       if (mounted) {
         setState(() => _isPhoneVerificationLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -463,29 +296,8 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
   
   /// Handles verification of OTP
   void _handleOtpSubmit() async {
-    // Log OTP submission attempt
-    _analytics.logEvent(
-      name: 'otp_submission_attempt',
-      parameters: {
-        'otp_length': _otpController.text.length.toString(),
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    
     // Validate OTP code - enforcing exactly 6 digits
     if (_otpController.text.isEmpty || _otpController.text.length != 6 || !RegExp(r'^\d{6}$').hasMatch(_otpController.text)) {
-      // Log validation failure with specific reason
-      _analytics.logEvent(
-        name: 'otp_validation_failed',
-        parameters: {
-          'reason': _otpController.text.isEmpty ? 'empty_code' : 
-                    _otpController.text.length != 6 ? 'invalid_length' : 'non_numeric',
-          'entered_length': _otpController.text.length.toString(),
-          'required_length': '6',
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
-      
       // Show error feedback with haptic
       HapticFeedback.heavyImpact();
       
@@ -523,39 +335,14 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         phoneNumber: fullPhoneNumber,
       );
       
-      // Log successful OTP verification at UI level
-      _analytics.logEvent(
-        name: 'otp_verification_success_ui',
-        parameters: {
-          'is_new_user': isNewUser ? '1' : '0',
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
-      
       if (mounted) {
         setState(() => _isOtpVerificationLoading = false);
         Navigator.pop(context);
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // Log new user flow
-          _analytics.logEvent(
-            name: 'profile_completion_navigation',
-            parameters: {
-              'auth_method': 'phone',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
         } else {
-          // Log returning user flow
-          _analytics.logEvent(
-            name: 'home_screen_navigation',
-            parameters: {
-              'auth_method': 'phone',
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          );
           Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
       }
@@ -575,18 +362,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         errorMessage = 'Network error, please check your connection';
         errorCode = 'network-error';
       }
-      
-      // Log OTP verification failure with detailed parameters
-      _analytics.logEvent(
-        name: 'otp_verification_failure_ui',
-        parameters: {
-          'error_message': e.toString().substring(0, math.min(e.toString().length, 100)),
-          'error_code': errorCode,
-          'otp_length': _otpController.text.length.toString(),
-          'resend_count': _codeResendCount,
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-      );
       
       if (mounted) {
         setState(() => _isOtpVerificationLoading = false);
@@ -633,18 +408,6 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     
     HapticFeedback.mediumImpact();
     
-    // Log resend code action with proper source
-    _analytics.logEvent(
-      name: 'resend_code_clicked',
-      parameters: {
-        'source': 'resend_button',
-        'phone_number_length': _phoneController.text.length,
-        'time_since_first_send': DateTime.now().difference(_codeFirstSentTime).inSeconds,
-        'resend_count': _codeResendCount,
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
-    
     // Reset OTP field to avoid confusion with old code
     _otpController.clear();
     
@@ -677,17 +440,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         // Cancel safety timer since we got a response
         safetyTimer.cancel();
         
-        // Log successful code resend
-        _analytics.logEvent(
-          name: 'resend_code_success',
-          parameters: {
-            'source': 'resend_button',
-            'has_resend_token': resendToken != null ? '1' : '0',
-            'phone_country_code': _countryCode,
-            'resend_count': _codeResendCount + 1,
-            'timestamp': DateTime.now().toIso8601String(),
-          },
-        );
+
         
         if (mounted) {
           setState(() {
@@ -712,15 +465,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         // Cancel safety timer since we got a response
         safetyTimer.cancel();
         
-        // Log resend error
-        _analytics.logEvent(
-          name: 'resend_code_error',
-          parameters: {
-            'source': 'resend_button',
-            'error': error.substring(0, math.min(error.length, 100)),
-            'timestamp': DateTime.now().toIso8601String(),
-          },
-        );
+
         
         if (mounted) {
           setState(() => _isOtpVerificationLoading = false);
@@ -752,14 +497,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
   void _handleBackPress() {
     HapticFeedback.lightImpact();
     
-    // Log back button press with current stage info
-    _analytics.logEvent(
-      name: 'auth_back_pressed',
-      parameters: {
-        'from_stage': _currentStage.toString(),
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
+
     
     if (_currentStage == AuthStage.otpVerification) {
       setState(() => _currentStage = AuthStage.phoneEntry);
@@ -939,6 +677,5 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       resendCountdownText: resendText,
     ).animate().fadeIn(duration: 400.ms);
   }
-
-  // Legacy auth button implementation removed as it's now handled by AuthOptionsView
+ 
 }

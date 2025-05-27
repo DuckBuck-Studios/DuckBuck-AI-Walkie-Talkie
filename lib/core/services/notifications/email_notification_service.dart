@@ -4,8 +4,8 @@ import '../logger/logger_service.dart';
 
 /// Service for handling all email notifications throughout the app
 ///
-/// This service centralizes all email notification functionality to
-/// better separate concerns and make the authentication code cleaner.
+/// This service provides fire-and-forget email operations that don't block the UI.
+/// All email operations are performed asynchronously in the background with no error propagation.
 class EmailNotificationService {
   final ApiService _apiService;
   final LoggerService _logger;
@@ -17,71 +17,55 @@ class EmailNotificationService {
     ApiService? apiService,
     LoggerService? logger,
   }) : _apiService = apiService ?? serviceLocator<ApiService>(),
-       _logger = logger ?? LoggerService();
+       _logger = logger ?? serviceLocator<LoggerService>();
   
   /// Send welcome email to a new user after profile completion
-  /// This should only be called once the user has completed their profile
-  Future<bool> sendWelcomeEmail({
+  /// This is a fire-and-forget operation that won't block the UI
+  /// No exceptions are thrown and no return value is provided
+  void sendWelcomeEmail({
     required String email,
     required String username,
     required Map<String, dynamic>? metadata,
-  }) async {
-    try {
-      _logger.i(_tag, 'Sending welcome email to $email');
-      
-      // Skip sending emails for users who didn't sign in with supported methods
-      if (!_isSupportedAuthMethod(metadata)) {
-        _logger.i(_tag, 'Skipping welcome email for unsupported auth method');
-        return true;
+  }) {
+    // Fire and forget - schedule async operation without awaiting
+    _apiService.sendWelcomeEmail(
+      email: email,
+      username: username,
+      metadata: metadata,
+    ).then((success) {
+      if (success) {
+        _logger.i(_tag, 'Welcome email sent successfully to $email');
+      } else {
+        _logger.w(_tag, 'Welcome email failed to send to $email');
       }
-      
-      return await _apiService.sendWelcomeEmail(
-        email: email,
-        username: username,
-        metadata: metadata,
-      );
-    } catch (e) {
-      _logger.e(_tag, 'Failed to send welcome email: $e');
-      return false;
-    }
+    }).catchError((error) {
+      _logger.e(_tag, 'Error sending welcome email to $email: $error');
+    });
   }
   
   /// Send login notification email to returning users
-  /// This should only be called for existing users, not new signups
-  Future<bool> sendLoginNotificationEmail({
+  /// This is a fire-and-forget operation that won't block the UI
+  /// No exceptions are thrown and no return value is provided
+  void sendLoginNotificationEmail({
     required String email,
     required String username,
     required String loginTime,
     required Map<String, dynamic>? metadata,
-  }) async {
-    try {
-      _logger.i(_tag, 'Sending login notification to $email');
-      
-      // Skip sending emails for users who didn't sign in with supported methods
-      if (!_isSupportedAuthMethod(metadata)) {
-        _logger.i(_tag, 'Skipping login notification for unsupported auth method');
-        return true;
+  }) {
+    // Fire and forget - schedule async operation without awaiting
+    _apiService.sendLoginNotificationEmail(
+      email: email,
+      username: username,
+      loginTime: loginTime,
+      metadata: metadata,
+    ).then((success) {
+      if (success) {
+        _logger.i(_tag, 'Login notification sent successfully to $email');
+      } else {
+        _logger.w(_tag, 'Login notification failed to send to $email');
       }
-      
-      return await _apiService.sendLoginNotificationEmail(
-        email: email,
-        username: username,
-        loginTime: loginTime,
-        metadata: metadata,
-      );
-    } catch (e) {
-      _logger.e(_tag, 'Failed to send login notification: $e');
-      return false;
-    }
-  }
-  
-  /// Check if the user authenticated with a supported method for email notifications
-  bool _isSupportedAuthMethod(Map<String, dynamic>? metadata) {
-    if (metadata == null || !metadata.containsKey('authMethod')) {
-      return false;
-    }
-    
-    final authMethod = metadata['authMethod'] as String?;
-    return authMethod == 'google' || authMethod == 'apple';
+    }).catchError((error) {
+      _logger.e(_tag, 'Error sending login notification to $email: $error');
+    });
   }
 }
