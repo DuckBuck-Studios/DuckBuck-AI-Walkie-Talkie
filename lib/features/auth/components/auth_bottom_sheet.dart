@@ -512,11 +512,15 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
     HapticFeedback.mediumImpact();
     
     try {
-      // Get the auth provider and verify OTP
+      // Get full phone number with country code for rate limiting check
+      final fullPhoneNumber = "$_countryCode${_phoneController.text}";
+      
+      // Get auth provider and verify OTP
       final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
       final (user, isNewUser) = await authProvider.verifyOtpAndSignIn(
         verificationId: _verificationId!, 
         smsCode: _otpController.text,
+        phoneNumber: fullPhoneNumber,
       );
       
       // Log successful OTP verification at UI level

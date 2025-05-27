@@ -67,9 +67,17 @@ class AuthService implements AuthServiceInterface {
   }
 
   /// Convert FirebaseAuthException to our AuthException using standardized error handler
+  /// This provides consistent error handling across all authentication methods
   AuthException _handleException(FirebaseAuthException e, {AuthMethod? method}) {
+    _logger.e(_tag, 'Firebase Auth Exception: ${e.code} - ${e.message ?? "No message"}', e);
+    
     // Using our centralized error handler for consistency
-    return AuthErrorMessages.handleError(e, authMethod: method);
+    final authException = AuthErrorMessages.handleError(e, authMethod: method);
+    
+    // Log the standardized error
+    _logger.e(_tag, 'Standardized auth error: ${authException.code} - ${authException.message}');
+    
+    return authException;
   }
 
   // Email/password authentication removed as per new requirements
@@ -260,42 +268,74 @@ class AuthService implements AuthServiceInterface {
     required void Function(String) codeAutoRetrievalTimeout,
   }) async {
     try {
-      _logger.i(_tag, 'Starting phone number verification: $phoneNumber');
+      // Sanitize phone number by removing spaces and non-essential characters
+      final sanitizedPhoneNumber = phoneNumber.trim();
+      
+      _logger.i(_tag, 'Starting phone number verification: $sanitizedPhoneNumber');
+      
+      // Verify the phone number format is valid before sending to Firebase
+      // This prevents unnecessary Firebase Auth quota usage for obviously invalid numbers
+      if (!_isValidPhoneNumberFormat(sanitizedPhoneNumber)) {
+        _logger.w(_tag, 'Invalid phone number format: $sanitizedPhoneNumber');
+        verificationFailed(
+          AuthException(
+            AuthErrorCodes.invalidPhoneNumber,
+            'Phone number format is invalid. Please enter a valid phone number.',
+            null,
+            AuthMethod.phone
+          )
+        );
+        return;
+      }
+      
       await _firebaseAuth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
+        phoneNumber: sanitizedPhoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) {
           _logger.i(_tag, 'Phone auth automatically completed');
           verificationCompleted(credential);
         },
         verificationFailed: (FirebaseAuthException e) {
           _logger.w(_tag, 'Phone verification failed: ${e.code} - ${e.message}');
-          verificationFailed(_handleException(e));
+          verificationFailed(_handleException(e, method: AuthMethod.phone));
         },
         codeSent: (String verificationId, int? resendToken) {
-          _logger.i(_tag, 'Verification code sent to $phoneNumber');
+          _logger.i(_tag, 'Verification code sent to $sanitizedPhoneNumber');
           codeSent(verificationId, resendToken);
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _logger.d(_tag, 'Auto-retrieval timeout for verification code');
           codeAutoRetrievalTimeout(verificationId);
         },
-        timeout: const Duration(seconds: 60),
+        // Increase timeout slightly to accommodate network latency
+        timeout: const Duration(seconds: 90),
       );
     } catch (e) {
-      _logger.e(_tag, 'Phone number verification error: ${e.toString()}');
+      _logger.e(_tag, 'Phone number verification error', e);
       
       if (e is FirebaseAuthException) {
-        verificationFailed(_handleException(e));
+        verificationFailed(_handleException(e, method: AuthMethod.phone));
+      } else if (e is AuthException) {
+        verificationFailed(e);
       } else {
         verificationFailed(
           AuthException(
             AuthErrorCodes.phoneAuthFailed,
-            'Failed to verify phone number',
+            'Failed to verify phone number: ${e.toString()}',
             e,
+            AuthMethod.phone
           ),
         );
       }
     }
+  }
+  
+  /// Validates a phone number has the correct format
+  /// This is a basic validation to prevent obviously wrong phone numbers
+  bool _isValidPhoneNumberFormat(String phoneNumber) {
+    // Simple regex for international phone format: +country_code followed by digits
+    // This is a simple validation; Firebase will do more thorough validation
+    final regex = RegExp(r'^\+[1-9]\d{1,14}$');
+    return regex.hasMatch(phoneNumber);
   }
 
   @override
@@ -303,14 +343,18 @@ class AuthService implements AuthServiceInterface {
     PhoneAuthCredential credential,
   ) async {
     try {
+      _logger.d(_tag, 'Signing in with phone auth credential');
       return await _firebaseAuth.signInWithCredential(credential);
     } on FirebaseAuthException catch (e) {
-      throw _handleException(e);
+      _logger.e(_tag, 'Firebase Auth error during phone sign-in: ${e.code} - ${e.message}');
+      throw _handleException(e, method: AuthMethod.phone);
     } catch (e) {
+      _logger.e(_tag, 'Unexpected error during phone sign-in', e);
       throw AuthException(
         AuthErrorCodes.phoneAuthFailed,
         'Failed to sign in with phone credential',
         e,
+        AuthMethod.phone,
       );
     }
   }
@@ -321,19 +365,17 @@ class AuthService implements AuthServiceInterface {
     String smsCode,
   ) async {
     try {
+      _logger.d(_tag, 'Creating credential with verification ID and SMS code');
       final credential = PhoneAuthProvider.credential(
         verificationId: verificationId,
         smsCode: smsCode,
       );
-      return await _firebaseAuth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      throw _handleException(e);
+      
+      // Use the existing method for credential sign-in to avoid code duplication
+      return await signInWithPhoneAuthCredential(credential);
     } catch (e) {
-      throw AuthException(
-        AuthErrorCodes.phoneAuthFailed,
-        'Failed to verify OTP code',
-        e,
-      );
+      // The signInWithPhoneAuthCredential method already handles errors properly
+      rethrow;
     }
   }
 
@@ -457,18 +499,15 @@ class AuthService implements AuthServiceInterface {
         );
       }
       
-      _logger.i(_tag, 'Starting user account deletion process');
-      debugPrint('💥 DELETE: Starting user account deletion process');
+      _logger.i(_tag, 'Starting user account deletion process for UID: $uid');
       
       // Get user ID before deleting
       uid = user.uid;
-      debugPrint('💥 DELETE: User ID to delete: $uid');
       
       // Get API service from service locator for backend deletion request
       final apiService = serviceLocator<ApiService>();
       
-      _logger.i(_tag, 'Making API call to delete user data from backend');
-      debugPrint('💥 DELETE: Making API call to delete user data from backend');
+      _logger.i(_tag, 'Making API call to delete user data from backend for UID: $uid');
       
       // Get Firebase ID token for authorization
       final idToken = await refreshIdToken(forceRefresh: true);
@@ -496,7 +535,6 @@ class AuthService implements AuthServiceInterface {
       }
       
       _logger.i(_tag, 'Backend confirmed successful user deletion');
-      debugPrint('💥 DELETE: Backend deletion confirmed successful');
       
       // Delete the Firebase user directly without token removal or signOut
       // No need to remove FCM token as the backend should have cleaned up all user data
@@ -510,7 +548,6 @@ class AuthService implements AuthServiceInterface {
         if (e.code == 'user-not-found') {
           // This is expected - the backend already deleted the Firebase Auth user
           _logger.i(_tag, 'Firebase user was already deleted by backend - this is expected');
-          debugPrint('💥 DELETE: Firebase user was already deleted by backend - this is expected');
         } else {
           // Some other Firebase Auth error occurred
           _logger.e(_tag, 'Unexpected Firebase Auth error during user deletion: ${e.code} - ${e.message}');
