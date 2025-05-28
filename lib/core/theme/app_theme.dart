@@ -106,7 +106,7 @@ class AppTheme {
       ),
 
       // Card theme
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: Colors.black, // Pure black
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -149,7 +149,7 @@ class AppTheme {
       ),
 
       // Dialog theme
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: Colors.black, // Pure black
         elevation: 24,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

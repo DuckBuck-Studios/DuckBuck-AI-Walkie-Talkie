@@ -39,11 +39,15 @@ class AppSecurityService {
   /// Returns true if all checks pass, false otherwise
   Future<bool> performSecurityChecks() async {
     try {
-      // Pass whether we're in debug mode to the platform code
+      // Check both dart.vm.product and ENVIRONMENT to determine if in development mode
       final bool isDebug = const bool.fromEnvironment('dart.vm.product') == false;
+      final String environment = const String.fromEnvironment('ENVIRONMENT', defaultValue: 'production');
+      final bool isDevelopment = isDebug || environment.toLowerCase() == 'development';
+      
+      _logger.d(_tag, 'Security checks running in ${isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode');
       
       final result = await _channel.invokeMethod<bool>('performSecurityChecks', {
-        'isDevelopment': isDebug,
+        'isDevelopment': isDevelopment,
       });
       
       if (result == true) {
