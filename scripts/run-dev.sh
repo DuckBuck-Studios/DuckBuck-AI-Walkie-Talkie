@@ -30,9 +30,13 @@ echo "API Key: ${DUCKBUCK_API_KEY:0:10}... (truncated for security)"
 
 cd "$PROJECT_ROOT"
 
-# Run with environment variables
+# Run with environment variables and explicitly set ENVIRONMENT=development
 if [ -n "$TARGET_DEVICE" ]; then
-    flutter run -d "$TARGET_DEVICE" --dart-define=DUCKBUCK_API_KEY="$DUCKBUCK_API_KEY"
+    flutter run -d "$TARGET_DEVICE" \
+      --dart-define=DUCKBUCK_API_KEY="$DUCKBUCK_API_KEY" \
+      --dart-define=ENVIRONMENT=development
 else
-    flutter run --dart-define=DUCKBUCK_API_KEY="$DUCKBUCK_API_KEY"
+    flutter run \
+      --dart-define=DUCKBUCK_API_KEY="$DUCKBUCK_API_KEY" \
+      --dart-define=ENVIRONMENT=development
 fi
