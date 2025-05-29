@@ -30,6 +30,7 @@ enum RelationshipOperation {
   unblockUser,
   getFriends,
   searchFriends,
+  searchUser,
   updateProfile,
 }
 

@@ -17,6 +17,7 @@ import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
 import '../repositories/user_repository.dart'; 
+import '../repositories/relationship_repository.dart'; 
 import 'logger/logger_service.dart';
 import 'relationship/relationship_service_interface.dart';
 import 'relationship/relationship_service.dart';
@@ -93,6 +94,15 @@ Future<void> setupServiceLocator() async {
       analytics: serviceLocator<FirebaseAnalyticsService>(),
       crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
       emailService: serviceLocator<EmailNotificationService>(),
+    ),
+  );
+
+  // Register relationship repository
+  serviceLocator.registerLazySingleton<RelationshipRepository>(
+    () => RelationshipRepository(
+      relationshipService: serviceLocator<RelationshipServiceInterface>(),
+      analytics: serviceLocator<FirebaseAnalyticsService>(),
+      crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
     ),
   );
    
