@@ -59,7 +59,7 @@ class ApiService {
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = 'https://e64c-2401-4900-62df-6aac-7ca0-2a0c-55ce-2114.ngrok-free.app',
+    _baseUrl = 'https://api.duckbuck.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
