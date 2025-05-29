@@ -41,6 +41,7 @@ dependencies:
   sms_autofill: ^2.4.1
   dio: ^5.8.0+1
   google_nav_bar: ^5.0.7
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:
