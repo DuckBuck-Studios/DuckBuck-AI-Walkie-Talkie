@@ -1,6 +1,7 @@
+import 'dart:io' show Platform;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../../core/theme/app_colors.dart';
 
 /// A reusable cached profile avatar widget with fallback to initials
 class ProfileAvatar extends StatelessWidget {
@@ -17,21 +18,55 @@ class ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasImage = photoURL != null && photoURL!.isNotEmpty;
+
+    if (Platform.isIOS) {
+      return _buildCupertinoAvatar(context, hasImage);
+    } else {
+      return _buildMaterialAvatar(context, hasImage);
+    }
+  }
+
+  Widget _buildMaterialAvatar(BuildContext context, bool hasImage) {
+    final theme = Theme.of(context);
     return CircleAvatar(
       radius: radius,
-      backgroundColor: AppColors.surfaceBlack,
-      backgroundImage: photoURL == null
-          ? null
-          : CachedNetworkImageProvider(
-              photoURL!,
-            ),
-      child: photoURL == null
+      backgroundColor: theme.colorScheme.secondaryContainer,
+      backgroundImage: hasImage
+          ? CachedNetworkImageProvider(photoURL!)
+          : null,
+      child: !hasImage
           ? Text(
               _getInitials(displayName),
               style: TextStyle(
                 fontSize: radius * 0.6,
                 fontWeight: FontWeight.bold,
-                color: AppColors.accentBlue,
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildCupertinoAvatar(BuildContext context, bool hasImage) {
+    final theme = CupertinoTheme.of(context);
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: theme.brightness == Brightness.dark 
+          ? CupertinoColors.systemGrey3.darkColor 
+          : CupertinoColors.systemGrey5.color,
+      backgroundImage: hasImage
+          ? CachedNetworkImageProvider(photoURL!)
+          : null,
+      child: !hasImage
+          ? Text(
+              _getInitials(displayName),
+              style: TextStyle(
+                fontSize: radius * 0.6,
+                fontWeight: FontWeight.bold,
+                color: theme.brightness == Brightness.dark
+                    ? CupertinoColors.white
+                    : CupertinoColors.black,
               ),
             )
           : null,
@@ -39,7 +74,13 @@ class ProfileAvatar extends StatelessWidget {
   }
 
   String _getInitials(String name) {
-    if (name.isEmpty) return '?';
-    return name.substring(0, 1).toUpperCase();
+    if (name.trim().isEmpty) return '?';
+    final parts = name.trim().split(' ');
+    if (parts.length > 1 && parts.last.isNotEmpty) {
+      return (parts.first[0] + parts.last[0]).toUpperCase();
+    } else if (parts.first.isNotEmpty) {
+      return parts.first[0].toUpperCase();
+    }
+    return '?';
   }
 }

@@ -1,8 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:io' show Platform;
 import '../../../core/models/relationship_model.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
-import '../../../core/theme/app_colors.dart';
 import '../providers/friends_provider.dart';
 
 class RemoveFriendDialog extends StatelessWidget {
@@ -16,29 +17,73 @@ class RemoveFriendDialog extends StatelessWidget {
   });
 
   static Future<void> show(BuildContext context, RelationshipModel relationship, FriendsProvider provider) {
-    return showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return RemoveFriendDialog(
-          relationship: relationship,
-          provider: provider,
-        );
-      },
-    );
+    if (Platform.isIOS) {
+      return showCupertinoDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return RemoveFriendDialog(
+            relationship: relationship,
+            provider: provider,
+          );
+        },
+      );
+    } else {
+      return showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return RemoveFriendDialog(
+            relationship: relationship,
+            provider: provider,
+          );
+        },
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isIOS) {
+      return _buildCupertinoDialog(context);
+    } else {
+      return _buildMaterialDialog(context);
+    }
+  }
+
+  Widget _buildCupertinoDialog(BuildContext context) {
+    final authService = serviceLocator<AuthServiceInterface>();
+    final currentUserId = authService.currentUser?.uid ?? '';
+    final profile = provider.getCachedProfile(relationship, currentUserId);
+
+    return CupertinoAlertDialog(
+      title: const Text('Remove Friend'),
+      content: Text(
+        'Are you sure you want to remove ${profile?.displayName ?? 'this user'} from your friends?',
+      ),
+      actions: [
+        CupertinoDialogAction(
+          child: const Text('Cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          child: const Text('Remove'),
+          onPressed: () => _handleRemoveFriend(context, true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMaterialDialog(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
     final profile = provider.getCachedProfile(relationship, currentUserId);
     
     return AlertDialog(
-      backgroundColor: AppColors.surfaceBlack,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       title: Text(
         'Remove Friend',
         style: TextStyle(
-          color: AppColors.textPrimary,
+          color: Theme.of(context).colorScheme.onSurface,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -47,41 +92,44 @@ class RemoveFriendDialog extends StatelessWidget {
       ),
       content: Text(
         'Are you sure you want to remove ${profile?.displayName ?? 'this user'} from your friends?',
-        style: TextStyle(color: AppColors.textSecondary),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
       actions: [
         TextButton(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.textSecondary,
+            foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: () async {
-            Navigator.of(context).pop();
-            final success = await provider.removeFriend(relationship.id);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    success 
-                      ? 'Friend removed' 
-                      : 'Failed to remove friend',
-                  ),
-                  backgroundColor: success ? Colors.green : Colors.red,
-                ),
-              );
-            }
-          },
+          onPressed: () => _handleRemoveFriend(context, false),
           child: const Text('Remove'),
         ),
       ],
     );
+  }
+
+  Future<void> _handleRemoveFriend(BuildContext context, bool isIOS) async {
+    Navigator.of(context).pop();
+    final success = await provider.removeFriend(relationship.id);
+    if (context.mounted) {
+      final snackBar = SnackBar(
+        content: Text(
+          success 
+            ? 'Friend removed' 
+            : 'Failed to remove friend',
+        ),
+        backgroundColor: success 
+          ? (isIOS ? CupertinoColors.activeGreen : Colors.green)
+          : (isIOS ? CupertinoColors.destructiveRed : Colors.red),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
   }
 }
