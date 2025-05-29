@@ -3,6 +3,7 @@ import '../../models/relationship_model.dart';
 import '../firebase/firebase_database_service.dart';
 import '../user/user_service_interface.dart';
 import '../auth/auth_service_interface.dart';
+import '../notifications/notifications_service.dart';
 import '../service_locator.dart';
 import '../logger/logger_service.dart';
 import '../../exceptions/relationship_exceptions.dart';
@@ -14,6 +15,7 @@ class RelationshipService implements RelationshipServiceInterface {
   final FirebaseDatabaseService _databaseService;
   final UserServiceInterface _userService;
   final AuthServiceInterface _authService;
+  final NotificationsService _notificationsService;
   final LoggerService _logger;
   
   static const String _tag = 'RELATIONSHIP_SERVICE';
@@ -24,10 +26,12 @@ class RelationshipService implements RelationshipServiceInterface {
     FirebaseDatabaseService? databaseService,
     UserServiceInterface? userService,
     AuthServiceInterface? authService,
+    NotificationsService? notificationsService,
     LoggerService? logger,
   }) : _databaseService = databaseService ?? serviceLocator<FirebaseDatabaseService>(),
        _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _authService = authService ?? serviceLocator<AuthServiceInterface>(),
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
        _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Get current user ID with validation
@@ -161,6 +165,22 @@ class RelationshipService implements RelationshipServiceInterface {
         });
 
         _logger.i(_tag, 'Friend request sent from $currentUserId to $targetUserId');
+        
+        // Send notification to target user (fire-and-forget)
+        final currentUserProfile = await _userService.getUserData(currentUserId);
+        if (currentUserProfile != null) {
+          _notificationsService.sendNotification(
+            recipientUid: targetUserId,
+            // Don't include title field at all to avoid showing title in notification
+            body: '${currentUserProfile.displayName ?? 'Someone'} wants to be your friend',
+            data: {
+              'type': 'friend_request',
+              'sender_name': currentUserProfile.displayName ?? 'Someone',
+              // Remove photo URL and other unnecessary data
+            },
+          );
+        }
+        
         return docRef.id;
       });
     } catch (e) {
@@ -289,6 +309,25 @@ class RelationshipService implements RelationshipServiceInterface {
 
         _logger.i(_tag, 'Friend request accepted: $relationshipId');
       });
+      
+      // Send notification to the request sender (fire-and-forget)
+      final relationship = await _getRelationshipById(relationshipId);
+      if (relationship != null && relationship.initiatorId != null) {
+        final accepterProfile = await _userService.getUserData(currentUserId);
+        if (accepterProfile != null) {
+          _notificationsService.sendNotification(
+            recipientUid: relationship.initiatorId!,
+            // Leave title empty as per requirement to only show the name
+            title: '',
+            body: '${accepterProfile.displayName ?? 'Someone'} accepted your friend request',
+            data: {
+              'type': 'friend_request_accepted',
+              'accepter_name': accepterProfile.displayName ?? 'Someone',
+              // Remove photo URL and other unnecessary data
+            },
+          );
+        }
+      }
     } catch (e) {
       _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
       if (e is RelationshipException) rethrow;
@@ -933,5 +972,117 @@ class RelationshipService implements RelationshipServiceInterface {
         RelationshipOperation.searchUser,
       );
     }
+  }
+
+  // ========== STREAM-BASED METHODS ==========
+
+  @override
+  Stream<List<RelationshipModel>> getFriendsStream(String userId) {
+    _logger.d(_tag, 'Getting friends stream for user: $userId');
+    return _databaseService
+        .collectionStream(
+          collection: _relationshipCollection,
+          queryBuilder: (query) => query
+              .where('participants', arrayContains: userId)
+              .where('status', isEqualTo: RelationshipStatus.accepted.name),
+        )
+        .map((snapshot) {
+          final relationships = snapshot.docs
+              .map((doc) => RelationshipModel.fromMap(doc.data(), doc.id))
+              .toList();
+          // Sort by display name of the other participant
+          relationships.sort((a, b) => 
+            (a.cachedProfiles[a.participants.firstWhere((id) => id != userId, orElse: () => '')]?.displayName ?? '')
+            .compareTo(b.cachedProfiles[b.participants.firstWhere((id) => id != userId, orElse: () => '')]?.displayName ?? '')
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getFriendsStream: $error');
+          _handleStreamError(error, RelationshipOperation.getFriendsStream);
+          return Stream.value([]); // Return empty list on error to keep stream alive
+        });
+  }
+
+  @override
+  Stream<List<RelationshipModel>> getPendingRequestsStream(String userId) {
+    _logger.d(_tag, 'Getting pending requests stream for user: $userId');
+    return _databaseService
+        .collectionStream(
+          collection: _relationshipCollection,
+          queryBuilder: (query) => query
+              .where('participants', arrayContains: userId)
+              .where('status', isEqualTo: RelationshipStatus.pending.name)
+              .where('initiatorId', isNotEqualTo: userId), // User is the receiver
+        )
+        .map((snapshot) {
+          final relationships = snapshot.docs
+              .map((doc) => RelationshipModel.fromMap(doc.data(), doc.id))
+              .toList();
+          // Sort by display name of the initiator
+          relationships.sort((a, b) => 
+            (a.cachedProfiles[a.initiatorId]?.displayName ?? '')
+            .compareTo(b.cachedProfiles[b.initiatorId]?.displayName ?? '')
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getPendingRequestsStream: $error');
+          _handleStreamError(error, RelationshipOperation.getPendingRequestsStream);
+          return Stream.value([]);
+        });
+  }
+
+  @override
+  Stream<List<RelationshipModel>> getSentRequestsStream(String userId) {
+    _logger.d(_tag, 'Getting sent requests stream for user: $userId');
+    return _databaseService
+        .collectionStream(
+          collection: _relationshipCollection,
+          queryBuilder: (query) => query
+              .where('participants', arrayContains: userId)
+              .where('status', isEqualTo: RelationshipStatus.pending.name)
+              .where('initiatorId', isEqualTo: userId), // User is the initiator
+        )
+        .map((snapshot) {
+          final relationships = snapshot.docs
+              .map((doc) => RelationshipModel.fromMap(doc.data(), doc.id))
+              .toList();
+          // Sort by display name of the other participant (receiver)
+          relationships.sort((a, b) {
+            final otherParticipantA = a.participants.firstWhere((pId) => pId != userId, orElse: () => '');
+            final otherParticipantB = b.participants.firstWhere((pId) => pId != userId, orElse: () => '');
+            return (a.cachedProfiles[otherParticipantA]?.displayName ?? '')
+                .compareTo(b.cachedProfiles[otherParticipantB]?.displayName ?? '');
+          });
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getSentRequestsStream: $error');
+          _handleStreamError(error, RelationshipOperation.getSentRequestsStream);
+          return Stream.value([]);
+        });
+  }
+
+  /// Helper to handle stream errors consistently
+  void _handleStreamError(Object error, RelationshipOperation operation) {
+    if (error is RelationshipException) {
+      // Log already handled by the exception constructor or specific catch block
+    } else {
+      // Log unexpected errors
+      _logger.e(
+        _tag,
+        'Unexpected error in stream operation $operation: ${error.toString()}',
+      );
+      // Optionally, rethrow as a RelationshipException if needed for higher-level handling
+      // throw RelationshipException(
+      //   RelationshipErrorCodes.databaseError,
+      //   'Stream failed for $operation',
+      //   error,
+      //   operation,
+      // );
+    }
+    // Consider if Crashlytics should record these errors,
+    // but be mindful of potential noise if streams frequently encounter transient issues.
   }
 }

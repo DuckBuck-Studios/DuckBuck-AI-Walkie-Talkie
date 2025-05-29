@@ -4,6 +4,8 @@ import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/logger/logger_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/relationship_exceptions.dart';
+import '../models/relationship_model.dart';
+import '../services/auth/auth_service_interface.dart';
 
 /// Repository to handle relationship data operations
 /// 
@@ -15,7 +17,8 @@ class RelationshipRepository {
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final LoggerService _logger = LoggerService();
-  
+  final AuthServiceInterface _authService;
+
   static const String _tag = 'RELATIONSHIP_REPO';
 
   /// Creates a new RelationshipRepository
@@ -23,9 +26,11 @@ class RelationshipRepository {
     RelationshipServiceInterface? relationshipService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
+    AuthServiceInterface? authService,
   }) : _relationshipService = relationshipService ?? serviceLocator<RelationshipServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
-       _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>();
+       _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
+       _authService = authService ?? serviceLocator<AuthServiceInterface>();
 
   // ========== FRIEND REQUEST OPERATIONS ==========
 
@@ -649,47 +654,140 @@ class RelationshipRepository {
     }
   }
 
-  // ========== HELPER METHODS ==========
+  // ========== STREAM-BASED METHODS ==========
 
-  /// Get user-friendly error message from RelationshipException
-  String getErrorMessage(RelationshipException exception) {
-    return RelationshipErrorMessages.getOperationSpecificMessage(exception);
+  /// Get a stream of accepted friendships for the current user
+  Stream<List<RelationshipModel>> getFriendsStream() {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) {
+        _logger.w(_tag, 'Cannot get friends stream: user not authenticated');
+        return Stream.error(RelationshipException(
+          RelationshipErrorCodes.notLoggedIn,
+          'User not logged in',
+          null,
+          RelationshipOperation.getFriendsStream,
+        ));
+      }
+      final userId = currentUser.uid;
+      _logger.d(_tag, 'Getting friends stream for current user');
+      return _relationshipService.getFriendsStream(userId)
+        .map((relationships) {
+          _analytics.logEvent(
+            name: 'friends_stream_updated',
+            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getFriendsStream from repository: $error');
+          _crashlytics.recordError(
+            error,
+            null, // Stack trace can be null
+            reason: 'Failed to get friends stream',
+            fatal: false, 
+          );
+          throw error; 
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initiate getFriendsStream: ${e.toString()}');
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initiate getFriendsStream',
+        fatal: false,
+      );
+      return Stream.error(e);
+    }
   }
 
-  /// Check if an error is a specific relationship error code
-  bool isErrorOfType(dynamic error, String errorCode) {
-    return error is RelationshipException && error.code == errorCode;
+  /// Get a stream of pending friend requests (received by current user)
+  Stream<List<RelationshipModel>> getPendingRequestsStream() {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) {
+        _logger.w(_tag, 'Cannot get pending requests stream: user not authenticated');
+        return Stream.error(RelationshipException(
+          RelationshipErrorCodes.notLoggedIn,
+          'User not logged in',
+          null,
+          RelationshipOperation.getPendingRequestsStream,
+        ));
+      }
+      final userId = currentUser.uid;
+      _logger.d(_tag, 'Getting pending requests stream for current user');
+      return _relationshipService.getPendingRequestsStream(userId)
+        .map((relationships) {
+          _analytics.logEvent(
+            name: 'pending_requests_stream_updated',
+            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getPendingRequestsStream from repository: $error');
+          _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to get pending requests stream',
+            fatal: false,
+          );
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initiate getPendingRequestsStream: ${e.toString()}');
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initiate getPendingRequestsStream',
+        fatal: false,
+      );
+      return Stream.error(e);
+    }
   }
 
-  /// Check if user is not logged in error
-  bool isNotLoggedInError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.notLoggedIn);
-  }
-
-  /// Check if user not found error
-  bool isUserNotFoundError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.userNotFound);
-  }
-
-  /// Check if network error
-  bool isNetworkError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.networkError);
-  }
-
-  /// Check if already friends error
-  bool isAlreadyFriendsError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.alreadyFriends);
-  }
-
-  /// Check if request already sent error
-  bool isRequestAlreadySentError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.requestAlreadySent);
-  }
-
-  /// Check if blocked error
-  bool isBlockedError(dynamic error) {
-    return isErrorOfType(error, RelationshipErrorCodes.blocked) ||
-           isErrorOfType(error, RelationshipErrorCodes.blockedByUser) ||
-           isErrorOfType(error, RelationshipErrorCodes.blockedUser);
+  /// Get a stream of sent friend requests (sent by current user)
+  Stream<List<RelationshipModel>> getSentRequestsStream() {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) {
+        _logger.w(_tag, 'Cannot get sent requests stream: user not authenticated');
+        return Stream.error(RelationshipException(
+          RelationshipErrorCodes.notLoggedIn,
+          'User not logged in',
+          null,
+          RelationshipOperation.getSentRequestsStream,
+        ));
+      }
+      final userId = currentUser.uid;
+      _logger.d(_tag, 'Getting sent requests stream for current user');
+      return _relationshipService.getSentRequestsStream(userId)
+        .map((relationships) {
+          _analytics.logEvent(
+            name: 'sent_requests_stream_updated',
+            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getSentRequestsStream from repository: $error');
+          _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to get sent requests stream',
+            fatal: false,
+          );
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initiate getSentRequestsStream: ${e.toString()}');
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initiate getSentRequestsStream',
+        fatal: false,
+      );
+      return Stream.error(e);
+    }
   }
 }

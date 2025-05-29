@@ -1,8 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import '../firebase/firebase_database_service.dart';
 import '../logger/logger_service.dart';
+import '../api/api_service.dart';
 
 /// Service for handling push notifications and FCM tokens
 ///
@@ -14,6 +14,7 @@ class NotificationsService {
   final FirebaseMessaging _firebaseMessaging;
   final FirebaseDatabaseService _databaseService;
   final LoggerService _logger = LoggerService();
+  final ApiService _apiService;
   
   static const String _tag = 'NOTIFICATIONS'; // Tag for logs
 
@@ -21,8 +22,10 @@ class NotificationsService {
   NotificationsService({
     FirebaseMessaging? firebaseMessaging,
     required FirebaseDatabaseService databaseService,
+    required ApiService apiService,
   }) : _firebaseMessaging = firebaseMessaging ?? FirebaseMessaging.instance,
-       _databaseService = databaseService;
+       _databaseService = databaseService,
+       _apiService = apiService;
 
   /// Initialize FCM token generation
   Future<void> initialize() async {
@@ -186,6 +189,36 @@ class NotificationsService {
 }
 
   
+  /// Send push notification to a user
+  /// Fire-and-forget method - doesn't throw exceptions, just logs results
+  Future<bool> sendNotification({
+    required String recipientUid,
+    String? title,  // Make title optional
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      _logger.i(_tag, 'Sending notification to user: $recipientUid');
+      final success = await _apiService.sendNotification(
+        recipientUid: recipientUid,
+        title: title,  // Pass title as optional
+        body: body,
+        data: data,
+      );
+      
+      if (success) {
+        _logger.i(_tag, 'Notification sent successfully to user: $recipientUid');
+      } else {
+        _logger.w(_tag, 'Failed to send notification to user: $recipientUid');
+      }
+      
+      return success;
+    } catch (e) {
+      _logger.e(_tag, 'Error sending notification: $e');
+      return false;
+    }
+  }
+
   /// Helper to get the current platform name
   String _getPlatformName() {
     if (kIsWeb) return 'web';

@@ -48,6 +48,15 @@ abstract class RelationshipServiceInterface {
   /// Get blocked relationships for a user with pagination support
   Future<PaginatedRelationshipResult> getBlockedUsers(String userId, {int limit = 20, String? startAfter});
 
+  /// Stream of accepted friendships for a user
+  Stream<List<RelationshipModel>> getFriendsStream(String userId);
+
+  /// Stream of pending friend requests (received by user)
+  Stream<List<RelationshipModel>> getPendingRequestsStream(String userId);
+
+  /// Stream of sent friend requests (sent by user)
+  Stream<List<RelationshipModel>> getSentRequestsStream(String userId);
+
   /// Search user by UID to send friend request
   Future<Map<String, dynamic>?> searchUserByUid(String uid);
   
