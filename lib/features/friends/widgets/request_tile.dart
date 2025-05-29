@@ -13,10 +13,10 @@ class RequestTile extends StatelessWidget {
   final FriendsProvider provider;
   final bool isLoadingAccept;
   final bool isLoadingDecline;
-  final bool isLoadingCancel; // Added for cancel button
+  final bool isLoadingCancel;  
   final VoidCallback onAccept;
   final VoidCallback onDecline;
-  final VoidCallback onCancel; // Added for cancel button
+  final VoidCallback onCancel;  
 
   const RequestTile({
     super.key,
@@ -25,10 +25,10 @@ class RequestTile extends StatelessWidget {
     required this.provider,
     required this.isLoadingAccept,
     required this.isLoadingDecline,
-    required this.isLoadingCancel, // Added
+    required this.isLoadingCancel, 
     required this.onAccept,
     required this.onDecline,
-    required this.onCancel, // Added
+    required this.onCancel, 
   });
 
   @override

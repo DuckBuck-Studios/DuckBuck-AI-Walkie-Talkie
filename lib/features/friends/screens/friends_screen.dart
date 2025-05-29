@@ -111,25 +111,15 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           return TabBarView(
             controller: _materialTabController,
             children: [
-              RefreshIndicator(
-                color: theme.colorScheme.secondary,
-                backgroundColor: theme.colorScheme.surface,
-                onRefresh: () => provider.refreshAll(),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: _buildFriendsList(context, provider),
-                ),
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: _buildFriendsList(context, provider),
               ),
-              RefreshIndicator(
-                color: theme.colorScheme.secondaryContainer,
-                backgroundColor: theme.colorScheme.surface,
-                onRefresh: () => provider.refreshAll(),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  child: _buildPendingList(context, provider),
-                ),
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: _buildPendingList(context, provider),
               ),
             ],
           );
@@ -178,7 +168,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 Text(tabTitles[index]),
                 Builder(builder: (context) {
                   int count = 0;
-                  if (index == 0) count = provider.friendsCount;
+                  // Only show count for pending requests (index 1), not for friends (index 0)
                   if (index == 1) count = provider.incomingCount + provider.outgoingCount;
                   if (count > 0) {
                     return Container(
@@ -257,7 +247,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                   }
                 },
                 children: {
-                  0: _buildCupertinoSegment(context, 'Friends', CupertinoIcons.group, provider.friendsCount, 0),
+                  0: _buildCupertinoSegment(context, 'Friends', CupertinoIcons.group, 0, 0), // No count for friends
                   1: _buildCupertinoSegment(context, 'Pending', CupertinoIcons.hourglass, provider.incomingCount + provider.outgoingCount, 1),
                 },
               ),
@@ -277,17 +267,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                   } else {
                     content = _buildPendingList(context, provider);
                   }
-                  return CustomScrollView(
+                  return SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      CupertinoSliverRefreshControl(
-                        onRefresh: () => provider.refreshAll(),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 0), // Sections handle their own padding
-                        sliver: SliverToBoxAdapter(child: content),
-                      ),
-                    ],
+                    padding: const EdgeInsets.symmetric(horizontal: 0), // Sections handle their own padding
+                    child: content,
                   );
                 },
               ),

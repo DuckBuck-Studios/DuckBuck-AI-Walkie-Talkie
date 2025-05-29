@@ -42,22 +42,11 @@ class FriendsProvider extends ChangeNotifier {
   List<RelationshipModel> _incomingRequests = [];
   List<RelationshipModel> _outgoingRequests = [];
 
-  // Pagination state - May become less relevant with streams providing full lists, or adapt if streams support pagination
-  bool _friendsHasMore = false;
-  bool _incomingHasMore = false;
-  bool _outgoingHasMore = false;
-  // String? _friendsLastDoc; // Likely remove if streams don't use cursors this way
-  // String? _incomingLastDoc; // Likely remove
-  // String? _outgoingLastDoc; // Likely remove
-
   // Loading states
   bool _isLoadingSummary = false;
   bool _isLoadingFriends = false;
   bool _isLoadingIncoming = false;
   bool _isLoadingOutgoing = false;
-  bool _isLoadingMoreFriends = false;
-  bool _isLoadingMoreIncoming = false;
-  bool _isLoadingMoreOutgoing = false;
   bool _isSearching = false;
 
   // Sets to track processing state for individual requests
@@ -85,19 +74,12 @@ class FriendsProvider extends ChangeNotifier {
   bool get isLoadingFriends => _isLoadingFriends;
   bool get isLoadingIncoming => _isLoadingIncoming;
   bool get isLoadingOutgoing => _isLoadingOutgoing;
-  bool get isLoadingMoreFriends => _isLoadingMoreFriends;
-  bool get isLoadingMoreIncoming => _isLoadingMoreIncoming;
-  bool get isLoadingMoreOutgoing => _isLoadingMoreOutgoing;
   bool get isSearching => _isSearching;
 
   // Getters for processing states
   bool isAcceptingRequest(String id) => _processingAcceptRequestIds.contains(id);
   bool isDecliningRequest(String id) => _processingDeclineRequestIds.contains(id);
   bool isCancellingRequest(String id) => _processingCancelRequestIds.contains(id); // Added getter
-
-  bool get friendsHasMore => _friendsHasMore;
-  bool get incomingHasMore => _incomingHasMore;
-  bool get outgoingHasMore => _outgoingHasMore;
 
   String? get error => _error;
 
@@ -130,7 +112,6 @@ class FriendsProvider extends ChangeNotifier {
         _friends = friendsList;
         _summary['friends'] = _friends.length; // Update summary count
         _isLoadingFriends = false;
-        _friendsHasMore = false; // Assuming stream provides the whole list
         _error = null;
         notifyListeners();
         _logger.d(_tag, 'Friends list updated from stream: ${_friends.length} friends');
@@ -155,7 +136,6 @@ class FriendsProvider extends ChangeNotifier {
         _incomingRequests = incomingList;
         _summary['pending_received'] = _incomingRequests.length; // Update summary count
         _isLoadingIncoming = false;
-        _incomingHasMore = false; // Assuming stream provides the whole list
         _error = null;
         notifyListeners();
         _logger.d(_tag, 'Incoming requests updated from stream: ${_incomingRequests.length} requests');
@@ -180,7 +160,6 @@ class FriendsProvider extends ChangeNotifier {
         _outgoingRequests = outgoingList;
         _summary['pending_sent'] = _outgoingRequests.length; // Update summary count
         _isLoadingOutgoing = false;
-        _outgoingHasMore = false; // Assuming stream provides the whole list
         _error = null;
         notifyListeners();
         _logger.d(_tag, 'Outgoing requests updated from stream: ${_outgoingRequests.length} requests');
@@ -349,19 +328,6 @@ class FriendsProvider extends ChangeNotifier {
     } finally {
       // Clear processing state
     }
-  }
-
-  /// Refresh all data - streams handle automatic updates, this method can be kept for manual refresh if needed
-  Future<void> refreshAll() async {
-    _logger.d(_tag, 'Refreshing data - streams handle automatic updates');
-    // Streams are already active and handle real-time updates automatically
-    // If you need to force a re-fetch for streams, you might need to re-initialize them
-    final currentUser = _authService.currentUser;
-    if (currentUser != null) {
-      // Optionally reload summary for any other fields not covered by streams
-      await loadSummary(); 
-    }
-    _logger.i(_tag, 'Data refresh completed');
   }
 
   /// Clear error state
