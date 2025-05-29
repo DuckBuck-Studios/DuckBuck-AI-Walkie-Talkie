@@ -582,6 +582,8 @@ class RelationshipService implements RelationshipServiceInterface {
   @override
   Future<PaginatedRelationshipResult> getFriends(String userId, {int limit = 20, String? startAfter}) async {
     try {
+      // Simplified query - removed ordering to avoid index requirement
+      // TODO: Add proper composite index in Firebase Console for better performance
       final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
@@ -589,8 +591,9 @@ class RelationshipService implements RelationshipServiceInterface {
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.accepted.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
-        orderBy: 'updatedAt',
-        descending: true,
+        // Temporarily removed orderBy to avoid index requirement
+        // orderBy: 'updatedAt',
+        // descending: true,
         limit: limit + 1, // Fetch one extra to check if there are more
         startAfterDocument: startAfter,
       );
@@ -736,6 +739,7 @@ class RelationshipService implements RelationshipServiceInterface {
   @override
   Future<PaginatedRelationshipResult> getPendingRequests(String userId, {int limit = 20, String? startAfter}) async {
     try {
+      // Simplified query - removed ordering to avoid index requirement
       final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
@@ -743,8 +747,9 @@ class RelationshipService implements RelationshipServiceInterface {
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
-        orderBy: 'createdAt',
-        descending: true,
+        // Temporarily removed orderBy to avoid index requirement
+        // orderBy: 'createdAt',
+        // descending: true,
         limit: limit * 2, // Fetch more since we need to filter
         startAfterDocument: startAfter,
       );
@@ -779,6 +784,7 @@ class RelationshipService implements RelationshipServiceInterface {
   @override
   Future<PaginatedRelationshipResult> getSentRequests(String userId, {int limit = 20, String? startAfter}) async {
     try {
+      // Simplified query - removed ordering to avoid index requirement
       final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
@@ -786,8 +792,9 @@ class RelationshipService implements RelationshipServiceInterface {
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
-        orderBy: 'createdAt',
-        descending: true,
+        // Temporarily removed orderBy to avoid index requirement
+        // orderBy: 'createdAt',
+        // descending: true,
         limit: limit + 1, // Fetch one extra to check if there are more
         startAfterDocument: startAfter,
       );
@@ -819,6 +826,7 @@ class RelationshipService implements RelationshipServiceInterface {
   @override
   Future<PaginatedRelationshipResult> getBlockedUsers(String userId, {int limit = 20, String? startAfter}) async {
     try {
+      // Simplified query - removed ordering to avoid index requirement
       final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
@@ -826,8 +834,9 @@ class RelationshipService implements RelationshipServiceInterface {
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.blocked.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
-        orderBy: 'updatedAt',
-        descending: true,
+        // Temporarily removed orderBy to avoid index requirement
+        // orderBy: 'updatedAt',
+        // descending: true,
         limit: limit + 1, // Fetch one extra to check if there are more
         startAfterDocument: startAfter,
       );
