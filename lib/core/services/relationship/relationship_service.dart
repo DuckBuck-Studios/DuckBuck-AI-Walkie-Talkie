@@ -68,96 +68,101 @@ class RelationshipService implements RelationshipServiceInterface {
         );
       }
 
-      // Check if relationship already exists
-      final existingRelationship = await getFriendshipStatus(currentUserId, targetUserId);
-      
-      if (existingRelationship != null) {
-        switch (existingRelationship.status) {
-          case RelationshipStatus.pending:
-            if (existingRelationship.initiatorId == currentUserId) {
+      // Use transaction to ensure consistency
+      return await _databaseService.runTransaction<String>((transaction) async {
+        // Check if relationship already exists within transaction
+        final existingRelationship = await getFriendshipStatus(currentUserId, targetUserId);
+        
+        if (existingRelationship != null) {
+          switch (existingRelationship.status) {
+            case RelationshipStatus.pending:
+              if (existingRelationship.initiatorId == currentUserId) {
+                throw RelationshipException(
+                  RelationshipErrorCodes.requestAlreadySent,
+                  'Friend request already sent',
+                  null,
+                  RelationshipOperation.sendRequest,
+                );
+              } else {
+                throw RelationshipException(
+                  RelationshipErrorCodes.requestAlreadyReceived,
+                  'You have a pending friend request from this user',
+                  null,
+                  RelationshipOperation.sendRequest,
+                );
+              }
+            case RelationshipStatus.accepted:
               throw RelationshipException(
-                RelationshipErrorCodes.requestAlreadySent,
-                'Friend request already sent',
+                RelationshipErrorCodes.alreadyFriends,
+                'Users are already friends',
                 null,
                 RelationshipOperation.sendRequest,
               );
-            } else {
+            case RelationshipStatus.blocked:
               throw RelationshipException(
-                RelationshipErrorCodes.requestAlreadyReceived,
-                'You have a pending friend request from this user',
+                RelationshipErrorCodes.blocked,
+                'Cannot send request to blocked user',
                 null,
                 RelationshipOperation.sendRequest,
               );
-            }
-          case RelationshipStatus.accepted:
-            throw RelationshipException(
-              RelationshipErrorCodes.alreadyFriends,
-              'Users are already friends',
-              null,
-              RelationshipOperation.sendRequest,
-            );
-          case RelationshipStatus.blocked:
-            throw RelationshipException(
-              RelationshipErrorCodes.blocked,
-              'Cannot send request to blocked user',
-              null,
-              RelationshipOperation.sendRequest,
-            );
-          case RelationshipStatus.declined:
-            // Update existing declined relationship to pending with new initiator
-            return await _updateExistingRelationshipToPending(
-              existingRelationship.id,
-              currentUserId,
-              targetUserId,
-            );
+            case RelationshipStatus.declined:
+              // Update existing declined relationship to pending with new initiator
+              return await _updateExistingRelationshipToPending(
+                existingRelationship.id,
+                currentUserId,
+                targetUserId,
+              );
+          }
         }
-      }
 
-      // Get current user profile for caching
-      final currentUser = await _userService.getUserData(currentUserId);
-      if (currentUser == null) {
-        throw RelationshipException(
-          RelationshipErrorCodes.userNotFound,
-          'Current user data not found',
-          null,
-          RelationshipOperation.sendRequest,
+        // Get current user profile for caching
+        final currentUser = await _userService.getUserData(currentUserId);
+        if (currentUser == null) {
+          throw RelationshipException(
+            RelationshipErrorCodes.userNotFound,
+            'Current user data not found',
+            null,
+            RelationshipOperation.sendRequest,
+          );
+        }
+
+        // Create new relationship document within transaction
+        final participants = RelationshipModel.sortParticipants([currentUserId, targetUserId]);
+        final now = DateTime.now();
+        
+        final newRelationship = RelationshipModel(
+          id: '', // Will be set by Firestore
+          participants: participants,
+          type: RelationshipType.friendship,
+          status: RelationshipStatus.pending,
+          createdAt: now,
+          updatedAt: now,
+          initiatorId: currentUserId,
+          cachedProfiles: {
+            currentUserId: CachedProfile(
+              displayName: currentUser.displayName ?? 'Unknown',
+              photoURL: currentUser.photoURL,
+              lastUpdated: now,
+            ),
+            targetUserId: CachedProfile(
+              displayName: targetUser.displayName ?? 'Unknown',
+              photoURL: targetUser.photoURL,
+              lastUpdated: now,
+            ),
+          },
         );
-      }
 
-      // Create new relationship document
-      final participants = RelationshipModel.sortParticipants([currentUserId, targetUserId]);
-      final now = DateTime.now();
-      
-      final newRelationship = RelationshipModel(
-        id: '', // Will be set by Firestore
-        participants: participants,
-        type: RelationshipType.friendship,
-        status: RelationshipStatus.pending,
-        createdAt: now,
-        updatedAt: now,
-        initiatorId: currentUserId,
-        cachedProfiles: {
-          currentUserId: CachedProfile(
-            displayName: currentUser.displayName ?? 'Unknown',
-            photoURL: currentUser.photoURL,
-            lastUpdated: now,
-          ),
-          targetUserId: CachedProfile(
-            displayName: targetUser.displayName ?? 'Unknown',
-            photoURL: targetUser.photoURL,
-            lastUpdated: now,
-          ),
-        },
-      );
+        // Create document within transaction
+        final docRef = _databaseService.firestoreInstance.collection(_relationshipCollection).doc();
+        transaction.set(docRef, {
+          ...newRelationship.toMap(),
+          'createdAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
 
-      // Save to Firestore
-      final docId = await _databaseService.addDocument(
-        collection: _relationshipCollection,
-        data: newRelationship.toMap(),
-      );
-
-      _logger.i(_tag, 'Friend request sent from $currentUserId to $targetUserId');
-      return docId;
+        _logger.i(_tag, 'Friend request sent from $currentUserId to $targetUserId');
+        return docRef.id;
+      });
     } catch (e) {
       _logger.e(_tag, 'Failed to send friend request: ${e.toString()}');
       if (e is RelationshipException) rethrow;
@@ -226,60 +231,64 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
-      if (relationship == null) {
-        throw RelationshipException(
-          RelationshipErrorCodes.notFound,
-          'Friend request not found',
-          null,
-          RelationshipOperation.acceptRequest,
-        );
-      }
+      // Use transaction to ensure consistency
+      await _databaseService.runTransaction<void>((transaction) async {
+        final relationshipRef = _databaseService.firestoreInstance
+            .collection(_relationshipCollection)
+            .doc(relationshipId);
+            
+        final relationshipDoc = await transaction.get(relationshipRef);
+        
+        if (!relationshipDoc.exists) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notFound,
+            'Friend request not found',
+            null,
+            RelationshipOperation.acceptRequest,
+          );
+        }
 
-      // Validate user is part of this relationship
-      if (!relationship.participants.contains(currentUserId)) {
-        throw RelationshipException(
-          RelationshipErrorCodes.notParticipant,
-          'Not authorized to accept this friend request',
-          null,
-          RelationshipOperation.acceptRequest,
-        );
-      }
+        final relationship = RelationshipModel.fromMap(relationshipDoc.data()!, relationshipId);
 
-      // Validate request is pending and user is not the initiator
-      if (relationship.status != RelationshipStatus.pending) {
-        throw RelationshipException(
-          RelationshipErrorCodes.notPending,
-          'Friend request is not pending',
-          null,
-          RelationshipOperation.acceptRequest,
-        );
-      }
+        // Validate user is part of this relationship
+        if (!relationship.participants.contains(currentUserId)) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notParticipant,
+            'Not authorized to accept this friend request',
+            null,
+            RelationshipOperation.acceptRequest,
+          );
+        }
 
-      if (relationship.initiatorId == currentUserId) {
-        throw RelationshipException(
-          RelationshipErrorCodes.cannotAcceptOwnRequest,
-          'Cannot accept your own friend request',
-          null,
-          RelationshipOperation.acceptRequest,
-        );
-      }
+        // Validate request is pending and user is not the initiator
+        if (relationship.status != RelationshipStatus.pending) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notPending,
+            'Friend request is not pending',
+            null,
+            RelationshipOperation.acceptRequest,
+          );
+        }
 
-      // Update relationship to accepted
-      final updatedData = {
-        'status': RelationshipStatus.accepted.name,
-        'acceptedAt': Timestamp.fromDate(DateTime.now()),
-        'updatedAt': Timestamp.fromDate(DateTime.now()),
-      };
+        if (relationship.initiatorId == currentUserId) {
+          throw RelationshipException(
+            RelationshipErrorCodes.cannotAcceptOwnRequest,
+            'Cannot accept your own friend request',
+            null,
+            RelationshipOperation.acceptRequest,
+          );
+        }
 
-      await _databaseService.setDocument(
-        collection: _relationshipCollection,
-        documentId: relationshipId,
-        data: updatedData,
-        merge: true,
-      );
+        // Update relationship to accepted within transaction
+        final now = DateTime.now();
+        transaction.update(relationshipRef, {
+          'status': RelationshipStatus.accepted.name,
+          'acceptedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
 
-      _logger.i(_tag, 'Friend request accepted: $relationshipId');
+        _logger.i(_tag, 'Friend request accepted: $relationshipId');
+      });
     } catch (e) {
       _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
       if (e is RelationshipException) rethrow;
@@ -297,7 +306,7 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
+      final relationship = await _getRelationshipById(relationshipId);
       if (relationship == null) {
         throw RelationshipException(
           RelationshipErrorCodes.notFound,
@@ -359,7 +368,7 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
+      final relationship = await _getRelationshipById(relationshipId);
       if (relationship == null) {
         throw RelationshipException(
           RelationshipErrorCodes.notFound,
@@ -413,7 +422,7 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
+      final relationship = await _getRelationshipById(relationshipId);
       if (relationship == null) {
         throw RelationshipException(
           RelationshipErrorCodes.notFound,
@@ -467,40 +476,43 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
-      if (relationship == null) {
-        throw RelationshipException(
-          RelationshipErrorCodes.notFound,
-          'Relationship not found',
-          null,
-          RelationshipOperation.blockUser,
-        );
-      }
+      // Use transaction to ensure consistency
+      await _databaseService.runTransaction<void>((transaction) async {
+        final relationshipRef = _databaseService.firestoreInstance
+            .collection(_relationshipCollection)
+            .doc(relationshipId);
+            
+        final relationshipDoc = await transaction.get(relationshipRef);
+        
+        if (!relationshipDoc.exists) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notFound,
+            'Relationship not found',
+            null,
+            RelationshipOperation.blockUser,
+          );
+        }
 
-      // Validate user is part of this relationship
-      if (!relationship.participants.contains(currentUserId)) {
-        throw RelationshipException(
-          RelationshipErrorCodes.notParticipant,
-          'Not authorized to block this user',
-          null,
-          RelationshipOperation.blockUser,
-        );
-      }
+        final relationship = RelationshipModel.fromMap(relationshipDoc.data()!, relationshipId);
 
-      // Update relationship to blocked
-      final updatedData = {
-        'status': RelationshipStatus.blocked.name,
-        'updatedAt': Timestamp.fromDate(DateTime.now()),
-      };
+        // Validate user is part of this relationship
+        if (!relationship.participants.contains(currentUserId)) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notParticipant,
+            'Not authorized to block this user',
+            null,
+            RelationshipOperation.blockUser,
+          );
+        }
 
-      await _databaseService.setDocument(
-        collection: _relationshipCollection,
-        documentId: relationshipId,
-        data: updatedData,
-        merge: true,
-      );
+        // Update relationship to blocked within transaction
+        transaction.update(relationshipRef, {
+          'status': RelationshipStatus.blocked.name,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        });
 
-      _logger.i(_tag, 'User blocked: $relationshipId');
+        _logger.i(_tag, 'User blocked: $relationshipId');
+      });
     } catch (e) {
       _logger.e(_tag, 'Failed to block user: ${e.toString()}');
       if (e is RelationshipException) rethrow;
@@ -518,7 +530,7 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      final relationship = await getRelationshipById(relationshipId);
+      final relationship = await _getRelationshipById(relationshipId);
       if (relationship == null) {
         throw RelationshipException(
           RelationshipErrorCodes.notFound,
@@ -568,20 +580,34 @@ class RelationshipService implements RelationshipServiceInterface {
   }
 
   @override
-  Future<List<RelationshipModel>> getFriends(String userId) async {
+  Future<PaginatedRelationshipResult> getFriends(String userId, {int limit = 20, String? startAfter}) async {
     try {
-      final results = await _databaseService.queryDocuments(
+      final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
           {'field': 'participants', 'operator': 'array-contains', 'value': userId},
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.accepted.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
+        orderBy: 'updatedAt',
+        descending: true,
+        limit: limit + 1, // Fetch one extra to check if there are more
+        startAfterDocument: startAfter,
       );
 
-      return results
+      final relationships = results
+          .take(limit) // Take only the requested amount
           .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
           .toList();
+
+      final hasMore = results.length > limit;
+      final lastDocumentId = relationships.isNotEmpty ? relationships.last.id : null;
+
+      return PaginatedRelationshipResult(
+        relationships: relationships,
+        hasMore: hasMore,
+        lastDocumentId: lastDocumentId,
+      );
     } catch (e) {
       _logger.e(_tag, 'Failed to get friends: ${e.toString()}');
       throw RelationshipException(
@@ -593,87 +619,12 @@ class RelationshipService implements RelationshipServiceInterface {
     }
   }
 
-  @override
-  Future<List<RelationshipModel>> getPendingRequests(String userId) async {
-    try {
-      final results = await _databaseService.queryDocuments(
-        collection: _relationshipCollection,
-        conditions: [
-          {'field': 'participants', 'operator': 'array-contains', 'value': userId},
-          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
-          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
-        ],
-      );
 
-      // Filter to only show requests received by this user (not sent by them)
-      return results
-          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
-          .where((relationship) => relationship.initiatorId != userId)
-          .toList();
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get pending requests: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to get pending friend requests',
-        e,
-        RelationshipOperation.getFriends,
-      );
-    }
-  }
 
-  @override
-  Future<List<RelationshipModel>> getSentRequests(String userId) async {
-    try {
-      final results = await _databaseService.queryDocuments(
-        collection: _relationshipCollection,
-        conditions: [
-          {'field': 'initiatorId', 'operator': '==', 'value': userId},
-          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
-          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
-        ],
-      );
 
-      return results
-          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
-          .toList();
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get sent requests: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to get sent friend requests',
-        e,
-        RelationshipOperation.getFriends,
-      );
-    }
-  }
 
-  @override
-  Future<List<RelationshipModel>> getBlockedUsers(String userId) async {
-    try {
-      final results = await _databaseService.queryDocuments(
-        collection: _relationshipCollection,
-        conditions: [
-          {'field': 'participants', 'operator': 'array-contains', 'value': userId},
-          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.blocked.name},
-          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
-        ],
-      );
 
-      return results
-          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
-          .toList();
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get blocked users: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to get blocked users list',
-        e,
-        RelationshipOperation.getFriends,
-      );
-    }
-  }
 
-  @override
   Future<RelationshipModel?> getFriendshipStatus(String userId, String otherUserId) async {
     try {
       final participants = RelationshipModel.sortParticipants([userId, otherUserId]);
@@ -702,41 +653,9 @@ class RelationshipService implements RelationshipServiceInterface {
     }
   }
 
-  @override
-  Future<List<RelationshipModel>> searchFriends(String userId, String query) async {
-    try {
-      final friends = await getFriends(userId);
-      
-      if (query.isEmpty) {
-        return friends;
-      }
 
-      // Search in cached profiles
-      return friends.where((friendship) {
-        final otherUserId = friendship.getFriendId(userId);
-        final cachedProfile = friendship.getCachedProfile(otherUserId);
-        
-        if (cachedProfile != null) {
-          return cachedProfile.displayName
-              .toLowerCase()
-              .contains(query.toLowerCase());
-        }
-        
-        return false;
-      }).toList();
-    } catch (e) {
-      _logger.e(_tag, 'Failed to search friends: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to search friends',
-        e,
-        RelationshipOperation.searchFriends,
-      );
-    }
-  }
 
-  @override
-  Future<RelationshipModel?> getRelationshipById(String relationshipId) async {
+  Future<RelationshipModel?> _getRelationshipById(String relationshipId) async {
     try {
       final doc = await _databaseService.getDocument(
         collection: _relationshipCollection,
@@ -753,91 +672,6 @@ class RelationshipService implements RelationshipServiceInterface {
       throw RelationshipException(
         RelationshipErrorCodes.databaseError,
         'Failed to get relationship',
-        e,
-        RelationshipOperation.getFriends,
-      );
-    }
-  }
-
-  @override
-  Future<bool> checkIfUsersAreFriends(String userId1, String userId2) async {
-    try {
-      final relationship = await getFriendshipStatus(userId1, userId2);
-      return relationship?.status == RelationshipStatus.accepted;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to check friendship: ${e.toString()}');
-      return false;
-    }
-  }
-
-  @override
-  Future<List<RelationshipModel>> getMutualFriends(String userId1, String userId2) async {
-    try {
-      final user1Friends = await getFriends(userId1);
-      final user2Friends = await getFriends(userId2);
-
-      final user1FriendIds = user1Friends.map((f) => f.getFriendId(userId1)).toSet();
-      final user2FriendIds = user2Friends.map((f) => f.getFriendId(userId2)).toSet();
-
-      final mutualFriendIds = user1FriendIds.intersection(user2FriendIds);
-
-      return user1Friends
-          .where((f) => mutualFriendIds.contains(f.getFriendId(userId1)))
-          .toList();
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get mutual friends: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to get mutual friends',
-        e,
-        RelationshipOperation.getFriends,
-      );
-    }
-  }
-
-  @override
-  Future<int> getFriendCount(String userId) async {
-    try {
-      final friends = await getFriends(userId);
-      return friends.length;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get friend count: ${e.toString()}');
-      return 0;
-    }
-  }
-
-  @override
-  Future<List<RelationshipModel>> getMultipleRelationships(List<String> relationshipIds) async {
-    try {
-      if (relationshipIds.isEmpty) {
-        return [];
-      }
-
-      final relationships = <RelationshipModel>[];
-      
-      // Firestore 'in' queries are limited to 10 items, so we need to batch
-      const batchSize = 10;
-      for (int i = 0; i < relationshipIds.length; i += batchSize) {
-        final batch = relationshipIds.skip(i).take(batchSize).toList();
-        
-        final results = await _databaseService.queryDocuments(
-          collection: _relationshipCollection,
-          conditions: [
-            {'field': FieldPath.documentId, 'operator': 'in', 'value': batch},
-          ],
-        );
-
-        relationships.addAll(
-          results.map((doc) => RelationshipModel.fromMap(doc, doc['id'])),
-        );
-      }
-
-      return relationships;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get multiple relationships: ${e.toString()}');
-      throw RelationshipException(
-        RelationshipErrorCodes.databaseError,
-        'Failed to get relationships',
         e,
         RelationshipOperation.getFriends,
       );
@@ -900,103 +734,194 @@ class RelationshipService implements RelationshipServiceInterface {
   }
 
   @override
-  Future<void> updateCachedProfile(String userId, String displayName, String? photoURL) async {
+  Future<PaginatedRelationshipResult> getPendingRequests(String userId, {int limit = 20, String? startAfter}) async {
     try {
-      // Get all relationships involving this user
-      final results = await _databaseService.queryDocuments(
+      final results = await _databaseService.queryDocumentsWithPagination(
         collection: _relationshipCollection,
         conditions: [
           {'field': 'participants', 'operator': 'array-contains', 'value': userId},
+          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
+          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
         ],
+        orderBy: 'createdAt',
+        descending: true,
+        limit: limit * 2, // Fetch more since we need to filter
+        startAfterDocument: startAfter,
       );
 
-      final batch = FirebaseFirestore.instance.batch();
-      final updatedAt = DateTime.now();
+      // Filter to only show requests received by this user (not sent by them)
+      final relationships = results
+          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
+          .where((relationship) => relationship.initiatorId != userId)
+          .take(limit)
+          .toList();
 
-      for (final doc in results) {
-        final relationship = RelationshipModel.fromMap(doc, doc['id']);
-        final updatedCachedProfiles = Map<String, CachedProfile>.from(relationship.cachedProfiles);
-        
-        // Update the cached profile for this user
-        updatedCachedProfiles[userId] = CachedProfile(
-          displayName: displayName,
-          photoURL: photoURL,
-          lastUpdated: updatedAt,
-        );
+      // For pending requests, we need to check if there are more by running another query
+      final hasMore = relationships.length == limit;
+      final lastDocId = relationships.isNotEmpty ? relationships.last.id : null;
 
-        final updatedRelationship = relationship.copyWith(
-          cachedProfiles: updatedCachedProfiles,
-          updatedAt: updatedAt,
-        );
-
-        batch.update(
-          FirebaseFirestore.instance.collection(_relationshipCollection).doc(doc['id']),
-          updatedRelationship.toMap(),
-        );
-      }
-
-      await batch.commit();
-      _logger.i(_tag, 'Updated cached profile for user: $userId in ${results.length} relationships');
+      return PaginatedRelationshipResult(
+        relationships: relationships,
+        hasMore: hasMore,
+        lastDocumentId: lastDocId,
+      );
     } catch (e) {
-      _logger.e(_tag, 'Failed to update cached profile: ${e.toString()}');
+      _logger.e(_tag, 'Failed to get pending requests paginated: ${e.toString()}');
       throw RelationshipException(
-        RelationshipErrorCodes.cacheUpdateFailed,
-        'Failed to update profile cache',
+        RelationshipErrorCodes.databaseError,
+        'Failed to get pending friend requests',
         e,
-        RelationshipOperation.updateProfile,
+        RelationshipOperation.getFriends,
       );
     }
   }
 
   @override
-  Future<void> refreshCachedProfiles(String relationshipId) async {
+  Future<PaginatedRelationshipResult> getSentRequests(String userId, {int limit = 20, String? startAfter}) async {
     try {
-      final relationship = await getRelationshipById(relationshipId);
-      if (relationship == null) {
+      final results = await _databaseService.queryDocumentsWithPagination(
+        collection: _relationshipCollection,
+        conditions: [
+          {'field': 'initiatorId', 'operator': '==', 'value': userId},
+          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.pending.name},
+          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
+        ],
+        orderBy: 'createdAt',
+        descending: true,
+        limit: limit + 1, // Fetch one extra to check if there are more
+        startAfterDocument: startAfter,
+      );
+
+      final relationships = results
+          .take(limit) // Take only the requested amount
+          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
+          .toList();
+
+      final hasMore = results.length > limit;
+      final lastDocId = relationships.isNotEmpty ? relationships.last.id : null;
+
+      return PaginatedRelationshipResult(
+        relationships: relationships,
+        hasMore: hasMore,
+        lastDocumentId: lastDocId,
+      );
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get sent requests paginated: ${e.toString()}');
+      throw RelationshipException(
+        RelationshipErrorCodes.databaseError,
+        'Failed to get sent friend requests',
+        e,
+        RelationshipOperation.getFriends,
+      );
+    }
+  }
+
+  @override
+  Future<PaginatedRelationshipResult> getBlockedUsers(String userId, {int limit = 20, String? startAfter}) async {
+    try {
+      final results = await _databaseService.queryDocumentsWithPagination(
+        collection: _relationshipCollection,
+        conditions: [
+          {'field': 'participants', 'operator': 'array-contains', 'value': userId},
+          {'field': 'status', 'operator': '==', 'value': RelationshipStatus.blocked.name},
+          {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
+        ],
+        orderBy: 'updatedAt',
+        descending: true,
+        limit: limit + 1, // Fetch one extra to check if there are more
+        startAfterDocument: startAfter,
+      );
+
+      final relationships = results
+          .take(limit) // Take only the requested amount
+          .map((doc) => RelationshipModel.fromMap(doc, doc['id']))
+          .toList();
+
+      final hasMore = results.length > limit;
+      final lastDocId = relationships.isNotEmpty ? relationships.last.id : null;
+
+      return PaginatedRelationshipResult(
+        relationships: relationships,
+        hasMore: hasMore,
+        lastDocumentId: lastDocId,
+      );
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get blocked users paginated: ${e.toString()}');
+      throw RelationshipException(
+        RelationshipErrorCodes.databaseError,
+        'Failed to get blocked users list',
+        e,
+        RelationshipOperation.getFriends,
+      );
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> searchUserByUid(String uid) async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      
+      // Prevent searching for self
+      if (currentUserId == uid) {
         throw RelationshipException(
-          RelationshipErrorCodes.notFound,
-          'Relationship not found',
+          RelationshipErrorCodes.selfRequest,
+          'Cannot search for yourself',
           null,
-          RelationshipOperation.updateProfile,
+          RelationshipOperation.searchUser,
         );
       }
 
-      final updatedCachedProfiles = <String, CachedProfile>{};
-      final updatedAt = DateTime.now();
+      // Get user data from user service
+      final userData = await _userService.getUserData(uid);
+      if (userData == null) {
+        return null;
+      }
 
-      // Refresh cached profiles for all participants
-      for (final userId in relationship.participants) {
-        final userProfile = await _userService.getUserData(userId);
-        if (userProfile != null) {
-          updatedCachedProfiles[userId] = CachedProfile(
-            displayName: userProfile.displayName ?? 'Unknown',
-            photoURL: userProfile.photoURL,
-            lastUpdated: updatedAt,
-          );
+      // Check existing relationship status
+      final existingRelationship = await getFriendshipStatus(currentUserId, uid);
+      
+      String relationshipStatus = 'none';
+      String? relationshipId;
+      
+      if (existingRelationship != null) {
+        relationshipId = existingRelationship.id;
+        switch (existingRelationship.status) {
+          case RelationshipStatus.accepted:
+            relationshipStatus = 'friends';
+            break;
+          case RelationshipStatus.pending:
+            if (existingRelationship.initiatorId == currentUserId) {
+              relationshipStatus = 'request_sent';
+            } else {
+              relationshipStatus = 'request_received';
+            }
+            break;
+          case RelationshipStatus.blocked:
+            relationshipStatus = 'blocked';
+            break;
+          case RelationshipStatus.declined:
+            relationshipStatus = 'declined';
+            break;
         }
       }
 
-      final updatedRelationship = relationship.copyWith(
-        cachedProfiles: updatedCachedProfiles,
-        updatedAt: updatedAt,
-      );
-
-      await _databaseService.setDocument(
-        collection: _relationshipCollection,
-        documentId: relationshipId,
-        data: updatedRelationship.toMap(),
-        merge: true,
-      );
-
-      _logger.i(_tag, 'Refreshed cached profiles for relationship: $relationshipId');
+      return {
+        'uid': userData.uid,
+        'displayName': userData.displayName,
+        'photoURL': userData.photoURL,
+        'email': userData.email,
+        'relationshipStatus': relationshipStatus,
+        'relationshipId': relationshipId,
+        'canSendRequest': relationshipStatus == 'none' || relationshipStatus == 'declined',
+      };
     } catch (e) {
-      _logger.e(_tag, 'Failed to refresh cached profiles: ${e.toString()}');
+      _logger.e(_tag, 'Failed to search user by UID: ${e.toString()}');
       if (e is RelationshipException) rethrow;
       throw RelationshipException(
-        RelationshipErrorCodes.profileRefreshFailed,
-        'Failed to refresh cached profiles',
+        RelationshipErrorCodes.databaseError,
+        'Failed to search user',
         e,
-        RelationshipOperation.updateProfile,
+        RelationshipOperation.searchUser,
       );
     }
   }

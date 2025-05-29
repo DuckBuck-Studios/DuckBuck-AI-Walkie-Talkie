@@ -1,5 +1,18 @@
 import '../../models/relationship_model.dart';
 
+/// Pagination result for relationship queries
+class PaginatedRelationshipResult {
+  final List<RelationshipModel> relationships;
+  final bool hasMore;
+  final String? lastDocumentId;
+
+  const PaginatedRelationshipResult({
+    required this.relationships,
+    required this.hasMore,
+    this.lastDocumentId,
+  });
+}
+
 /// Interface for relationship service operations (friendships)
 abstract class RelationshipServiceInterface {
   /// Send a friend request to another user
@@ -23,45 +36,21 @@ abstract class RelationshipServiceInterface {
   /// Unblock a user
   Future<void> unblockUser(String relationshipId);
   
-  /// Get all accepted friendships for a user
-  Future<List<RelationshipModel>> getFriends(String userId);
+  /// Get all accepted friendships for a user with pagination support
+  Future<PaginatedRelationshipResult> getFriends(String userId, {int limit = 20, String? startAfter});
   
-  /// Get pending friend requests (received by user)
-  Future<List<RelationshipModel>> getPendingRequests(String userId);
+  /// Get pending friend requests (received by user) with pagination support
+  Future<PaginatedRelationshipResult> getPendingRequests(String userId, {int limit = 20, String? startAfter});
   
-  /// Get sent friend requests (sent by user)
-  Future<List<RelationshipModel>> getSentRequests(String userId);
+  /// Get sent friend requests (sent by user) with pagination support
+  Future<PaginatedRelationshipResult> getSentRequests(String userId, {int limit = 20, String? startAfter});
   
-  /// Get blocked relationships for a user
-  Future<List<RelationshipModel>> getBlockedUsers(String userId);
-  
-  /// Check friendship status between two users
-  Future<RelationshipModel?> getFriendshipStatus(String userId, String otherUserId);
-  
-  /// Search within user's friends
-  Future<List<RelationshipModel>> searchFriends(String userId, String query);
-  
-  /// Get a specific relationship by ID
-  Future<RelationshipModel?> getRelationshipById(String relationshipId);
-  
-  /// Check if two users are friends (quick check)
-  Future<bool> checkIfUsersAreFriends(String userId1, String userId2);
-  
-  /// Get mutual friends between two users
-  Future<List<RelationshipModel>> getMutualFriends(String userId1, String userId2);
-  
-  /// Get total friend count for a user
-  Future<int> getFriendCount(String userId);
-  
-  /// Get multiple relationships efficiently
-  Future<List<RelationshipModel>> getMultipleRelationships(List<String> relationshipIds);
+  /// Get blocked relationships for a user with pagination support
+  Future<PaginatedRelationshipResult> getBlockedUsers(String userId, {int limit = 20, String? startAfter});
+
+  /// Search user by UID to send friend request
+  Future<Map<String, dynamic>?> searchUserByUid(String uid);
   
   /// Get relationship summary (counts of different types)
   Future<Map<String, int>> getUserRelationshipsSummary(String userId);
-  
-  /// Update cached profile data across all relationships
-  Future<void> updateCachedProfile(String userId, String displayName, String? photoURL);
-  
-  /// Refresh stale cached profiles in a relationship
-  Future<void> refreshCachedProfiles(String relationshipId);
 }
