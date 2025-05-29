@@ -3,6 +3,7 @@ import '../../models/relationship_model.dart';
 import '../firebase/firebase_database_service.dart';
 import '../user/user_service_interface.dart';
 import '../auth/auth_service_interface.dart';
+import '../notifications/notifications_service.dart';
 import '../service_locator.dart';
 import '../logger/logger_service.dart';
 import '../../exceptions/relationship_exceptions.dart';
@@ -14,6 +15,7 @@ class RelationshipService implements RelationshipServiceInterface {
   final FirebaseDatabaseService _databaseService;
   final UserServiceInterface _userService;
   final AuthServiceInterface _authService;
+  final NotificationsService _notificationsService;
   final LoggerService _logger;
   
   static const String _tag = 'RELATIONSHIP_SERVICE';
@@ -24,10 +26,12 @@ class RelationshipService implements RelationshipServiceInterface {
     FirebaseDatabaseService? databaseService,
     UserServiceInterface? userService,
     AuthServiceInterface? authService,
+    NotificationsService? notificationsService,
     LoggerService? logger,
   }) : _databaseService = databaseService ?? serviceLocator<FirebaseDatabaseService>(),
        _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _authService = authService ?? serviceLocator<AuthServiceInterface>(),
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
        _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Get current user ID with validation
@@ -161,6 +165,22 @@ class RelationshipService implements RelationshipServiceInterface {
         });
 
         _logger.i(_tag, 'Friend request sent from $currentUserId to $targetUserId');
+        
+        // Send notification to target user (fire-and-forget)
+        final currentUserProfile = await _userService.getUserData(currentUserId);
+        if (currentUserProfile != null) {
+          _notificationsService.sendNotification(
+            recipientUid: targetUserId,
+            // Don't include title field at all to avoid showing title in notification
+            body: '${currentUserProfile.displayName ?? 'Someone'} wants to be your friend',
+            data: {
+              'type': 'friend_request',
+              'sender_name': currentUserProfile.displayName ?? 'Someone',
+              // Remove photo URL and other unnecessary data
+            },
+          );
+        }
+        
         return docRef.id;
       });
     } catch (e) {
@@ -289,6 +309,25 @@ class RelationshipService implements RelationshipServiceInterface {
 
         _logger.i(_tag, 'Friend request accepted: $relationshipId');
       });
+      
+      // Send notification to the request sender (fire-and-forget)
+      final relationship = await _getRelationshipById(relationshipId);
+      if (relationship != null && relationship.initiatorId != null) {
+        final accepterProfile = await _userService.getUserData(currentUserId);
+        if (accepterProfile != null) {
+          _notificationsService.sendNotification(
+            recipientUid: relationship.initiatorId!,
+            // Leave title empty as per requirement to only show the name
+            title: '',
+            body: '${accepterProfile.displayName ?? 'Someone'} accepted your friend request',
+            data: {
+              'type': 'friend_request_accepted',
+              'accepter_name': accepterProfile.displayName ?? 'Someone',
+              // Remove photo URL and other unnecessary data
+            },
+          );
+        }
+      }
     } catch (e) {
       _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
       if (e is RelationshipException) rethrow;

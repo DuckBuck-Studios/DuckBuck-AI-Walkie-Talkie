@@ -53,14 +53,13 @@ class ApiService {
   static const Duration _tokenCacheExpiry = Duration(minutes: 50); // Firebase tokens are valid for 1 hour
   
   /// Creates a new ApiService instance
-  ApiService({
-    String? baseUrl,
+  ApiService({ 
     String? apiKey,
     AuthServiceInterface? authService,
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = baseUrl ?? 'https://api.duckbuck.app',
+    _baseUrl = 'https://e64c-2401-4900-62df-6aac-7ca0-2a0c-55ce-2114.ngrok-free.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
@@ -356,6 +355,58 @@ class ApiService {
     }
   }
   
+  /// Send push notification to a user
+  /// Fire-and-forget method - doesn't throw exceptions, just logs results
+  Future<bool> sendNotification({
+    required String recipientUid,
+    String? title,  // Make title optional
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      // Get the Firebase ID token for authentication
+      final idToken = await _getValidToken();
+      
+      if (idToken == null) {
+        _logger.e(_tag, 'Failed to get Firebase ID token for sending notification');
+        return false;
+      }
+      
+      // Build request data without title if it's not provided
+      final Map<String, dynamic> requestData = {
+        'recipientUid': recipientUid,
+        'body': body,
+        if (title != null) 'title': title,  // Only include title if provided
+        if (data != null) 'data': data,
+      };
+      
+      final response = await _dio.post(
+        '/api/notifications/send',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'x-api-key': _apiKey,
+          },
+        ),
+        data: requestData,
+      );
+      
+      if (response.statusCode == 200) {
+        _logger.i(_tag, 'Notification sent successfully to user: $recipientUid');
+        return true;
+      } else {
+        _logger.w(_tag, 'Failed to send notification. Status: ${response.statusCode}');
+        return false;
+      }
+    } on DioException catch (e) {
+      _logger.e(_tag, 'Dio error sending notification: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_tag, 'Error sending notification: $e');
+      return false;
+    }
+  }
+
   /// Delete user account from backend systems
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   Future<bool> deleteUser({
