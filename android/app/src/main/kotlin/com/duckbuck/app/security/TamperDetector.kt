@@ -17,13 +17,10 @@ class TamperDetector(private val context: Context) {
     
     // Expected certificate hash for release builds (in HEX format)
     // This is the SHA-256 hash of our app's signing certificate
-    private val expectedCertSha256 = "186F6AE36F18CA016BF3B4EAAF45A346129EB043FD70BB48E2E2F0C9C59E0D24"
+    private val expectedCertSha256 = "E4A25E830982A1CE9FAE8E3588646AB352CF6928D059A9687C85C439F7A69AB5"
     
     // Alternative expected hashes (for different build flavors or key rotation)
-    private val alternativeHashes = listOf<String>(
-        // Debug keystore certificate hash
-        "B76E7FC5BD8E3D47F21A4202C31CDD27A83967B98ACAC3B22BBAF17189285FAB"
-    )
+    private val alternativeHashes = listOf<String>()
     
     /**
      * Verify that the app has not been tampered with by checking its signature.

@@ -13,6 +13,7 @@ import 'package:duckbuck/core/services/notifications/email_notification_service.
 import 'package:duckbuck/core/services/logger/logger_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/features/auth/providers/auth_state_provider.dart';
+import 'package:duckbuck/core/services/auth/auth_security_manager.dart';
 
 /// Screen for completing user profile after signup
 /// Collects user's display name and profile photo
@@ -153,12 +154,33 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         context,
         listen: false,
       );
-      final user = authProvider.currentUser;
-
+      
+      // Try to get user with different methods to ensure we have a valid user
+      // First try with cache-optimized method that's more reliable during transitions
+      var user = await authProvider.getCurrentUserWithCache();
+      
+      // If that fails, try the direct property access as fallback
       if (user == null) {
-        throw Exception('User not authenticated');
+        user = authProvider.currentUser;
+        _logger.d('ProfileCompletion', 'Fallback to direct currentUser access');
       }
 
+      // If still null, try to ensure we have a valid token which might trigger auth state update
+      if (user == null) {
+        _logger.w('ProfileCompletion', 'User not available, attempting to ensure valid token');
+        // Get the auth service directly as a last resort
+        final authSecurityManager = serviceLocator<AuthSecurityManager>();
+        await authSecurityManager.ensureValidToken();
+        // Try once more after token refresh
+        user = authProvider.currentUser;
+      }
+
+      if (user == null) {
+        throw Exception('User not authenticated - unable to retrieve user information');
+      }
+
+      _logger.i('ProfileCompletion', 'Uploading image for user: ${user.uid}');
+      
       // Upload to Firebase Storage
       final downloadUrl = await _storageService.uploadProfileImage(
         userId: user.uid,
@@ -220,7 +242,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       await authProvider.markUserOnboardingComplete();
       
       // Send welcome email for new social auth users without blocking the UI flow
-      final user = authProvider.currentUser;
+      // Use the more reliable cached user retrieval method to prevent null user issues
+      final user = await authProvider.getCurrentUserWithCache() ?? authProvider.currentUser;
       if (user != null && user.metadata != null && 
           (user.metadata!['authMethod'] == 'google' || user.metadata!['authMethod'] == 'apple')) {
         
