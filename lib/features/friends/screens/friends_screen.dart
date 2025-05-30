@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import 'dart:io' show Platform;
 
 import '../../../core/models/relationship_model.dart';
@@ -10,6 +11,7 @@ import '../widgets/add_friend_dialog.dart';
 import '../widgets/remove_friend_dialog.dart';
 import '../widgets/sections/friends_section.dart';
 import '../widgets/sections/pending_section.dart';
+import '../widgets/friend_tile.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -59,10 +61,16 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     RemoveFriendDialog.show(context, relationship, provider);
   }
 
+  void _showBlockUserDialog(BuildContext context, RelationshipModel relationship) {
+    final provider = Provider.of<FriendsProvider>(context, listen: false);
+    FriendsSection.showBlockFriendDialog(context, relationship, provider);
+  }
+
   Widget _buildFriendsList(BuildContext context, FriendsProvider provider) {
     return FriendsSection(
       provider: provider,
       showRemoveFriendDialog: _showRemoveFriendDialog,
+      showBlockUserDialog: _showBlockUserDialog, // Pass the block user dialog handler
     );
   }
 
@@ -99,9 +107,16 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       body: Consumer<FriendsProvider>(
         builder: (context, provider, child) {
           if (provider.isLoadingSummary) {
-            return Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: List.generate(
+                  5, // Show 5 skeleton tiles
+                  (index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: FriendTileSkeleton(isIOS: false),
+                  ),
+                ),
               ),
             );
           }
@@ -256,7 +271,18 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               child: Builder(
                 builder: (context) {
                   if (provider.isLoadingSummary) {
-                    return const Center(child: CupertinoActivityIndicator());
+                    return Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: List.generate(
+                          5, // Show 5 skeleton tiles
+                          (index) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: FriendTileSkeleton(isIOS: true),
+                          ),
+                        ),
+                      ),
+                    );
                   }
                   if (provider.error != null) {
                     return ErrorStateWidget(provider: provider);

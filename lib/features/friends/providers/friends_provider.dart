@@ -27,6 +27,7 @@ class FriendsProvider extends ChangeNotifier {
   StreamSubscription<List<RelationshipModel>>? _friendsSubscription;
   StreamSubscription<List<RelationshipModel>>? _incomingRequestsSubscription;
   StreamSubscription<List<RelationshipModel>>? _outgoingRequestsSubscription;
+  StreamSubscription<List<RelationshipModel>>? _blockedUsersSubscription;
   // StreamSubscription<Map<String, int>>? _summarySubscription; // Optional: if summary can be streamed
 
   // Summary data
@@ -41,18 +42,21 @@ class FriendsProvider extends ChangeNotifier {
   List<RelationshipModel> _friends = [];
   List<RelationshipModel> _incomingRequests = [];
   List<RelationshipModel> _outgoingRequests = [];
+  List<RelationshipModel> _blockedUsers = []; // Added to store blocked users
 
   // Loading states
   bool _isLoadingSummary = false;
   bool _isLoadingFriends = false;
   bool _isLoadingIncoming = false;
   bool _isLoadingOutgoing = false;
+  bool _isLoadingBlocked = false; // Added for blocked users loading state
   bool _isSearching = false;
 
   // Sets to track processing state for individual requests
   final Set<String> _processingAcceptRequestIds = {};
   final Set<String> _processingDeclineRequestIds = {};
   final Set<String> _processingCancelRequestIds = {}; // Added for cancelling outgoing requests
+  final Set<String> _processingBlockUserIds = {}; // Added for blocking users
 
   // Error states
   String? _error;
@@ -69,17 +73,20 @@ class FriendsProvider extends ChangeNotifier {
   List<RelationshipModel> get friends => List.unmodifiable(_friends);
   List<RelationshipModel> get incomingRequests => List.unmodifiable(_incomingRequests);
   List<RelationshipModel> get outgoingRequests => List.unmodifiable(_outgoingRequests);
+  List<RelationshipModel> get blockedUsers => List.unmodifiable(_blockedUsers); // Added getter for blocked users
 
   bool get isLoadingSummary => _isLoadingSummary;
   bool get isLoadingFriends => _isLoadingFriends;
   bool get isLoadingIncoming => _isLoadingIncoming;
   bool get isLoadingOutgoing => _isLoadingOutgoing;
+  bool get isLoadingBlocked => _isLoadingBlocked; // Added getter for blocked users loading state
   bool get isSearching => _isSearching;
 
   // Getters for processing states
   bool isAcceptingRequest(String id) => _processingAcceptRequestIds.contains(id);
   bool isDecliningRequest(String id) => _processingDeclineRequestIds.contains(id);
   bool isCancellingRequest(String id) => _processingCancelRequestIds.contains(id); // Added getter
+  bool isBlockingUser(String id) => _processingBlockUserIds.contains(id); // Added getter for blocking state
 
   String? get error => _error;
 
@@ -176,6 +183,31 @@ class FriendsProvider extends ChangeNotifier {
       }
     );
     _isLoadingOutgoing = true; // Indicate initial loading via stream
+    notifyListeners();
+    
+    // Set up blocked users stream
+    _blockedUsersSubscription?.cancel();
+    _blockedUsersSubscription = _relationshipRepository.getBlockedUsersStream().listen(
+      (blockedList) {
+        _blockedUsers = blockedList;
+        _summary['blocked'] = _blockedUsers.length; // Update summary count
+        _isLoadingBlocked = false;
+        _error = null;
+        notifyListeners();
+        _logger.d(_tag, 'Blocked users updated from stream: ${_blockedUsers.length} users');
+      },
+      onError: (e) {
+        _logger.e(_tag, 'Error in blocked users stream: ${e.toString()}');
+        _error = _getErrorMessage(e);
+        _isLoadingBlocked = false;
+        notifyListeners();
+      },
+      onDone: () {
+        _isLoadingBlocked = false;
+        notifyListeners();
+      }
+    );
+    _isLoadingBlocked = true; // Indicate initial loading via stream
     notifyListeners();
   }
 
@@ -287,6 +319,48 @@ class FriendsProvider extends ChangeNotifier {
     }
   }
 
+  /// Block a user
+  Future<bool> blockUser(String relationshipId) async {
+    _processingBlockUserIds.add(relationshipId);
+    notifyListeners();
+    try {
+      _logger.d(_tag, 'Blocking user with relationship: $relationshipId');
+      await _relationshipRepository.blockUser(relationshipId);
+      // Lists will update via streams automatically
+      _logger.i(_tag, 'User blocked successfully');
+      return true;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to block user: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingBlockUserIds.remove(relationshipId);
+      notifyListeners();
+    }
+  }
+
+  /// Unblock a user
+  Future<bool> unblockUser(String relationshipId) async {
+    _processingBlockUserIds.add(relationshipId);
+    notifyListeners();
+    try {
+      _logger.d(_tag, 'Unblocking user with relationship: $relationshipId');
+      await _relationshipRepository.unblockUser(relationshipId);
+      // Lists will update via streams automatically
+      _logger.i(_tag, 'User unblocked successfully');
+      return true;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to unblock user: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingBlockUserIds.remove(relationshipId);
+      notifyListeners();
+    }
+  }
+
   /// Search for user by UID
   Future<Map<String, dynamic>?> searchUserByUid(String uid) async {
     _isSearching = true;
@@ -350,12 +424,41 @@ class FriendsProvider extends ChangeNotifier {
     return relationship.getCachedProfile(friendId);
   }
 
+  /// Get blocked users (manual refresh - stream provides real-time updates)
+  Future<void> loadBlockedUsers() async {
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) return;
+
+    _isLoadingBlocked = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Loading blocked users');
+      
+      // This will now only return users that the current user has blocked
+      // due to our changes in the relationship service
+      final result = await _relationshipRepository.getBlockedUsers(currentUser.uid);
+      _blockedUsers = result.relationships;
+      
+      _logger.i(_tag, 'Blocked users loaded: ${_blockedUsers.length} users');
+      
+    } catch (e) {
+      _logger.e(_tag, 'Failed to load blocked users: ${e.toString()}');
+      _error = _getErrorMessage(e);
+    } finally {
+      _isLoadingBlocked = false;
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     _logger.d(_tag, 'Disposing FriendsProvider and cancelling streams');
     _friendsSubscription?.cancel();
     _incomingRequestsSubscription?.cancel();
     _outgoingRequestsSubscription?.cancel();
+    _blockedUsersSubscription?.cancel();
     // _summarySubscription?.cancel();
     super.dispose();
   }

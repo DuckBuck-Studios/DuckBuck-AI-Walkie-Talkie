@@ -790,4 +790,49 @@ class RelationshipRepository {
       return Stream.error(e);
     }
   }
+  
+  /// Get a stream of blocked users (only users that the current user has blocked)
+  Stream<List<RelationshipModel>> getBlockedUsersStream() {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) {
+        _logger.w(_tag, 'Cannot get blocked users stream: user not authenticated');
+        return Stream.error(RelationshipException(
+          RelationshipErrorCodes.notLoggedIn,
+          'User not logged in',
+          null,
+          RelationshipOperation.getBlockedUsersStream,
+        ));
+      }
+      final userId = currentUser.uid;
+      _logger.d(_tag, 'Getting blocked users stream for current user');
+      return _relationshipService.getBlockedUsersStream(userId)
+        .map((relationships) {
+          _analytics.logEvent(
+            name: 'blocked_users_stream_updated',
+            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
+          );
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getBlockedUsersStream from repository: $error');
+          _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to get blocked users stream',
+            fatal: false,
+          );
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initiate getBlockedUsersStream: ${e.toString()}');
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initiate getBlockedUsersStream',
+        fatal: false,
+      );
+      return Stream.error(e);
+    }
+  }
 }

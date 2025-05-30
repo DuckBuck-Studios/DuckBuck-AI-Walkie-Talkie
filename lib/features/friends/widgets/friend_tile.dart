@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import '../../../core/models/relationship_model.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
@@ -12,12 +13,14 @@ class FriendTile extends StatelessWidget {
   final RelationshipModel relationship;
   final FriendsProvider provider;
   final Function(RelationshipModel) onShowRemoveDialog;
+  final Function(RelationshipModel)? onShowBlockDialog;
 
   const FriendTile({
     super.key,
     required this.relationship,
     required this.provider,
     required this.onShowRemoveDialog,
+    this.onShowBlockDialog,
   });
 
   @override
@@ -51,35 +54,48 @@ class FriendTile extends StatelessWidget {
         'Friend since ${relationship.acceptedAt != null ? DateFormatter.formatRelativeTime(relationship.acceptedAt!) : 'Unknown'}',
         // style: TextStyle(color: Colors.grey[400]), // Adjust color if needed
       ),
-      trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        onSelected: (value) {
-          if (value == 'remove') {
-            onShowRemoveDialog(relationship);
-          }
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: 'remove',
-            child: Row(
-              children: [
-                Icon(Icons.person_remove, color: Theme.of(context).colorScheme.error, size: 20),
-                const SizedBox(width: 8),
-                const Text('Remove Friend'),
-              ],
+      trailing: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: PopupMenuButton<String>(
+          icon: Icon(Icons.more_horiz, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          tooltip: 'Friend Options',
+          padding: EdgeInsets.zero,
+          position: PopupMenuPosition.under,
+          onSelected: (value) {
+            if (value == 'remove') {
+              onShowRemoveDialog(relationship);
+            } else if (value == 'block' && onShowBlockDialog != null) {
+              onShowBlockDialog!(relationship);
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'remove',
+              child: Row(
+                children: [
+                  Icon(Icons.person_remove, color: Theme.of(context).colorScheme.error, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('Remove Friend'),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-      onTap: () {
-        // TODO: Navigate to friend's profile
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Tapped on ${profile?.displayName ?? 'Unknown User'}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      },
+            if (onShowBlockDialog != null)
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block, color: Theme.of(context).colorScheme.error, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Block User'),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ), 
     );
   }
 
@@ -118,6 +134,15 @@ class FriendTile extends StatelessWidget {
                   },
                   child: const Text('Remove Friend'),
                 ),
+                if (onShowBlockDialog != null)
+                  CupertinoActionSheetAction(
+                    isDestructiveAction: true,
+                    onPressed: () {
+                      Navigator.pop(modalContext);
+                      onShowBlockDialog!(relationship);
+                    },
+                    child: const Text('Block User'),
+                  ),
               ],
               cancelButton: CupertinoActionSheetAction(
                 child: const Text('Cancel'),
@@ -129,26 +154,56 @@ class FriendTile extends StatelessWidget {
           );
         },
       ),
-      onTap: () {
-        // TODO: Navigate to friend's profile
-        showCupertinoDialog(
-          context: context,
-          builder: (dialogContext) => CupertinoAlertDialog(
-            title: Text('Tapped on ${profile?.displayName ?? 'Unknown User'}'),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(dialogContext),
-              )
-            ],
-          ),
-        );
-      },
+      // No onTap - removing interaction to focus only on add/remove/block functionality
     );
   }
 }
 
 // Helper for CupertinoListTile if not available or for custom styling
+/// A skeleton version of the friend tile for loading states
+class FriendTileSkeleton extends StatelessWidget {
+  final bool isIOS;
+  
+  const FriendTileSkeleton({
+    super.key, 
+    this.isIOS = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Skeletonizer(
+      enabled: true,
+      child: isIOS ? _buildCupertinoSkeleton(context) : _buildMaterialSkeleton(context),
+    );
+  }
+  
+  Widget _buildMaterialSkeleton(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: const CircleAvatar(radius: 24),
+      title: const Text('Friend Name'),
+      subtitle: const Text('Friend since Jan 1, 2025'),
+      trailing: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Icon(Icons.more_horiz),
+      ),
+    );
+  }
+  
+  Widget _buildCupertinoSkeleton(BuildContext context) {
+    return CupertinoListTile(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: const CircleAvatar(radius: 24),
+      title: const Text('Friend Name'),
+      subtitle: const Text('Friend since Jan 1, 2025'),
+      trailing: const Icon(CupertinoIcons.ellipsis),
+    );
+  }
+}
+
 class CupertinoListTile extends StatelessWidget {
   final Widget? leading;
   final Widget title;

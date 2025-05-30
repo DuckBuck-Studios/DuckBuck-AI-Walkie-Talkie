@@ -23,7 +23,10 @@ class AddFriendDialog extends StatefulWidget {
   
   // iOS-specific bottom sheet
   static Future<void> showCupertinoModalBottomSheet(BuildContext context, FriendsProvider provider) {
-    final height = MediaQuery.of(context).size.height * 0.85;
+    // Adjust height based on device size (smaller on smaller devices, larger on tablets)
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallDevice = mediaQuery.size.height < 700;
+    final height = mediaQuery.size.height * (isSmallDevice ? 0.80 : 0.85);
     
     return showCupertinoModalPopup(
       context: context,
@@ -54,6 +57,11 @@ class AddFriendDialog extends StatefulWidget {
   
   // Android/Material-specific bottom sheet
   static Future<void> showMaterialModalBottomSheet(BuildContext context, FriendsProvider provider) {
+    // Adjust height based on device size (smaller on smaller devices, larger on tablets)
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallDevice = mediaQuery.size.height < 700;
+    final heightFactor = isSmallDevice ? 0.80 : 0.85;
+    
     return showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -64,7 +72,7 @@ class AddFriendDialog extends StatefulWidget {
       barrierColor: Colors.black.withOpacity(0.5),
       builder: (BuildContext dialogContext) {
         return FractionallySizedBox(
-          heightFactor: 0.85,
+          heightFactor: heightFactor,
           child: SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(0, 0.2),
@@ -536,6 +544,10 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
     final userName = _foundUserData!['displayName'] ?? 'Unknown User';
     final photoURL = _foundUserData!['photoURL'];
     
+    // Calculate optimal avatar size based on device size
+    final deviceWidth = MediaQuery.of(context).size.width;
+    final avatarRadius = deviceWidth * 0.18; // 36% of screen width for diameter
+    
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -550,12 +562,17 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
             ),
             child: Column(
               children: [
-                ProfileAvatar(radius: 45, photoURL: photoURL, displayName: userName), // Increased size
+                ProfileAvatar(
+                  radius: avatarRadius, 
+                  photoURL: photoURL, 
+                  displayName: userName,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   userName,
-                  style: cupertinoTheme.textTheme.navTitleTextStyle.copyWith( // Adjusted style
+                  style: cupertinoTheme.textTheme.navTitleTextStyle.copyWith(
                     fontWeight: FontWeight.bold,
+                    fontSize: deviceWidth * 0.05, // Responsive font size
                     color: cupertinoTheme.textTheme.textStyle.color
                   ),
                   textAlign: TextAlign.center,
@@ -665,12 +682,18 @@ class _AddFriendDialogState extends State<AddFriendDialog> {
             ),
             child: Column(
               children: [
-                ProfileAvatar(radius: 45, photoURL: photoURL, displayName: userName), // Increased size
+                // Calculate optimal avatar size based on device width
+                ProfileAvatar(
+                  radius: MediaQuery.of(context).size.width * 0.18, 
+                  photoURL: photoURL, 
+                  displayName: userName
+                ),
                 const SizedBox(height: 16),
                 Text(
                   userName,
-                  style: theme.textTheme.titleLarge?.copyWith( // Adjusted style
+                  style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
+                    fontSize: MediaQuery.of(context).size.width * 0.05, // Responsive font size
                     color: theme.colorScheme.onSurface,
                   ),
                   textAlign: TextAlign.center,

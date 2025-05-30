@@ -29,9 +29,10 @@ enum RelationshipOperation {
   blockUser,
   unblockUser,
   getFriends,
-  getFriendsStream, // Added
-  getPendingRequestsStream, // Added
-  getSentRequestsStream, // Added
+  getFriendsStream,
+  getPendingRequestsStream,
+  getSentRequestsStream,
+  getBlockedUsersStream, // Added
   searchFriends,
   searchUser,
   updateProfile,

@@ -1,8 +1,10 @@
 import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import '../../providers/friends_provider.dart';
 import '../request_tile.dart';
+import '../request_tile_skeleton.dart';
 
 class OutgoingRequestsSection extends StatelessWidget {
   final FriendsProvider provider;
@@ -47,11 +49,12 @@ class OutgoingRequestsSection extends StatelessWidget {
 
   Widget _buildMaterialContent(BuildContext context) {
     if (provider.isLoadingOutgoing && provider.outgoingRequests.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
+      return Column(
+        children: List.generate(
+          3, // Show 3 skeleton tiles
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: RequestTileSkeleton(isIOS: false),
           ),
         ),
       );
@@ -142,9 +145,14 @@ class OutgoingRequestsSection extends StatelessWidget {
 
   Widget _buildCupertinoContent(BuildContext context) {
     if (provider.isLoadingOutgoing && provider.outgoingRequests.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
-        child: Center(child: CupertinoActivityIndicator()),
+      return Column(
+        children: List.generate(
+          3, // Show 3 skeleton tiles
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: RequestTileSkeleton(isIOS: true),
+          ),
+        ),
       );
     }
 

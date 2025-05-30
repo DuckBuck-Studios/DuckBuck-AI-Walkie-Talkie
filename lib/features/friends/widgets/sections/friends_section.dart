@@ -2,17 +2,21 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import '../../../../core/models/relationship_model.dart';
+import '../../../../core/services/auth/auth_service_interface.dart';
+import '../../../../core/services/service_locator.dart';
 import '../../providers/friends_provider.dart';
 import '../friend_tile.dart';
 
 class FriendsSection extends StatelessWidget {
   final FriendsProvider provider;
   final Function(BuildContext, RelationshipModel) showRemoveFriendDialog;
+  final Function(BuildContext, RelationshipModel)? showBlockUserDialog; // Add parameter for block dialog
 
   const FriendsSection({
     super.key,
     required this.provider,
     required this.showRemoveFriendDialog,
+    this.showBlockUserDialog, // Optional parameter for showing block dialog
   });
 
   @override
@@ -31,9 +35,14 @@ class FriendsSection extends StatelessWidget {
     final cupertinoTheme = CupertinoTheme.of(context);
 
     if (provider.isLoadingFriends) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
-        child: Center(child: CupertinoActivityIndicator()),
+      return Column(
+        children: List.generate(
+          5, // Show 5 skeleton tiles
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: FriendTileSkeleton(isIOS: true),
+          ),
+        ),
       );
     }
 
@@ -78,6 +87,9 @@ class FriendsSection extends StatelessWidget {
           relationship: relationship,
           provider: provider,
           onShowRemoveDialog: (relationship) => showRemoveFriendDialog(context, relationship),
+          onShowBlockDialog: showBlockUserDialog != null
+              ? (relationship) => showBlockUserDialog!(context, relationship)
+              : null,
         ),
       ).toList(),
     );
@@ -87,11 +99,12 @@ class FriendsSection extends StatelessWidget {
     final theme = Theme.of(context);
 
     if (provider.isLoadingFriends) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.secondary),
+      return Column(
+        children: List.generate(
+          5, // Show 5 skeleton tiles
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: FriendTileSkeleton(isIOS: false),
           ),
         ),
       );
@@ -142,6 +155,9 @@ class FriendsSection extends StatelessWidget {
               relationship: relationship,
               provider: provider,
               onShowRemoveDialog: (relationship) => showRemoveFriendDialog(context, relationship),
+              onShowBlockDialog: showBlockUserDialog != null
+                  ? (relationship) => showBlockUserDialog!(context, relationship)
+                  : null,
             ),
           ),
         ],
@@ -165,5 +181,108 @@ class FriendsSection extends StatelessWidget {
         ),
       ),
     );
+  }
+  
+  /// Shows a platform-specific dialog to confirm blocking a user
+  static void showBlockFriendDialog(BuildContext context, RelationshipModel relationship, FriendsProvider provider) {
+    final authService = serviceLocator<AuthServiceInterface>();
+    final currentUserId = authService.currentUser?.uid ?? '';
+    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final userName = profile?.displayName ?? 'this user';
+    
+    if (Platform.isIOS) {
+      // iOS-style dialog
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext dialogContext) {
+          return CupertinoAlertDialog(
+            title: Text('Block $userName?'),
+            content: Text(
+              'Blocking $userName will remove them from your friends list and prevent them from sending you friend requests in the future. You can unblock them later from your settings.'
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  final success = await provider.blockUser(relationship.id);
+                  if (success && context.mounted) {
+                    _showBlockSuccessNotification(context, userName);
+                  }
+                },
+                child: const Text('Block User'),
+              ),
+            ],
+          );
+        }
+      );
+    } else {
+      // Material-style dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: Text('Block $userName?'),
+            content: Text(
+              'Blocking $userName will remove them from your friends list and prevent them from sending you friend requests in the future. You can unblock them later from your settings.'
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  final success = await provider.blockUser(relationship.id);
+                  if (success && context.mounted) {
+                    _showBlockSuccessNotification(context, userName);
+                  }
+                },
+                child: Text(
+                  'Block User',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
+          );
+        }
+      );
+    }
+  }
+  
+  /// Shows a notification that a user was successfully blocked
+  static void _showBlockSuccessNotification(BuildContext context, String userName) {
+    if (Platform.isIOS) {
+      // iOS-style notification
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('User Blocked'),
+          content: Text('You have blocked $userName successfully.'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Material-style notification
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$userName has been blocked'),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+        ),
+      );
+    }
   }
 }

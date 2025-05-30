@@ -56,6 +56,9 @@ abstract class RelationshipServiceInterface {
 
   /// Stream of sent friend requests (sent by user)
   Stream<List<RelationshipModel>> getSentRequestsStream(String userId);
+  
+  /// Stream of blocked users (only users that the current user has blocked)
+  Stream<List<RelationshipModel>> getBlockedUsersStream(String userId);
 
   /// Search user by UID to send friend request
   Future<Map<String, dynamic>?> searchUserByUid(String uid);

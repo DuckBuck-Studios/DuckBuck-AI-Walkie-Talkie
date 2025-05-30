@@ -545,8 +545,10 @@ class RelationshipService implements RelationshipServiceInterface {
         }
 
         // Update relationship to blocked within transaction
+        // Store who initiated the block so only they can unblock
         transaction.update(relationshipRef, {
           'status': RelationshipStatus.blocked.name,
+          'blockerId': currentUserId, // Add this field to track who blocked
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         });
 
@@ -594,6 +596,28 @@ class RelationshipService implements RelationshipServiceInterface {
         throw RelationshipException(
           RelationshipErrorCodes.notBlocked,
           'User is not blocked',
+          null,
+          RelationshipOperation.unblockUser,
+        );
+      }
+      
+      // Check if the current user is the one who did the blocking
+      // Only the user who blocked can unblock
+      if (relationship.blockerId != currentUserId) {
+        throw RelationshipException(
+          RelationshipErrorCodes.unauthorized,
+          'Only the user who blocked can unblock',
+          null,
+          RelationshipOperation.unblockUser,
+        );
+      }
+      
+      // Check if the current user is the one who did the blocking
+      // Only the user who blocked can unblock
+      if (relationship.blockerId != currentUserId) {
+        throw RelationshipException(
+          RelationshipErrorCodes.unauthorized,
+          'Only the user who blocked can unblock',
           null,
           RelationshipOperation.unblockUser,
         );
@@ -872,6 +896,7 @@ class RelationshipService implements RelationshipServiceInterface {
           {'field': 'participants', 'operator': 'array-contains', 'value': userId},
           {'field': 'status', 'operator': '==', 'value': RelationshipStatus.blocked.name},
           {'field': 'type', 'operator': '==', 'value': RelationshipType.friendship.name},
+          {'field': 'blockerId', 'operator': '==', 'value': userId}, // Only show blocks initiated by this user
         ],
         // Temporarily removed orderBy to avoid index requirement
         // orderBy: 'updatedAt',
@@ -945,7 +970,14 @@ class RelationshipService implements RelationshipServiceInterface {
             }
             break;
           case RelationshipStatus.blocked:
-            relationshipStatus = 'blocked';
+            // Only show as blocked if the current user initiated the block
+            if (existingRelationship.blockerId == currentUserId) {
+              relationshipStatus = 'blocked';
+            } else {
+              // If the other user blocked the current user, treat it as if there's no relationship
+              relationshipStatus = 'none';
+              relationshipId = null;
+            }
             break;
           case RelationshipStatus.declined:
             relationshipStatus = 'declined';
@@ -1060,6 +1092,37 @@ class RelationshipService implements RelationshipServiceInterface {
         .handleError((error) {
           _logger.e(_tag, 'Error in getSentRequestsStream: $error');
           _handleStreamError(error, RelationshipOperation.getSentRequestsStream);
+          return Stream.value([]);
+        });
+  }
+
+  @override
+  Stream<List<RelationshipModel>> getBlockedUsersStream(String userId) {
+    _logger.d(_tag, 'Getting blocked users stream for user: $userId');
+    return _databaseService
+        .collectionStream(
+          collection: _relationshipCollection,
+          queryBuilder: (query) => query
+              .where('participants', arrayContains: userId)
+              .where('status', isEqualTo: RelationshipStatus.blocked.name)
+              .where('blockerId', isEqualTo: userId), // Only get blocks initiated by this user
+        )
+        .map((snapshot) {
+          final relationships = snapshot.docs
+              .map((doc) => RelationshipModel.fromMap(doc.data(), doc.id))
+              .toList();
+          // Sort by display name of the other participant
+          relationships.sort((a, b) {
+            final otherParticipantA = a.participants.firstWhere((pId) => pId != userId, orElse: () => '');
+            final otherParticipantB = b.participants.firstWhere((pId) => pId != userId, orElse: () => '');
+            return (a.cachedProfiles[otherParticipantA]?.displayName ?? '')
+                .compareTo(b.cachedProfiles[otherParticipantB]?.displayName ?? '');
+          });
+          return relationships;
+        })
+        .handleError((error) {
+          _logger.e(_tag, 'Error in getBlockedUsersStream: $error');
+          _handleStreamError(error, RelationshipOperation.getBlockedUsersStream);
           return Stream.value([]);
         });
   }

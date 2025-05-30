@@ -6,6 +6,7 @@ import '../../../core/providers/crashlytics_consent_provider.dart';
 import '../../../core/widgets/error_boundary.dart';
 import '../../auth/providers/auth_state_provider.dart';
 import '../../../core/navigation/app_routes.dart';
+import 'blocked_users_screen.dart';
 
 /// Screen for managing privacy and data collection settings
 class PrivacySettingsScreen extends StatefulWidget {
@@ -169,6 +170,40 @@ class _PrivacySettingsContent extends StatelessWidget {
           ),
           onTap: () {
             _showDeleteDataDialog(context);
+          },
+        ),
+        
+        const Divider(),
+        
+        // Social Privacy Section
+        ListTile(
+          title: Text(
+            'Social Privacy',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: screenWidth * 0.045,
+            ),
+          ),
+        ),
+        ListTile(
+          leading: _getPlatformIcon(
+            Icons.block,
+            CupertinoIcons.person_crop_circle_badge_xmark,
+            color: Colors.red,
+          ),
+          title: const Text('Blocked Users'),
+          subtitle: const Text('Manage users you\'ve blocked from contacting you'),
+          trailing: _getPlatformIcon(
+            Icons.arrow_forward_ios,
+            CupertinoIcons.chevron_right,
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BlockedUsersScreen(),
+              ),
+            );
           },
         ),
       ],

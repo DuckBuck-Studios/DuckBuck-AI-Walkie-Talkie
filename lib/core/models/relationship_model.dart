@@ -10,6 +10,7 @@ class RelationshipModel {
   final DateTime updatedAt;
   final String? initiatorId;
   final DateTime? acceptedAt;
+  final String? blockerId; // Added to track who initiated the block
   
   // Cached profile data for quick access
   final Map<String, CachedProfile> cachedProfiles;
@@ -23,6 +24,7 @@ class RelationshipModel {
     required this.updatedAt,
     this.initiatorId,
     this.acceptedAt,
+    this.blockerId,
     this.cachedProfiles = const {},
   });
 
@@ -41,6 +43,7 @@ class RelationshipModel {
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       initiatorId: map['initiatorId'],
+      blockerId: map['blockerId'], // Added this line to capture blockerId
       acceptedAt: (map['acceptedAt'] as Timestamp?)?.toDate(),
       cachedProfiles: Map<String, CachedProfile>.from(
         (map['cachedProfiles'] ?? {}).map(
