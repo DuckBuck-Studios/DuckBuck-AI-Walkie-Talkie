@@ -352,6 +352,313 @@ sequenceDiagram
     Note over UI1,UI2: Both users now see each other as friends
 ```
 
+### Unblock User Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Friends Screen
+    participant Blocked as Blocked Section
+    participant Dialog as Unblock Dialog
+    participant Provider as Friends Provider
+    participant Repo as Relationship Repository
+    participant Service as Relationship Service
+    participant DB as Firebase Database
+    participant Firestore as Firestore
+    participant Analytics as Firebase Analytics
+    participant Logger as Logger Service
+    
+    Note over UI: User views blocked users section
+    UI->>Blocked: Navigate to blocked users tab
+    Blocked->>Provider: Get blocked users
+    Provider-->>Blocked: List of blocked relationships
+    Blocked->>Blocked: Display blocked users
+    
+    User->>Blocked: Clicks "Unblock" on user
+    Blocked->>Dialog: Show unblock confirmation dialog
+    Dialog->>Dialog: Display confirmation message
+    
+    User->>Dialog: Confirms unblock action
+    Dialog->>Provider: unblockUser(relationshipId)
+    Provider->>Provider: Add to processing set
+    Provider->>Provider: notifyListeners() [show loading]
+    Provider-->>Dialog: Show loading indicator
+    
+    Provider->>Repo: unblockUser(relationshipId)
+    Repo->>Analytics: Log event: "user_unblock_attempt"
+    Repo->>Logger: Log operation start
+    Repo->>Service: unblockUser(relationshipId)
+    
+    Service->>Service: Validate current user
+    Service->>DB: Start transaction
+    DB->>Service: Transaction context
+    
+    Service->>Firestore: Get relationship document
+    Firestore-->>Service: RelationshipModel
+    
+    Service->>Service: Validate user is blocker
+    alt Valid blocked relationship and user is blocker
+        Service->>Service: Delete relationship document
+        Service->>Firestore: Delete relationship document
+        Firestore-->>Service: Document deleted
+        Service->>DB: Commit transaction
+        DB-->>Service: Transaction committed
+        
+        Service-->>Repo: Success response
+        Repo->>Analytics: Log event: "user_unblocked_success"
+        Repo->>Logger: Log operation success
+        Repo-->>Provider: Success response
+        
+    else Invalid state or not blocker
+        Service->>Service: Throw RelationshipException
+        Service->>DB: Rollback transaction
+        Service-->>Repo: RelationshipException
+        Repo->>Analytics: Log event: "user_unblock_failed"
+        Repo->>Logger: Log operation failure
+        Repo-->>Provider: Error response
+    end
+    
+    Provider->>Provider: Remove from processing set
+    Provider->>Provider: notifyListeners()
+    Provider-->>Dialog: Operation complete
+    Dialog->>Dialog: Close dialog
+    Dialog-->>UI: Return to friends screen
+    
+    Note over Firestore: Real-time stream updates
+    Firestore->>Provider: Stream update (blocked users)
+    Provider->>Provider: Remove from blocked users list
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: UI automatically refreshes
+    UI->>UI: Remove user from blocked list
+    UI->>UI: Show success message
+```
+
+### Remove Friend Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Friends Screen
+    participant Friends as Friends Section
+    participant Dialog as Remove Dialog
+    participant Provider as Friends Provider
+    participant Repo as Relationship Repository
+    participant Service as Relationship Service
+    participant DB as Firebase Database
+    participant Firestore as Firestore
+    participant Analytics as Firebase Analytics
+    participant Logger as Logger Service
+    
+    User->>UI: Long press on friend tile
+    UI->>UI: Show context menu
+    User->>UI: Selects "Remove Friend"
+    UI->>Dialog: Show remove confirmation dialog
+    Dialog->>Dialog: Display warning message
+    
+    User->>Dialog: Confirms remove action
+    Dialog->>Provider: removeFriend(relationshipId)
+    Provider->>Provider: Add to processing set
+    Provider->>Provider: notifyListeners() [show loading]
+    Provider-->>Dialog: Show loading indicator
+    
+    Provider->>Repo: removeFriend(relationshipId)
+    Repo->>Analytics: Log event: "friend_remove_attempt"
+    Repo->>Logger: Log operation start
+    Repo->>Service: removeFriend(relationshipId)
+    
+    Service->>Service: Validate current user
+    Service->>DB: Start transaction
+    DB->>Service: Transaction context
+    
+    Service->>Firestore: Get relationship document
+    Firestore-->>Service: RelationshipModel
+    
+    Service->>Service: Validate friendship exists
+    alt Valid friendship
+        Service->>Service: Delete relationship document
+        Service->>Firestore: Delete relationship document
+        Firestore-->>Service: Document deleted
+        Service->>DB: Commit transaction
+        DB-->>Service: Transaction committed
+        
+        Service-->>Repo: Success response
+        Repo->>Analytics: Log event: "friend_removed_success"
+        Repo->>Logger: Log operation success
+        Repo-->>Provider: Success response
+        
+    else Invalid friendship
+        Service->>Service: Throw RelationshipException
+        Service->>DB: Rollback transaction
+        Service-->>Repo: RelationshipException
+        Repo->>Analytics: Log event: "friend_remove_failed"
+        Repo->>Logger: Log operation failure
+        Repo-->>Provider: Error response
+    end
+    
+    Provider->>Provider: Remove from processing set
+    Provider->>Provider: notifyListeners()
+    Provider-->>Dialog: Operation complete
+    Dialog->>Dialog: Close dialog
+    Dialog-->>UI: Return to friends screen
+    
+    Note over Firestore: Real-time stream updates
+    Firestore->>Provider: Stream update (friends list)
+    Provider->>Provider: Remove from friends list
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: UI automatically refreshes
+    UI->>UI: Remove friend from list
+    UI->>UI: Show success message
+```
+
+### Decline Friend Request Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Friends Screen
+    participant Pending as Pending Section
+    participant Provider as Friends Provider
+    participant Repo as Relationship Repository
+    participant Service as Relationship Service
+    participant DB as Firebase Database
+    participant Firestore as Firestore
+    participant Analytics as Firebase Analytics
+    participant Logger as Logger Service
+    
+    Note over UI: User views pending requests tab
+    UI->>Pending: Switch to pending requests tab
+    Pending->>Provider: Get incoming requests
+    Provider-->>Pending: List of pending requests
+    Pending->>Pending: Display incoming requests
+    
+    User->>Pending: Clicks "Decline" on request
+    Pending->>Provider: declineFriendRequest(relationshipId)
+    Provider->>Provider: Add to processing set
+    Provider->>Provider: notifyListeners() [show loading]
+    Provider-->>Pending: Show loading indicator
+    
+    Provider->>Repo: declineFriendRequest(relationshipId)
+    Repo->>Analytics: Log event: "friend_request_decline_attempt"
+    Repo->>Logger: Log operation start
+    Repo->>Service: declineFriendRequest(relationshipId)
+    
+    Service->>Service: Validate current user
+    Service->>DB: Start transaction
+    DB->>Service: Transaction context
+    
+    Service->>Firestore: Get relationship document
+    Firestore-->>Service: RelationshipModel
+    
+    Service->>Service: Validate pending request
+    alt Valid pending request to current user
+        Service->>Service: Update status to declined
+        Service->>Service: Set declinedAt timestamp
+        Service->>Firestore: Update relationship document
+        Firestore-->>Service: Document updated
+        Service->>DB: Commit transaction
+        DB-->>Service: Transaction committed
+        
+        Service-->>Repo: Success response
+        Repo->>Analytics: Log event: "friend_request_declined_success"
+        Repo->>Logger: Log operation success
+        Repo-->>Provider: Success response
+        
+    else Invalid state
+        Service->>Service: Throw RelationshipException
+        Service->>DB: Rollback transaction
+        Service-->>Repo: RelationshipException
+        Repo->>Analytics: Log event: "friend_request_decline_failed"
+        Repo->>Logger: Log operation failure
+        Repo-->>Provider: Error response
+    end
+    
+    Provider->>Provider: Remove from processing set
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: Operation complete
+    
+    Note over Firestore: Real-time stream updates
+    Firestore->>Provider: Stream update (incoming requests)
+    Provider->>Provider: Remove from incoming requests
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: UI automatically refreshes
+    UI->>UI: Remove request from pending tab
+    UI->>UI: Show success message
+```
+
+### Cancel Friend Request Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Friends Screen
+    participant Outgoing as Outgoing Section
+    participant Provider as Friends Provider
+    participant Repo as Relationship Repository
+    participant Service as Relationship Service
+    participant DB as Firebase Database
+    participant Firestore as Firestore
+    participant Analytics as Firebase Analytics
+    participant Logger as Logger Service
+    
+    Note over UI: User views outgoing requests tab
+    UI->>Outgoing: Switch to outgoing requests tab
+    Outgoing->>Provider: Get outgoing requests
+    Provider-->>Outgoing: List of sent requests
+    Outgoing->>Outgoing: Display outgoing requests
+    
+    User->>Outgoing: Clicks "Cancel" on request
+    Outgoing->>Provider: cancelFriendRequest(relationshipId)
+    Provider->>Provider: Add to processing set
+    Provider->>Provider: notifyListeners() [show loading]
+    Provider-->>Outgoing: Show loading indicator
+    
+    Provider->>Repo: cancelFriendRequest(relationshipId)
+    Repo->>Analytics: Log event: "friend_request_cancel_attempt"
+    Repo->>Logger: Log operation start
+    Repo->>Service: cancelFriendRequest(relationshipId)
+    
+    Service->>Service: Validate current user
+    Service->>DB: Start transaction
+    DB->>Service: Transaction context
+    
+    Service->>Firestore: Get relationship document
+    Firestore-->>Service: RelationshipModel
+    
+    Service->>Service: Validate user is initiator
+    alt Valid pending request from current user
+        Service->>Service: Delete relationship document
+        Service->>Firestore: Delete relationship document
+        Firestore-->>Service: Document deleted
+        Service->>DB: Commit transaction
+        DB-->>Service: Transaction committed
+        
+        Service-->>Repo: Success response
+        Repo->>Analytics: Log event: "friend_request_cancelled_success"
+        Repo->>Logger: Log operation success
+        Repo-->>Provider: Success response
+        
+    else Invalid state or not initiator
+        Service->>Service: Throw RelationshipException
+        Service->>DB: Rollback transaction
+        Service-->>Repo: RelationshipException
+        Repo->>Analytics: Log event: "friend_request_cancel_failed"
+        Repo->>Logger: Log operation failure
+        Repo-->>Provider: Error response
+    end
+    
+    Provider->>Provider: Remove from processing set
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: Operation complete
+    
+    Note over Firestore: Real-time stream updates
+    Firestore->>Provider: Stream update (outgoing requests)
+    Provider->>Provider: Remove from outgoing requests
+    Provider->>Provider: notifyListeners()
+    Provider-->>UI: UI automatically refreshes
+    UI->>UI: Remove request from outgoing tab
+    UI->>UI: Show success message
+```
+
 ### Error Handling Flow
 
 ```mermaid
