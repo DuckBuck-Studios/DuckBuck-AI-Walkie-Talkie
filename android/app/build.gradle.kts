@@ -10,14 +10,12 @@ plugins {
 
 android {
     namespace = "com.duckbuck.app"
-    compileSdk = flutter.compileSdkVersion
-    // Update NDK version as recommended by the build output
+    compileSdk = flutter.compileSdkVersion 
     ndkVersion = "27.0.12077973"
     
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-        // Add isCoreLibraryDesugaringEnabled to support newer Java APIs on older Android versions
+        targetCompatibility = JavaVersion.VERSION_17 
         isCoreLibraryDesugaringEnabled = true
     }
 

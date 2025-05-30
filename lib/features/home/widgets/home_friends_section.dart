@@ -7,7 +7,6 @@ import '../../../core/services/service_locator.dart';
 import '../providers/home_provider.dart';
 import '../../friends/widgets/friend_tile.dart' show FriendTileSkeleton;
 import '../../friends/widgets/profile_avatar.dart';
-import '../../friends/widgets/date_formatter.dart';
 
 class HomeFriendsSection extends StatelessWidget {
   final HomeProvider provider;
@@ -171,11 +170,6 @@ class HomeFriendsSection extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text(
-          'Friend since ${relationship.acceptedAt != null ? DateFormatter.formatRelativeTime(relationship.acceptedAt!) : 'Unknown'}',
-          style: CupertinoTheme.of(context).textTheme.tabLabelTextStyle,
-        ),
-        trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
         onTap: onFriendTap != null ? () => onFriendTap!(context, relationship) : null,
       );
     } else {
@@ -192,14 +186,6 @@ class HomeFriendsSection extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text(
-          'Friend since ${relationship.acceptedAt != null ? DateFormatter.formatRelativeTime(relationship.acceptedAt!) : 'Unknown'}',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, size: 16),
         onTap: onFriendTap != null ? () => onFriendTap!(context, relationship) : null,
       );
     }
