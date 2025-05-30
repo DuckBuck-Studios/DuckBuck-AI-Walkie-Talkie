@@ -53,20 +53,20 @@ class RequestTileSkeleton extends StatelessWidget {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.2),
+                    color: Colors.grey.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check, size: 20),
+                  child: Icon(Icons.check, size: 20, color: Colors.grey.shade400),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.2),
+                    color: Colors.grey.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close, size: 20),
+                  child: Icon(Icons.close, size: 20, color: Colors.grey.shade400),
                 ),
               ],
             ),
@@ -115,21 +115,21 @@ class RequestTileSkeleton extends StatelessWidget {
               Container(
                 width: 36,
                 height: 36,
-                decoration: const BoxDecoration(
-                  color: CupertinoColors.activeGreen,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey5,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(CupertinoIcons.check_mark, size: 20, color: CupertinoColors.white),
+                child: Icon(CupertinoIcons.check_mark, size: 20, color: CupertinoColors.systemGrey),
               ),
               const SizedBox(width: 8),
               Container(
                 width: 36,
                 height: 36,
-                decoration: const BoxDecoration(
-                  color: CupertinoColors.destructiveRed,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemGrey5,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(CupertinoIcons.clear, size: 20, color: CupertinoColors.white),
+                child: Icon(CupertinoIcons.clear, size: 20, color: CupertinoColors.systemGrey),
               ),
             ],
           ),

@@ -185,10 +185,10 @@ class FriendTileSkeleton extends StatelessWidget {
       subtitle: const Text('Friend since Jan 1, 2025'),
       trailing: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          color: Colors.grey.withOpacity(0.2),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Icon(Icons.more_horiz),
+        child: Icon(Icons.more_horiz, color: Colors.grey.shade400),
       ),
     );
   }
@@ -199,7 +199,7 @@ class FriendTileSkeleton extends StatelessWidget {
       leading: const CircleAvatar(radius: 24),
       title: const Text('Friend Name'),
       subtitle: const Text('Friend since Jan 1, 2025'),
-      trailing: const Icon(CupertinoIcons.ellipsis),
+      trailing: Icon(CupertinoIcons.ellipsis, color: CupertinoColors.systemGrey),
     );
   }
 }

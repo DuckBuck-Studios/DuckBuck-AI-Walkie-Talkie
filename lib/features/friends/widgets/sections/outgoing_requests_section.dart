@@ -1,7 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:skeletonizer/skeletonizer.dart';
 import '../../providers/friends_provider.dart';
 import '../request_tile.dart';
 import '../request_tile_skeleton.dart';
