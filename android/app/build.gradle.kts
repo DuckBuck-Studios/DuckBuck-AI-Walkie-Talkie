@@ -13,6 +13,21 @@ android {
     compileSdk = flutter.compileSdkVersion 
     ndkVersion = "27.0.12077973"
     
+    // Add packagingOptions to handle native libraries properly for Agora SDK 4.5.2
+    packagingOptions {
+        // Pick first occurrence of any duplicated files
+        pickFirst("**/*.so")
+        // Exclude unnecessary files
+        exclude("META-INF/DEPENDENCIES")
+        exclude("META-INF/LICENSE")
+        exclude("META-INF/LICENSE.txt")
+        exclude("META-INF/license.txt")
+        exclude("META-INF/NOTICE")
+        exclude("META-INF/NOTICE.txt")
+        exclude("META-INF/notice.txt")
+        exclude("META-INF/ASL2.0")
+    }
+    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17 
@@ -93,32 +108,19 @@ dependencies {
     // Add desugaring library for backward compatibility with older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     
+    // Firebase Messaging for FCM notifications
+    implementation("com.google.firebase:firebase-messaging:23.4.0")
+    
+    // Agora SDK 4.5.2 for voice and video calls with necessary components
+    implementation("io.agora.rtc:full-rtc-basic:4.5.2")
+    // Add Agora supporting libraries
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.core:core-ktx:1.12.0")
+    
     // Required dependencies for Apple Sign In on Android
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("androidx.browser:browser:1.6.0")
-    
-    // AppCompat dependency for SecurityVerificationActivity
-    implementation("androidx.appcompat:appcompat:1.6.1")
-     
-    
-    // Security-related dependencies
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.76")
-    
-    // SafetyNet for additional device integrity checks
-    implementation("com.google.android.gms:play-services-safetynet:18.0.1")
-    
-    // Google Play Integrity API
-    implementation("com.google.android.play:integrity:1.2.0")
-    
-    // Coroutines for async operations
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    
-    // Additional security libraries
-    implementation("com.google.crypto.tink:tink-android:1.9.0")
-    implementation("androidx.biometric:biometric:1.1.0")
 }
 
 flutter {

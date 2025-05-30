@@ -3,8 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../firebase_options.dart';
 import '../services/preferences_service.dart';
-import '../services/service_locator.dart';
-import '../services/security/app_security_service.dart';
+import '../services/service_locator.dart'; 
 import '../services/firebase/firebase_app_check_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/crashlytics_consent_manager.dart';
@@ -19,9 +18,7 @@ class AppBootstrapper {
   LoggerService? _logger;
   
   /// Initialize all required services for the app to function
-  Future<void> initialize() async {
-    // Can't use service locator logger yet since we haven't set it up
-    print('[AppBootstrapper] Starting app initialization');
+  Future<void> initialize() async { 
     
     await _initializeFirebase();
     await _initializeCrashlytics();
@@ -32,8 +29,7 @@ class AppBootstrapper {
     // Now we can use the service locator logger
     _logger = serviceLocator<LoggerService>();
     _logger!.i('BOOTSTRAP', 'Service locator initialized, continuing with remaining services');
-    
-    await _initializeSecurity();
+     
     await _initializeCrashlyticsConsent();
     await _initializeFCM();
     await _syncAuthState();
@@ -102,33 +98,6 @@ class AppBootstrapper {
       print('[ServiceLocator] Failed to setup service locator: $e');
       // Critical error - app depends on services
       rethrow;
-    }
-  }
-
-  Future<void> _initializeSecurity() async {
-    try {
-      final securityService = serviceLocator<AppSecurityService>();
-      final securityInitialized = await securityService.initialize();
-      if (!securityInitialized) {
-        _logger!.w('SECURITY', 'Security services initialized with warnings');
-      } else {
-        _logger!.i('SECURITY', 'Security services initialized successfully');
-      }
-    } catch (e) {
-      _logger!.e('SECURITY', 'Error initializing security services: $e');
-      // Continue with reduced security, but log the issue
-      try {
-        final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
-        crashlytics.recordError(
-          e,
-          null,
-          reason: 'Security initialization failure',
-          fatal: false,
-          information: {'startup_stage': 'security_initialization'},
-        );
-      } catch (_) {
-        // Silently continue if logging fails
-      }
     }
   }
 

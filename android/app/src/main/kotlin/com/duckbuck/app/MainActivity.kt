@@ -1,88 +1,89 @@
 package com.duckbuck.app
-
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import com.duckbuck.app.security.SecurityManager
+import com.duckbuck.app.agora.AgoraService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
-    private val SECURITY_CHANNEL = "com.duckbuck.app/security"
-    private lateinit var securityManager: SecurityManager
-
+    private lateinit var agoraService: AgoraService
+    
+    // Channel name for Flutter-Native communication
+    private val AGORA_CHANNEL = "com.duckbuck.app/agora_channel"
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Initialize Agora service early during app startup
+        initializeAgoraService()
+    }
+    
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
-        try {
-            // Log app signing info in debug mode
-            logAppSigningInfo()
-            
-            // Initialize security manager
-            securityManager = SecurityManager(applicationContext, this)
-            
-            // Initialize all security components with verbose logging in debug mode
-            val isDevelopment = isDebuggable(applicationContext)
-            val isInitialized = securityManager.initialize(isDevelopment, isDevelopment)
-            
-            if (!isInitialized) {
-                Log.e(TAG, "Security components failed to initialize properly")
-                // In production, you might want to take more drastic actions
-                // like preventing the app from starting or limiting functionality
+        // Set up method channel for Flutter to communicate with native Agora service
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AGORA_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "initializeAgoraEngine" -> {
+                    val success = initializeAgoraService()
+                    result.success(success)
+                }
+                else -> result.notImplemented()
             }
-            
-            // Set up method channel for security operations
-            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SECURITY_CHANNEL).setMethodCallHandler { call, result ->
-                securityManager.handleMethodCall(call, result)
-            }
-            
-            Log.d(TAG, "Security components initialized successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing security components: ${e.message}")
         }
     }
     
-    private fun logAppSigningInfo() {
+    private fun initializeAgoraService(): Boolean {
         try {
-            val packageManager = applicationContext.packageManager
-            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.GET_SIGNING_CERTIFICATES
-                )
+            // First check if a valid instance exists in the holder (from Application)
+            val existingService = AgoraServiceHolder.getAgoraService()
+            if (existingService != null && existingService.isEngineInitialized()) {
+                Log.i(TAG, "✅ Using existing initialized Agora Engine from Application")
+                agoraService = existingService
+                return true
+            }
+            
+            // Create new service if needed
+            agoraService = AgoraService(this)
+            val success = agoraService.initializeEngine()
+            
+            if (success) {
+                Log.i(TAG, "✅ Agora Engine initialized successfully during app startup")
+                
+                // Verify initialization
+                if (agoraService.isEngineInitialized()) {
+                    Log.i(TAG, "✅ Agora Engine verification successful")
+                } else {
+                    Log.w(TAG, "⚠️ Agora Engine initialization succeeded but verification failed. Trying again...")
+                    
+                    // Try one more time with more aggressive approach
+                    agoraService.destroy()
+                    agoraService = AgoraService(this)
+                    
+                    // Try init again
+                    val retrySuccess = agoraService.initializeEngine()
+                    
+                    if (!retrySuccess || !agoraService.isEngineInitialized()) {
+                        Log.e(TAG, "❌ Agora Engine failed to initialize even after retry")
+                        return false
+                    }
+                    
+                    Log.i(TAG, "✅ Agora Engine initialized successfully on second attempt")
+                }
+                
+                // Store reference in singleton for service access
+                AgoraServiceHolder.setAgoraService(agoraService)
+                return true
             } else {
-                @Suppress("DEPRECATION")
-                packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.GET_SIGNATURES
-                )
+                Log.e(TAG, "❌ Failed to initialize Agora Engine during app startup")
+                return false
             }
-            
-            Log.d(TAG, "Package name: $packageName")
-            Log.d(TAG, "Version name: ${packageInfo.versionName}")
-            Log.d(TAG, "Version code: ${packageInfo.longVersionCode}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error logging app signing info: ${e.message}")
+            Log.e(TAG, "❌ Exception initializing Agora Engine", e)
+            return false
         }
     }
-    
-    /**
-     * Check if the app is running in debug mode
-     * @param context Application context
-     * @return True if the app is in debug mode
-     */
-    private fun isDebuggable(context: Context): Boolean {
-        return try {
-            val applicationInfo = context.applicationInfo
-            (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking if app is debuggable: ${e.message}")
-            false
-        }
-    }
-
 }

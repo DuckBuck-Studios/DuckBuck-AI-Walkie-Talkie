@@ -10,6 +10,31 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
+    <!-- Foreground service permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    
+    <!-- Call-related permissions -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Camera permission for video calls -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- Agora specific permissions - updated for SDK 4.5.2 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:minSdkVersion="31" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" 
+        tools:ignore="ProtectedPermissions" />
+    <!-- New permissions for Agora SDK 4.5.2 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
     <!-- Explicitly prevent debugging -->
     <uses-permission android:name="android.permission.SET_DEBUG_APP" tools:node="remove" />
     
@@ -18,7 +43,7 @@
     
     <application
         android:label="duckbuck"
-        android:name="${applicationName}"
+        android:name=".DuckBuckApplication"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false"
@@ -70,6 +95,17 @@
         <meta-data
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
+            
+        <!-- Data-Only FCM Service (handles only data-only notifications) -->
+        <service
+            android:name=".fcm.FCMService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall">
+            <intent-filter android:priority="1">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
