@@ -6,32 +6,29 @@ import 'core/app/app_bootstrapper.dart';
 import 'core/app/provider_registry.dart';
 import 'core/navigation/app_routes.dart';
 import 'core/theme/app_theme.dart';
-import 'core/services/preferences_service.dart';
-import 'core/services/logger_service.dart';
+import 'core/services/preferences_service.dart'; 
 import 'core/services/auth/auth_security_manager.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
+import 'core/services/logger/logger_service.dart';
 import 'core/services/service_locator.dart';
 
 /// Main entry point for the application
 void main() async {
   // Setup error capture before any other initialization
   WidgetsFlutterBinding.ensureInitialized();
-  
-  final logger = LoggerService();
+   
   final bootstrapper = AppBootstrapper();
   
-  try {
-    // Initialize all app services using the bootstrapper
-    // This centralizes all initialization logic in one place
-    logger.info('main', '🚀 Starting DuckBuck app initialization');
-    await bootstrapper.initialize();
-    logger.info('main', '✅ App initialization complete');
+  try { 
+    await bootstrapper.initialize(); 
+
+    // Get logger service after initialization
+    final logger = serviceLocator<LoggerService>();
+    logger.i('MAIN', 'App initialization completed successfully');
 
     // Start the application
-    
     runApp(const MyApp());
-  } catch (e, stack) {
-    logger.error('main', 'Critical error during app initialization: $e');
+  } catch (e, stack) { 
     
     // Try to log the error to Crashlytics if available
     try {
@@ -43,9 +40,8 @@ void main() async {
         fatal: true,
         information: {'startup_stage': 'main_initialization'},
       );
-    } catch (crashlyticsError) {
-      // Crashlytics itself failed, just log to console
-      logger.error('main', 'Failed to log to Crashlytics: $crashlyticsError');
+    } catch (crashlyticsError)  {
+      
     }
     
     // Show some kind of error UI or gracefully exit
@@ -121,20 +117,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   /// Determine the initial route based on authentication state and preferences
   String _determineInitialRoute() {
+    final logger = serviceLocator<LoggerService>();
     final bool isLoggedIn = PreferencesService.instance.isLoggedIn;
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
+    logger.d('MAIN', 'Determining initial route - isLoggedIn: $isLoggedIn, firebaseUser: ${firebaseUser?.uid}');
+
     // Only consider user logged in if both Firebase and SharedPreferences agree
     if (isLoggedIn && firebaseUser != null) {
+      logger.d('MAIN', 'User is logged in - navigating to home');
       return AppRoutes.home;
     } else {
       // If there's a mismatch, ensure we're properly logged out
       if (isLoggedIn && firebaseUser == null) {
+        logger.w('MAIN', 'Auth state mismatch - clearing preferences');
         // Fix inconsistent state - SharedPrefs says logged in but Firebase says no
         PreferencesService.instance.setLoggedIn(false);
         PreferencesService.instance.clearAll();
       }
 
+      logger.d('MAIN', 'User not logged in - navigating to welcome screen');
       // Default to welcome screen for new users
       return AppRoutes.welcome;
     }

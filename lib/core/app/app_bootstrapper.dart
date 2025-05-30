@@ -8,7 +8,7 @@ import '../services/security/app_security_service.dart';
 import '../services/firebase/firebase_app_check_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/crashlytics_consent_manager.dart';
-import '../services/logger_service.dart';
+import '../services/logger/logger_service.dart';
 import '../services/fcm/fcm_service.dart';
 
 /// Handles the bootstrapping of the app
@@ -16,31 +16,37 @@ import '../services/fcm/fcm_service.dart';
 /// Responsible for initializing all required services and ensuring
 /// the application is in a valid state before starting
 class AppBootstrapper {
-  final LoggerService _logger = LoggerService();
+  LoggerService? _logger;
   
   /// Initialize all required services for the app to function
   Future<void> initialize() async {
-    _logger.info('AppBootstrapper', 'Starting app initialization');
+    // Can't use service locator logger yet since we haven't set it up
+    print('[AppBootstrapper] Starting app initialization');
     
     await _initializeFirebase();
     await _initializeCrashlytics();
     await _initializeAppCheck();
     await _initializePreferences();
     await _initializeServiceLocator();
+    
+    // Now we can use the service locator logger
+    _logger = serviceLocator<LoggerService>();
+    _logger!.i('BOOTSTRAP', 'Service locator initialized, continuing with remaining services');
+    
     await _initializeSecurity();
     await _initializeCrashlyticsConsent();
     await _initializeFCM();
     await _syncAuthState();
     
-    _logger.info('AppBootstrapper', 'App initialization completed successfully');
+    _logger!.i('BOOTSTRAP', 'App initialization completed successfully');
   }
 
   Future<void> _initializeFirebase() async {
     try {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-      _logger.info('Firebase', 'Firebase initialized successfully');
+      print('[Firebase] Firebase initialized successfully');
     } catch (e) {
-      _logger.error('Firebase', 'Failed to initialize Firebase: $e');
+      print('[Firebase] Failed to initialize Firebase: $e');
       // Allow app to continue with limited functionality
     }
   }
@@ -59,9 +65,9 @@ class AppBootstrapper {
         return true;
       };
       
-      _logger.info('Crashlytics', 'Firebase Crashlytics initialized successfully');
+      print('[Crashlytics] Firebase Crashlytics initialized successfully');
     } catch (e) {
-      _logger.error('Crashlytics', 'Failed to initialize Firebase Crashlytics: $e');
+      print('[Crashlytics] Failed to initialize Firebase Crashlytics: $e');
       // App can function without Crashlytics, with reduced error reporting
     }
   }
@@ -70,9 +76,9 @@ class AppBootstrapper {
     try {
       final appCheckService = FirebaseAppCheckService();
       await appCheckService.initialize();
-      _logger.info('AppCheck', 'Firebase App Check initialized successfully');
+      print('[AppCheck] Firebase App Check initialized successfully');
     } catch (e) {
-      _logger.error('AppCheck', 'Failed to initialize Firebase App Check: $e');
+      print('[AppCheck] Failed to initialize Firebase App Check: $e');
       // App can still function without App Check, with reduced security
     }
   }
@@ -80,9 +86,9 @@ class AppBootstrapper {
   Future<void> _initializePreferences() async {
     try {
       await PreferencesService.instance.init();
-      _logger.info('Preferences', 'Preferences service initialized successfully');
+      print('[Preferences] Preferences service initialized successfully');
     } catch (e) {
-      _logger.error('Preferences', 'Failed to initialize Preferences: $e');
+      print('[Preferences] Failed to initialize Preferences: $e');
       // Critical error - app depends on preferences
       rethrow;
     }
@@ -91,9 +97,9 @@ class AppBootstrapper {
   Future<void> _initializeServiceLocator() async {
     try {
       await setupServiceLocator();
-      _logger.info('ServiceLocator', 'Service locator initialized successfully');
+      print('[ServiceLocator] Service locator initialized successfully');
     } catch (e) {
-      _logger.error('ServiceLocator', 'Failed to setup service locator: $e');
+      print('[ServiceLocator] Failed to setup service locator: $e');
       // Critical error - app depends on services
       rethrow;
     }
@@ -104,12 +110,12 @@ class AppBootstrapper {
       final securityService = serviceLocator<AppSecurityService>();
       final securityInitialized = await securityService.initialize();
       if (!securityInitialized) {
-        _logger.warning('Security', 'Security services initialized with warnings');
+        _logger!.w('SECURITY', 'Security services initialized with warnings');
       } else {
-        _logger.info('Security', 'Security services initialized successfully');
+        _logger!.i('SECURITY', 'Security services initialized successfully');
       }
     } catch (e) {
-      _logger.error('Security', 'Error initializing security services: $e');
+      _logger!.e('SECURITY', 'Error initializing security services: $e');
       // Continue with reduced security, but log the issue
       try {
         final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
@@ -132,9 +138,9 @@ class AppBootstrapper {
       await serviceLocator.isReady<CrashlyticsConsentManager>();
       final crashlyticsConsentManager = serviceLocator<CrashlyticsConsentManager>();
       await crashlyticsConsentManager.initialize();
-      _logger.info('Crashlytics', 'Crashlytics consent manager initialized');
+      _logger!.i('CRASHLYTICS', 'Crashlytics consent manager initialized');
     } catch (e) {
-      _logger.error('Crashlytics', 'Error initializing Crashlytics consent manager: $e');
+      _logger!.e('CRASHLYTICS', 'Error initializing Crashlytics consent manager: $e');
       // Continue execution even if this fails
     }
   }
@@ -143,9 +149,9 @@ class AppBootstrapper {
     try {
       final fcmService = serviceLocator<FCMService>();
       await fcmService.initialize();
-      _logger.info('FCM', 'FCM service initialized successfully');
+      _logger!.i('FCM', 'FCM service initialized successfully');
     } catch (e) {
-      _logger.error('FCM', 'Failed to initialize FCM service: $e');
+      _logger!.e('FCM', 'Failed to initialize FCM service: $e');
       // Continue execution even if FCM fails - notifications won't work but app will function
     }
   }
@@ -162,18 +168,18 @@ class AppBootstrapper {
         // Firebase says logged out but SharedPrefs says logged in - fix by clearing all
         await PreferencesService.instance.setLoggedIn(false);
         await PreferencesService.instance.clearAll();
-        _logger.warning('Auth', 'Auth state mismatch detected and fixed: Cleared invalid login state');
+        _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Cleared invalid login state');
       } else if (firebaseUser != null && !isLoggedInPrefs) {
         // Firebase says logged in but SharedPrefs says logged out - update preferences
         await PreferencesService.instance.setLoggedIn(true);
-        _logger.warning('Auth', 'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state');
+        _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state');
       } else {
         // States match, ensure they're both up to date
         await PreferencesService.instance.setLoggedIn(firebaseUser != null);
-        _logger.info('Auth', 'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}');
+        _logger!.i('AUTH', 'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}');
       }
     } catch (e) {
-      _logger.error('Auth', 'Error syncing auth state: $e');
+      _logger!.e('AUTH', 'Error syncing auth state: $e');
       // Handle but continue execution
     }
   }
