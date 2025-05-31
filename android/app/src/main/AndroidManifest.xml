@@ -12,7 +12,7 @@
     
     <!-- Foreground service permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     
     <!-- Call-related permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -96,16 +96,23 @@
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
             
-        <!-- Data-Only FCM Service (handles only data-only notifications) -->
+        <!-- Walkie-Talkie FCM Service (handles all FCM operations through orchestrator) -->
         <service
-            android:name=".fcm.FCMService"
+            android:name=".fcm.FcmServiceOrchestrator"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="phoneCall">
+            android:exported="false">
             <intent-filter android:priority="1">
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        
+        <!-- Persistent Walkie-Talkie Service (maintains connection in background) -->
+        <service
+            android:name=".services.WalkieTalkieService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

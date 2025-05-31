@@ -2,11 +2,13 @@ package com.duckbuck.app
 
 import android.app.Application
 import android.util.Log
-import com.duckbuck.app.agora.AgoraService
+import com.duckbuck.app.core.AgoraEngineInitializer
+import com.duckbuck.app.core.AgoraServiceManager
 
 /**
  * Main Application class for DuckBuck
  * Initializes critical components like Agora at the earliest possible point
+ * Now uses modularized initialization system
  */
 class DuckBuckApplication : Application() {
     
@@ -14,42 +16,28 @@ class DuckBuckApplication : Application() {
         private const val TAG = "DuckBuckApplication"
     }
     
-    private lateinit var agoraService: AgoraService
-    
     override fun onCreate() {
         super.onCreate()
         
         Log.i(TAG, "🚀 DuckBuck Application created - initializing core services")
         
-        // Initialize Agora as early as possible during app startup
+        // Initialize Agora using the new modular system
         initializeAgoraService()
     }
     
     private fun initializeAgoraService() {
         try {
-            agoraService = AgoraService(this)
-            val success = agoraService.initializeEngine()
+            Log.i(TAG, "Initializing Agora service using modular initializer")
             
-            if (success) {
+            // Use the new modular initializer
+            val (success, agoraService) = AgoraEngineInitializer.initializeAgoraService(this)
+            
+            if (success && agoraService != null) {
                 Log.i(TAG, "✅ Agora Engine initialized successfully during application startup")
                 
-                // Verify that it's truly initialized
-                if (agoraService.isEngineInitialized()) {
-                    Log.i(TAG, "✅ Agora Engine verified as fully initialized and ready for calls")
-                } else {
-                    Log.w(TAG, "⚠️ Agora Engine initialization succeeded but verification failed. Retrying...")
-                    
-                    // Try one more initialization attempt with longer delay
-                    val retrySuccess = agoraService.initializeEngine()
-                    if (retrySuccess && agoraService.isEngineInitialized()) {
-                        Log.i(TAG, "✅ Agora Engine successfully initialized on retry attempt")
-                    } else {
-                        Log.e(TAG, "❌ Agora Engine failed verification even after retry")
-                    }
-                }
-                
-                // Store reference in singleton for global access
-                AgoraServiceHolder.setAgoraService(agoraService)
+                // Store reference in new service manager
+                AgoraServiceManager.setAgoraService(agoraService)
+                Log.i(TAG, "✅ Agora service stored in service manager")
             } else {
                 Log.e(TAG, "❌ Failed to initialize Agora Engine during application startup")
             }
@@ -61,15 +49,14 @@ class DuckBuckApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
         
-        // Cleanup Agora engine
-        if (::agoraService.isInitialized) {
-            try {
-                agoraService.destroy()
-                AgoraServiceHolder.clear()
-                Log.i(TAG, "🧹 Cleaned up Agora Engine on application terminate")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to clean up Agora Engine", e)
-            }
+        Log.i(TAG, "🧹 Application terminating - cleaning up Agora Engine")
+        
+        // Cleanup using new service manager
+        try {
+            AgoraServiceManager.destroyAndClear()
+            Log.i(TAG, "🧹 Cleaned up Agora Engine on application terminate")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clean up Agora Engine", e)
         }
     }
 }

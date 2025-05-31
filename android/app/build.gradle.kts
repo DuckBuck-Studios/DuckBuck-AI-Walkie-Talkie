@@ -73,8 +73,7 @@ android {
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("custom_debug")
-            // Add proguard rules for debug builds to fix Google API Manager error
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            // ProGuard files removed - will be configured later for production
             isMinifyEnabled = false
             isShrinkResources = false
             isDebuggable = true
@@ -89,11 +88,7 @@ android {
             // Enable obfuscation and code shrinking for release builds
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), 
-                "proguard-rules.pro",
-                "security-rules.pro"
-            )
+            // ProGuard files removed - will be configured later for production
             
             // Disable debugging for release builds
             isDebuggable = false
