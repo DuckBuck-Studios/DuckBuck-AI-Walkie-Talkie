@@ -19,7 +19,8 @@ object FcmDataHandler {
         val uid: Int,
         val channelId: String,
         val callName: String,
-        val callerPhoto: String?
+        val callerPhoto: String?,
+        val timestamp: Long
     )
     
     /**
@@ -43,11 +44,18 @@ object FcmDataHandler {
             val agoraChannelId = data["agora_channelid"]
             val callName = data["call_name"]
             val callerPhoto = data["caller_photo"]
+            val timestamp = data["timestamp"]?.toLongOrNull()
             
             // Validate required fields
             if (agoraToken.isNullOrBlank() || agoraUid == null || 
-                agoraChannelId.isNullOrBlank() || callName.isNullOrBlank()) {
+                agoraChannelId.isNullOrBlank() || callName.isNullOrBlank() || timestamp == null) {
                 Log.w(TAG, "Missing required call data fields")
+                return null
+            }
+            
+            // 🕐 TIMESTAMP VALIDATION: Check if message is fresh (within 15 seconds)
+            if (!isMessageFresh(timestamp)) {
+                Log.w(TAG, "🕐 FCM message too old, rejecting stale walkie-talkie invitation")
                 return null
             }
             
@@ -56,7 +64,8 @@ object FcmDataHandler {
                 uid = agoraUid,
                 channelId = agoraChannelId,
                 callName = callName,
-                callerPhoto = callerPhoto?.takeIf { it.isNotBlank() }
+                callerPhoto = callerPhoto?.takeIf { it.isNotBlank() },
+                timestamp = timestamp
             )
             
             Log.i(TAG, "✅ Extracted valid call data: Channel=${callData.channelId}, Caller=${callData.callName}")
@@ -94,8 +103,9 @@ object FcmDataHandler {
             val hasAgoraUid = data.containsKey("agora_uid") && data["agora_uid"]?.toIntOrNull() != null
             val hasChannelId = data.containsKey("agora_channelid") && !data["agora_channelid"].isNullOrBlank()
             val hasCallName = data.containsKey("call_name") && !data["call_name"].isNullOrBlank()
+            val hasTimestamp = data.containsKey("timestamp") && data["timestamp"]?.toLongOrNull() != null
             
-            val isValidCall = hasAgoraToken && hasAgoraUid && hasChannelId && hasCallName
+            val isValidCall = hasAgoraToken && hasAgoraUid && hasChannelId && hasCallName && hasTimestamp
             
             if (isValidCall) {
                 Log.d(TAG, "✅ Valid call message detected")
@@ -112,6 +122,32 @@ object FcmDataHandler {
     }
     
     /**
+     * Check if FCM message is fresh (within 15 seconds)
+     * @param messageTimestamp Unix timestamp in seconds from FCM message
+     * @return true if message is fresh, false if stale
+     */
+    private fun isMessageFresh(messageTimestamp: Long): Boolean {
+        try {
+            val currentTime = System.currentTimeMillis() / 1000 // Convert to seconds
+            val messageAge = currentTime - messageTimestamp
+            
+            Log.d(TAG, "🕐 Message timestamp: $messageTimestamp, Current: $currentTime, Age: ${messageAge}s")
+            
+            return if (messageAge <= 15) {
+                Log.i(TAG, "✅ Message is fresh (${messageAge}s old) - proceeding")
+                true
+            } else {
+                Log.w(TAG, "❌ Message is stale (${messageAge}s old) - rejecting to prevent empty channel join")
+                false
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error validating message timestamp", e)
+            return false // Treat as stale if can't validate
+        }
+    }
+    
+    /**
      * Log call data for debugging purposes
      * @param callData The call data to log
      */
@@ -121,6 +157,7 @@ object FcmDataHandler {
         Log.i(TAG, "Speaker: ${callData.callName}")
         Log.i(TAG, "UID: ${callData.uid}")
         Log.i(TAG, "Has Photo: ${callData.callerPhoto != null}")
+        Log.i(TAG, "Timestamp: ${callData.timestamp}")
         Log.i(TAG, "================")
     }
 }

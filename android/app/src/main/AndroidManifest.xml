@@ -106,12 +106,11 @@
             </intent-filter>
         </service>
         
-        <!-- Persistent Walkie-Talkie Service (maintains connection in background) -->
+        <!-- Walkie-Talkie Service (starts only when FCM received, stops when all leave) -->
         <service
             android:name=".services.WalkieTalkieService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone"
             android:stopWithTask="false" />
     </application>
     <!-- Required to query activities that can process text, see:

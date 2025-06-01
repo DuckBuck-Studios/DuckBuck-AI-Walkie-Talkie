@@ -1,18 +1,11 @@
 package com.duckbuck.app.services
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.duckbuck.app.MainActivity
 import com.duckbuck.app.agora.AgoraCallManager
 import com.duckbuck.app.agora.AgoraService
 import com.duckbuck.app.callstate.CallStatePersistenceManager
@@ -26,14 +19,12 @@ import com.duckbuck.app.notifications.CallNotificationManager
  * 2. Prevents Android from killing the app during active walkie-talkie sessions
  * 3. Maintains wake lock for reliable connectivity
  * 4. Provides ongoing notification showing walkie-talkie status
+ * 5. Shows notifications when OTHER users speak (not self)
  */
 class WalkieTalkieService : Service() {
     
     companion object {
         private const val TAG = "WalkieTalkieService"
-        private const val FOREGROUND_SERVICE_ID = 2001
-        private const val CHANNEL_ID = "walkie_talkie_persistent_service"
-        private const val NOTIFICATION_ID = 1002
         
         // Intent extras
         private const val EXTRA_ACTION = "action"
@@ -41,22 +32,14 @@ class WalkieTalkieService : Service() {
         private const val EXTRA_CHANNEL_NAME = "channel_name"
         private const val EXTRA_TOKEN = "token"
         private const val EXTRA_UID = "uid"
+        private const val EXTRA_USERNAME = "username"
+        private const val EXTRA_SPEAKER_UID = "speaker_uid"
+        private const val EXTRA_SPEAKER_USERNAME = "speaker_username"
         
         // Actions
-        private const val ACTION_START_SERVICE = "start_service"
         private const val ACTION_JOIN_CHANNEL = "join_channel"
         private const val ACTION_LEAVE_CHANNEL = "leave_channel"
         private const val ACTION_STOP_SERVICE = "stop_service"
-        
-        /**
-         * Start the persistent walkie-talkie service
-         */
-        fun startService(context: Context) {
-            val intent = Intent(context, WalkieTalkieService::class.java).apply {
-                putExtra(EXTRA_ACTION, ACTION_START_SERVICE)
-            }
-            context.startForegroundService(intent)
-        }
         
         /**
          * Join a walkie-talkie channel through the service
@@ -66,7 +49,8 @@ class WalkieTalkieService : Service() {
             channelId: String,
             channelName: String,
             token: String,
-            uid: Int
+            uid: Int,
+            username: String? = null
         ) {
             val intent = Intent(context, WalkieTalkieService::class.java).apply {
                 putExtra(EXTRA_ACTION, ACTION_JOIN_CHANNEL)
@@ -74,8 +58,21 @@ class WalkieTalkieService : Service() {
                 putExtra(EXTRA_CHANNEL_NAME, channelName)
                 putExtra(EXTRA_TOKEN, token)
                 putExtra(EXTRA_UID, uid)
+                putExtra(EXTRA_USERNAME, username)
             }
-            context.startForegroundService(intent)
+            context.startService(intent)
+        }
+        
+        /**
+         * Store speaker info for leave notifications (called from FCM)
+         */
+        fun storeSpeakerInfo(context: Context, speakerUid: Int, speakerUsername: String) {
+            val intent = Intent(context, WalkieTalkieService::class.java).apply {
+                putExtra(EXTRA_ACTION, "store_speaker")
+                putExtra(EXTRA_SPEAKER_UID, speakerUid)
+                putExtra(EXTRA_SPEAKER_USERNAME, speakerUsername)
+            }
+            context.startService(intent)
         }
         
         /**
@@ -100,8 +97,7 @@ class WalkieTalkieService : Service() {
     }
     
     // Service components
-    private lateinit var notificationManager: NotificationManager
-    private lateinit var callNotificationManager: CallNotificationManager
+    private lateinit var notificationManager: CallNotificationManager
     private lateinit var callStatePersistence: CallStatePersistenceManager
     private lateinit var agoraCallManager: AgoraCallManager
     private var wakeLock: PowerManager.WakeLock? = null
@@ -111,12 +107,20 @@ class WalkieTalkieService : Service() {
     private var currentChannelName: String? = null
     private var isChannelActive = false
     
+    // UID-to-Username mapping for walkie-talkie participants
+    private val uidToUsernameMap = mutableMapOf<Int, String>()
+    private var myUid: Int = 0
+    private var myUsername: String? = null
+    
+    // Track the most recent speaker from FCM (for leave notifications)
+    private var lastSpeakerUid: Int = 0
+    private var lastSpeakerUsername: String? = null
+    
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "🚀 WalkieTalkie Service starting up...")
         
         initializeComponents()
-        createNotificationChannel()
         acquireWakeLock()
     }
     
@@ -125,31 +129,45 @@ class WalkieTalkieService : Service() {
         
         val action = intent?.getStringExtra(EXTRA_ACTION)
         
-        // CRITICAL: Start foreground service immediately for any action that uses startForegroundService()
-        // This prevents the ForegroundServiceDidNotStartInTimeException
+        // Start as background service (no foreground notification)
         when (action) {
-            ACTION_START_SERVICE, ACTION_JOIN_CHANNEL, null -> {
-                // These actions are called via startForegroundService(), so we must call startForeground() immediately
-                startForegroundService()
+            ACTION_JOIN_CHANNEL -> {
+                Log.i(TAG, "🎯 Starting walkie-talkie service silently")
             }
         }
         
-        // Then handle the specific action
+        // Handle the specific action
         when (action) {
-            ACTION_START_SERVICE -> {
-                // Already started foreground service above
-                Log.i(TAG, "✅ Walkie-talkie service started and ready")
-            }
             ACTION_JOIN_CHANNEL -> {
                 val channelId = intent.getStringExtra(EXTRA_CHANNEL_ID)
                 val channelName = intent.getStringExtra(EXTRA_CHANNEL_NAME)
                 val token = intent.getStringExtra(EXTRA_TOKEN)
-                val uid = intent.getIntExtra(EXTRA_UID, 0)
+                val uid = intent.getIntExtra(EXTRA_UID, 0)  
+                val username = intent.getStringExtra(EXTRA_USERNAME)
+                val speakerUid = intent.getIntExtra(EXTRA_SPEAKER_UID, 0)
+                val speakerUsername = intent.getStringExtra(EXTRA_SPEAKER_USERNAME)
                 
                 if (channelId != null && channelName != null && token != null && uid != 0) {
-                    joinWalkieTalkieChannel(channelId, channelName, token, uid)
+                    // Store speaker info for leave notifications
+                    if (speakerUid != 0 && speakerUsername != null) {
+                        lastSpeakerUid = speakerUid
+                        lastSpeakerUsername = speakerUsername
+                        Log.i(TAG, "📻 Stored speaker info: $speakerUsername (UID: $speakerUid)")
+                    }
+                    
+                    joinWalkieTalkieChannel(channelId, channelName, token, uid, username)
                 } else {
                     Log.e(TAG, "❌ Invalid channel join parameters")
+                }
+            }
+            "store_speaker" -> {
+                val speakerUid = intent.getIntExtra(EXTRA_SPEAKER_UID, 0)
+                val speakerUsername = intent.getStringExtra(EXTRA_SPEAKER_USERNAME)
+                
+                if (speakerUid != 0 && speakerUsername != null) {
+                    lastSpeakerUid = speakerUid
+                    lastSpeakerUsername = speakerUsername
+                    Log.i(TAG, "📻 Updated speaker info: $speakerUsername (UID: $speakerUid)")
                 }
             }
             ACTION_LEAVE_CHANNEL -> {
@@ -163,22 +181,17 @@ class WalkieTalkieService : Service() {
             }
         }
         
-        // Return START_STICKY to ensure service restarts if killed
         return START_STICKY
     }
     
     override fun onBind(intent: Intent?): IBinder? {
-        // This service doesn't support binding
         return null
     }
     
     override fun onDestroy() {
         Log.i(TAG, "🛑 WalkieTalkie Service shutting down...")
         
-        // Leave any active channel
         leaveCurrentChannel()
-        
-        // Release wake lock
         releaseWakeLock()
         
         super.onDestroy()
@@ -189,8 +202,7 @@ class WalkieTalkieService : Service() {
      */
     private fun initializeComponents() {
         try {
-            notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            callNotificationManager = CallNotificationManager(this)
+            notificationManager = CallNotificationManager(this)
             callStatePersistence = CallStatePersistenceManager(this)
             agoraCallManager = AgoraCallManager(this)
             
@@ -201,33 +213,23 @@ class WalkieTalkieService : Service() {
     }
     
     /**
-     * Start the foreground service with persistent notification
-     */
-    private fun startForegroundService() {
-        try {
-            val notification = createServiceNotification(
-                title = "📻 Walkie-Talkie Ready",
-                content = "Ready to receive walkie-talkie calls"
-            )
-            
-            startForeground(FOREGROUND_SERVICE_ID, notification)
-            Log.i(TAG, "✅ Foreground service started")
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error starting foreground service", e)
-        }
-    }
-    
-    /**
      * Join a walkie-talkie channel
      */
-    private fun joinWalkieTalkieChannel(channelId: String, channelName: String, token: String, uid: Int) {
+    private fun joinWalkieTalkieChannel(channelId: String, channelName: String, token: String, uid: Int, username: String?) {
         try {
-            Log.i(TAG, "📻 Joining walkie-talkie channel: $channelName")
+            Log.i(TAG, "📻 Joining walkie-talkie channel: $channelName (uid: $uid, username: $username)")
             
             // Leave any existing channel first
             if (isChannelActive) {
                 leaveCurrentChannel()
+            }
+            
+            // Store my own UID and username
+            myUid = uid
+            myUsername = username
+            if (username != null) {
+                uidToUsernameMap[uid] = username
+                Log.i(TAG, "✅ Stored username mapping: $uid -> $username")
             }
             
             // Join the new channel
@@ -235,22 +237,13 @@ class WalkieTalkieService : Service() {
                 token = token,
                 uid = uid,
                 channelId = channelId,
-                eventListener = createServiceEventListener(channelId, channelName)
+                eventListener = createServiceEventListener(channelId)
             )
             
             if (joined) {
                 currentChannelId = channelId
                 currentChannelName = channelName
                 isChannelActive = true
-                
-                // Update service notification
-                updateServiceNotification(
-                    title = "📻 Connected to $channelName",
-                    content = "Walkie-talkie active • Tap to open app"
-                )
-                
-                // Show channel joined notification
-                callNotificationManager.showChannelJoinedNotification(channelName, "You")
                 
                 // Persist the state
                 callStatePersistence.markCallAsJoined(channelId)
@@ -276,11 +269,6 @@ class WalkieTalkieService : Service() {
                 // Leave Agora channel
                 agoraCallManager.leaveCall("Walkie-talkie channel disconnection")
                 
-                // Show disconnection notification
-                currentChannelName?.let { channelName ->
-                    callNotificationManager.showDisconnectionNotification(channelName)
-                }
-                
                 // Clear state
                 callStatePersistence.clearCallData()
                 
@@ -289,13 +277,18 @@ class WalkieTalkieService : Service() {
                 currentChannelName = null
                 isChannelActive = false
                 
-                // Update service notification
-                updateServiceNotification(
-                    title = "📻 Walkie-Talkie Ready",
-                    content = "Ready to receive walkie-talkie calls"
-                )
+                // Clear username mappings
+                uidToUsernameMap.clear()
+                myUid = 0
+                myUsername = null
                 
-                Log.i(TAG, "✅ Left walkie-talkie channel")
+                // Clear speaker info
+                lastSpeakerUid = 0
+                lastSpeakerUsername = null
+                
+                // Stop the service completely instead of showing "Ready" notification
+                Log.i(TAG, "✅ Left walkie-talkie channel - stopping service")
+                stopSelf()
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error leaving walkie-talkie channel", e)
@@ -303,12 +296,19 @@ class WalkieTalkieService : Service() {
     }
     
     /**
+     * Get username for a given UID, with fallback to "User [UID]"
+     */
+    private fun getUsernameForUid(uid: Int): String {
+        return uidToUsernameMap[uid] ?: "User $uid"
+    }
+    
+    /**
      * Create event listener for service-managed walkie-talkie events
      */
-    private fun createServiceEventListener(channelId: String, channelName: String): AgoraService.AgoraEventListener {
+    private fun createServiceEventListener(channelId: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
-                Log.i(TAG, "✅ Service: Walkie-talkie channel joined: $channel")
+                Log.i(TAG, "✅ Service: Walkie-talkie channel joined: $channel (uid: $uid)")
                 callStatePersistence.markCallAsJoined(channelId)
             }
             
@@ -321,42 +321,60 @@ class WalkieTalkieService : Service() {
                 isChannelActive = false
                 
                 callStatePersistence.clearCallData()
-                callNotificationManager.showDisconnectionNotification(channelName)
                 
-                // Update service notification
-                updateServiceNotification(
-                    title = "📻 Walkie-Talkie Ready",
-                    content = "Ready to receive walkie-talkie calls"
-                )
+                // Clear username mappings
+                uidToUsernameMap.clear()
+                myUid = 0
+                myUsername = null
+                
+                // Stop the service completely
+                Log.i(TAG, "🛑 Left channel - stopping service")
+                stopSelf()
             }
             
             override fun onUserJoined(uid: Int, elapsed: Int) {
                 Log.i(TAG, "👤 Service: User joined walkie-talkie: $uid")
+                // Note: We don't have username info for users who join later
+                // This would need to be provided via a separate mechanism
             }
             
             override fun onUserOffline(uid: Int, reason: Int) {
-                Log.i(TAG, "👋 Service: User left walkie-talkie: $uid")
+                Log.i(TAG, "👋 Service: User left walkie-talkie: $uid (lastSpeakerUid: $lastSpeakerUid)")
+                
+                // Only show disconnection notification for OTHER users (not self)
+                if (uid != myUid) {
+                    // Clear any existing speaking notification first
+                    notificationManager.clearSpeakingNotification()
+                    Log.i(TAG, "🧹 Cleared speaking notification before showing leave notification")
+                    
+                    // In walkie-talkie mode, prioritize the last speaker's username
+                    // since FCM and Agora UIDs might differ but usually only one person speaks
+                    val username = if (lastSpeakerUsername != null) {
+                        val speakerName = lastSpeakerUsername!!
+                        Log.i(TAG, "📻 Using stored speaker name: $speakerName for leaving user $uid")
+                        speakerName
+                    } else {
+                        val fallbackName = getUsernameForUid(uid)
+                        Log.i(TAG, "📻 Using fallback name: $fallbackName for leaving user $uid")
+                        fallbackName
+                    }
+                    
+                    notificationManager.showDisconnectionNotification(username)
+                    Log.i(TAG, "📢 Showing disconnection notification for: $username")
+                    
+                    // Clear speaker info after showing the leave notification
+                    lastSpeakerUid = 0
+                    lastSpeakerUsername = null
+                    Log.i(TAG, "🧹 Cleared speaker info after user left")
+                }
+                
+                // Remove from username mapping
+                uidToUsernameMap.remove(uid)
             }
             
             override fun onMicrophoneToggled(isMuted: Boolean) {
-                Log.d(TAG, "🎤 Service: Walkie-talkie mic toggled: $isMuted")
-                
-                // Update speaking notifications
-                if (!isMuted && currentChannelName != null) {
-                    callNotificationManager.showSpeakingNotification("You", currentChannelName!!)
-                    
-                    // Update service notification to show speaking
-                    updateServiceNotification(
-                        title = "🗣️ Speaking in $currentChannelName",
-                        content = "You are currently speaking • Tap to open app"
-                    )
-                } else if (currentChannelName != null) {
-                    // Update service notification back to connected
-                    updateServiceNotification(
-                        title = "📻 Connected to $currentChannelName",
-                        content = "Walkie-talkie active • Tap to open app"
-                    )
-                }
+                Log.d(TAG, "🎤 Service: Walkie-talkie mic toggled: $isMuted (my UID: $myUid)")
+                // Service notification updates removed - only showing speaking/over notifications
             }
             
             override fun onVideoToggled(isEnabled: Boolean) {
@@ -370,79 +388,20 @@ class WalkieTalkieService : Service() {
             override fun onAllUsersLeft() {
                 Log.i(TAG, "👥 Service: All users left walkie-talkie")
                 
-                if (currentChannelName != null) {
-                    callNotificationManager.showDisconnectionNotification(currentChannelName!!)
-                }
-                
-                // Keep service running and ready for next call
-                updateServiceNotification(
-                    title = "📻 Walkie-Talkie Ready",
-                    content = "Ready to receive walkie-talkie calls"
-                )
+                // Stop the service when everyone leaves
+                Log.i(TAG, "🛑 All users left - stopping service")
+                stopSelf()
             }
             
             override fun onChannelEmpty() {
                 Log.i(TAG, "🏠 Service: Walkie-talkie channel empty")
             }
-        }
-    }
-    
-    /**
-     * Create notification channel for the service
-     */
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Walkie-Talkie Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Persistent walkie-talkie connection service"
-                enableVibration(false)
-                setShowBadge(false)
-                setSound(null, null)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
             
-            notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "✅ Service notification channel created")
-        }
-    }
-    
-    /**
-     * Create service notification
-     */
-    private fun createServiceNotification(title: String, content: String): Notification {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(content)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setOngoing(true)
-            .setShowWhen(false)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
-    }
-    
-    /**
-     * Update the service notification
-     */
-    private fun updateServiceNotification(title: String, content: String) {
-        try {
-            val notification = createServiceNotification(title, content)
-            notificationManager.notify(FOREGROUND_SERVICE_ID, notification)
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error updating service notification", e)
+            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
+                // Speaking notifications are handled immediately in FCM orchestrator
+                // This is just for logging/debugging Agora events
+                Log.d(TAG, "🎤 Service: Agora detected user $uid speaking: $isSpeaking (volume: $volume)")
+            }
         }
     }
     

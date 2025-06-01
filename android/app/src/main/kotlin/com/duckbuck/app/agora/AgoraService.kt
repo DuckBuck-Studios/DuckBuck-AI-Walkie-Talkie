@@ -8,6 +8,7 @@ import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
 import io.agora.rtc2.video.VideoCanvas
+import io.agora.rtc2.IRtcEngineEventHandler.AudioVolumeInfo
 
 class AgoraService(private val context: Context) {
     
@@ -89,6 +90,25 @@ class AgoraService(private val context: Context) {
             val errorMessage = getErrorMessage(err)
             eventListener?.onError(err, errorMessage)
         }
+        
+        override fun onAudioVolumeIndication(speakers: Array<AudioVolumeInfo>?, totalVolume: Int) {
+            super.onAudioVolumeIndication(speakers, totalVolume)
+            
+            speakers?.forEach { audioInfo ->
+                val uid = audioInfo.uid
+                val volume = audioInfo.volume
+                val vad = audioInfo.vad // Voice Activity Detection
+                
+                // Only process remote users (not ourselves) and only when actively speaking
+                if (uid != 0 && uid != myUid && volume > 0 && vad > 0) {
+                    Log.d(TAG, "🎤 User $uid is speaking (volume: $volume, vad: $vad)")
+                    eventListener?.onUserSpeaking(uid, volume, true)
+                } else if (uid != 0 && uid != myUid && (volume == 0 || vad == 0)) {
+                    // User stopped speaking
+                    eventListener?.onUserSpeaking(uid, volume, false)
+                }
+            }
+        }
     }
     
     /**
@@ -143,6 +163,11 @@ class AgoraService(private val context: Context) {
                 rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
                 rtcEngine?.enableVideo()
                 rtcEngine?.enableAudio()
+                
+                // Enable audio volume indication for speaking detection
+                // Interval: 200ms, smooth: 3 (smooth the volume), reportVad: true (voice activity detection)
+                rtcEngine?.enableAudioVolumeIndication(200, 3, true)
+                Log.d(TAG, "Audio volume indication enabled for speaking detection")
                 
                 // Set audio profile for better call quality
                 rtcEngine?.setAudioProfile(
@@ -588,5 +613,6 @@ class AgoraService(private val context: Context) {
         fun onError(errorCode: Int, errorMessage: String)
         fun onAllUsersLeft() {}
         fun onChannelEmpty() {}
+        fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {}
     }
 }

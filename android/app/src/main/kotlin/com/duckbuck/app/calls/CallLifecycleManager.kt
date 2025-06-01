@@ -222,6 +222,11 @@ class CallLifecycleManager(private val context: Context) {
             override fun onChannelEmpty() {
                 Log.i(TAG, "🏠 Channel empty")
             }
+            
+            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
+                Log.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume) in regular call")
+                // Regular calls don't need speaking notifications like walkie-talkie
+            }
         }
     }
     
@@ -283,12 +288,6 @@ class CallLifecycleManager(private val context: Context) {
                 // 3. Mark as successfully joined
                 callStatePersistence.markCallAsJoined(channelData.channelId)
                 
-                // 4. Show join notification (works in all app states)
-                notificationManager.showChannelJoinedNotification(
-                    channelName = channelData.callName,
-                    userName = "You"
-                )
-                
                 Log.i(TAG, "✅ Successfully joined walkie-talkie channel: ${channelData.channelId}")
                 return true
             } else {
@@ -305,7 +304,7 @@ class CallLifecycleManager(private val context: Context) {
     /**
      * Create event listener for walkie-talkie lifecycle events
      */
-    private fun createWalkieTalkieEventListener(channelId: String, channelName: String): AgoraService.AgoraEventListener {
+    private fun createWalkieTalkieEventListener(channelId: String, @Suppress("UNUSED_PARAMETER") channelName: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
                 Log.i(TAG, "✅ Walkie-talkie channel joined: $channel")
@@ -315,8 +314,7 @@ class CallLifecycleManager(private val context: Context) {
             
             override fun onLeaveChannel() {
                 Log.i(TAG, "📻 Left walkie-talkie channel: $channelId")
-                // Show disconnection notification
-                notificationManager.showDisconnectionNotification(channelName)
+                // Don't show disconnection notification for self leaving
                 // Clean up state
                 callStatePersistence.clearCallData()
             }
@@ -331,12 +329,8 @@ class CallLifecycleManager(private val context: Context) {
             
             override fun onMicrophoneToggled(isMuted: Boolean) {
                 Log.d(TAG, "🎤 Walkie-talkie mic toggled: $isMuted")
-                // Show speaking notification when mic is enabled
-                if (!isMuted) {
-                    notificationManager.showSpeakingNotification("You", channelName)
-                } else {
-                    notificationManager.clearWalkieTalkieNotifications()
-                }
+                // Don't show speaking notifications for self
+                // These should be handled by other users receiving the audio events
             }
             
             override fun onVideoToggled(isEnabled: Boolean) {
@@ -349,12 +343,18 @@ class CallLifecycleManager(private val context: Context) {
             
             override fun onAllUsersLeft() {
                 Log.i(TAG, "👥 All users left walkie-talkie")
-                notificationManager.showDisconnectionNotification(channelName)
+                // Don't show notification when all users leave
                 callStatePersistence.clearCallData()
             }
             
             override fun onChannelEmpty() {
                 Log.i(TAG, "🏠 Walkie-talkie channel empty")
+            }
+            
+            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
+                Log.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume)")
+                // CallLifecycleManager doesn't handle notifications - that's done by WalkieTalkieService
+                // Just log for debugging purposes
             }
         }
     }

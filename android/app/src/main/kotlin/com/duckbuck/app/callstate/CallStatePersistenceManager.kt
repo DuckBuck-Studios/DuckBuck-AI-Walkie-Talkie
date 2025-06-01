@@ -142,7 +142,8 @@ class CallStatePersistenceManager(context: Context) {
                     uid = uid,
                     channelId = channelId,
                     callName = callName,
-                    callerPhoto = callPrefs.getString(PREF_CALLER_PHOTO, null)
+                    callerPhoto = callPrefs.getString(PREF_CALLER_PHOTO, null),
+                    timestamp = System.currentTimeMillis() / 1000 // Default to current time for legacy data
                 )
             } else {
                 null

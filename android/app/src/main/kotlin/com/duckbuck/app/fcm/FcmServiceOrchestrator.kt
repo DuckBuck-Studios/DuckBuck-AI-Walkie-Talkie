@@ -31,8 +31,8 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
         // Initialize managers
         initializeManagers()
         
-        // Start persistent walkie-talkie service
-        startWalkieTalkieService()
+        // Don't start walkie-talkie service automatically
+        // It will be started only when FCM message is received
     }
     
     /**
@@ -44,18 +44,6 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
             Log.i(TAG, "✅ All high-level managers initialized successfully")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error initializing managers", e)
-        }
-    }
-    
-    /**
-     * Start the persistent walkie-talkie service
-     */
-    private fun startWalkieTalkieService() {
-        try {
-            WalkieTalkieService.startService(this)
-            Log.i(TAG, "✅ Walkie-talkie service started")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error starting walkie-talkie service", e)
         }
     }
     
@@ -100,23 +88,37 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
     }
     
     /**
-     * Handle walkie-talkie channel message - Always auto-connect using persistent service
+     * Handle walkie-talkie channel message - Show speaking notification immediately
      */
     private fun handleWalkieTalkieMessage(callData: FcmDataHandler.CallData) {
         try {
-            Log.i(TAG, "📻 Auto-connecting to walkie-talkie channel via service: ${callData.callName}")
+            val speakerName = callData.callName
+            Log.i(TAG, "📻 FCM received: $speakerName is speaking in walkie-talkie")
             
-            // Use the persistent walkie-talkie service to join the channel
-            // This ensures the connection persists even if app is backgrounded
+            // 1. IMMEDIATELY show speaking notification when FCM arrives
+            val notificationManager = com.duckbuck.app.notifications.CallNotificationManager(this)
+            notificationManager.showSpeakingNotification(speakerName)
+            Log.i(TAG, "📢 IMMEDIATE notification shown: $speakerName is speaking")
+            
+            // 2. Store speaker info for proper leave notifications
+            WalkieTalkieService.storeSpeakerInfo(
+                context = this,
+                speakerUid = callData.uid,
+                speakerUsername = callData.callName
+            )
+            
+            // 3. Join/maintain the walkie-talkie channel to keep call active
+            // This ensures the connection persists and we can detect when user leaves
             WalkieTalkieService.joinChannel(
                 context = this,
                 channelId = callData.channelId,
                 channelName = callData.callName,
                 token = callData.token,
-                uid = callData.uid
+                uid = callData.uid,
+                username = callData.callName  // Pass username for leave notifications
             )
             
-            Log.i(TAG, "✅ Walkie-talkie channel join initiated via service")
+            Log.i(TAG, "✅ Walkie-talkie channel joined to maintain active connection")
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling walkie-talkie message", e)
