@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../auth/auth_service_interface.dart';
 import '../service_locator.dart';
 import '../logger/logger_service.dart';
+import '../call/agora_token_service.dart';
 
 /// Exception thrown when API operations fail
 class ApiException implements Exception {
@@ -407,6 +408,61 @@ class ApiService {
     }
   }
 
+  /// Send data-only push notification to a user (for call invitations)
+  /// Fire-and-forget method - doesn't throw exceptions, just logs results
+  Future<bool> sendDataOnlyNotification({
+    required String uid,
+    required String type,
+    required String agoraUid,
+    required String agoraChannelId,
+    required String callName,
+    required String callerPhoto,
+  }) async {
+    try {
+      // Get the Firebase ID token for authentication
+      final idToken = await _getValidToken();
+      
+      if (idToken == null) {
+        _logger.e(_tag, 'Failed to get Firebase ID token for sending data-only notification');
+        return false;
+      }
+      
+      final response = await _dio.post(
+        '/api/users/send-data-only',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'x-api-key': _apiKey,
+          },
+        ),
+        data: {
+          'uid': uid,
+          'data': {
+            'type': type,
+            'agora_uid': agoraUid,
+            'agora_channelid': agoraChannelId,
+            'call_name': callName,
+            'caller_photo': callerPhoto,
+          },
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        _logger.i(_tag, 'Data-only notification sent successfully to user: $uid');
+        return true;
+      } else {
+        _logger.w(_tag, 'Failed to send data-only notification. Status: ${response.statusCode}');
+        return false;
+      }
+    } on DioException catch (e) {
+      _logger.e(_tag, 'Dio error sending data-only notification: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_tag, 'Error sending data-only notification: $e');
+      return false;
+    }
+  }
+
   /// Delete user account from backend systems
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   Future<bool> deleteUser({
@@ -454,6 +510,101 @@ class ApiService {
       throw ApiException(
         'Failed to delete user account: $e',
         errorCode: 'DELETE_ERROR',
+        originalError: e,
+      );
+    }
+  }
+  
+  /// Generate Agora token from backend
+  /// BLOCKING method - throws exceptions on failure to ensure proper error handling
+  Future<AgoraTokenResponse> generateAgoraToken({
+    required int uid,
+    required String channelId,
+    required String callerPhoto,
+    required String callName,
+    required String firebaseToken,
+  }) async {
+    try {
+      // Check circuit breaker first
+      if (_isCircuitBreakerOpen) {
+        _logger.e(_tag, 'Circuit breaker is open - rejecting Agora token request');
+        throw const ApiException(
+          'Service temporarily unavailable due to circuit breaker',
+          statusCode: 503,
+          errorCode: 'CIRCUIT_BREAKER_OPEN',
+        );
+      }
+
+      // Handle rate limiting
+      await _handleRateLimit();
+
+      _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid');
+
+      final response = await _dio.post(
+        '/api/agora/generate-token',
+        data: {
+          'uid': uid,
+          'channelId': channelId,
+          'callerPhoto': callerPhoto,
+          'callName': callName,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $firebaseToken',
+            'X-API-Key': _apiKey,
+          },
+        ),
+      );
+
+      _onRequestSuccess();
+
+      if (response.statusCode == 200 && response.data != null) {
+        _logger.i(_tag, 'Successfully generated Agora token for channel: $channelId');
+        return AgoraTokenResponse.fromJson(response.data);
+      } else {
+        _logger.e(_tag, 'Invalid response from Agora token endpoint: ${response.statusCode}');
+        throw ApiException(
+          'Invalid response from token generation service',
+          statusCode: response.statusCode,
+          errorCode: 'INVALID_RESPONSE',
+        );
+      }
+    } on DioException catch (e) {
+      _onRequestFailure();
+      _logger.e(_tag, 'DioException generating Agora token: ${e.message}');
+      
+      if (e.response?.statusCode == 401) {
+        throw const ApiException(
+          'Authentication failed - invalid Firebase token',
+          statusCode: 401,
+          errorCode: 'AUTH_FAILED',
+        );
+      } else if (e.response?.statusCode == 403) {
+        throw const ApiException(
+          'Access forbidden - invalid API key',
+          statusCode: 403,
+          errorCode: 'ACCESS_FORBIDDEN',
+        );
+      } else if (e.response?.statusCode == 400) {
+        throw ApiException(
+          'Bad request - invalid parameters: ${e.response?.data?['message'] ?? 'Unknown error'}',
+          statusCode: 400,
+          errorCode: 'BAD_REQUEST',
+        );
+      } else {
+        throw ApiException(
+          'Failed to generate Agora token: ${e.message}',
+          statusCode: e.response?.statusCode,
+          errorCode: 'NETWORK_ERROR',
+          originalError: e,
+        );
+      }
+    } catch (e) {
+      _onRequestFailure();
+      _logger.e(_tag, 'Unexpected error generating Agora token: $e');
+      throw ApiException(
+        'Unexpected error during token generation: ${e.toString()}',
+        errorCode: 'UNEXPECTED_ERROR',
         originalError: e,
       );
     }

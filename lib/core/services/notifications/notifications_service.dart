@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../firebase/firebase_database_service.dart';
 import '../logger/logger_service.dart';
 import '../api/api_service.dart';
+import '../../repositories/user_repository.dart';
+import '../service_locator.dart';
 
 /// Service for handling push notifications and FCM tokens
 ///
@@ -219,9 +221,56 @@ class NotificationsService {
     }
   }
 
+  /// Send data-only push notification to a user (for call invitations)
+  /// Fire-and-forget method - doesn't throw exceptions, just logs results
+  /// Automatically fetches current user's displayName and photoURL from cached auth data
+  Future<bool> sendDataOnlyNotification({
+    required String uid,
+    required String type,
+    required String agoraUid,
+    required String agoraChannelId,
+  }) async {
+    try {
+      _logger.i(_tag, 'Sending data-only notification to user: $uid');
+      
+      // Get current user's name and photo from cached auth data
+      final userRepository = serviceLocator<UserRepository>();
+      final currentUser = await userRepository.getCurrentUserWithCache();
+      
+      if (currentUser == null) {
+        _logger.e(_tag, 'Cannot send data-only notification: No current user found');
+        return false;
+      }
+      
+      final callName = currentUser.displayName ?? 'Unknown User';
+      final callerPhoto = currentUser.photoURL ?? '';
+      
+      _logger.d(_tag, 'Using caller data - Name: $callName, Photo: ${callerPhoto.isNotEmpty ? "present" : "not present"}');
+      
+      final success = await _apiService.sendDataOnlyNotification(
+        uid: uid,
+        type: type,
+        agoraUid: agoraUid,
+        agoraChannelId: agoraChannelId,
+        callName: callName,
+        callerPhoto: callerPhoto,
+      );
+      
+      if (success) {
+        _logger.i(_tag, 'Data-only notification sent successfully to user: $uid');
+      } else {
+        _logger.w(_tag, 'Failed to send data-only notification to user: $uid');
+      }
+      
+      return success;
+    } catch (e) {
+      _logger.e(_tag, 'Error sending data-only notification: $e');
+      return false;
+    }
+  }
+
   /// Helper to get the current platform name
-  String _getPlatformName() {
-    if (kIsWeb) return 'web';
+  String _getPlatformName() { 
     if (defaultTargetPlatform == TargetPlatform.android) return 'android';
     if (defaultTargetPlatform == TargetPlatform.iOS) return 'ios'; 
     return 'unknown';

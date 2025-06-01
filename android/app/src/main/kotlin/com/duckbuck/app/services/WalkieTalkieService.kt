@@ -9,6 +9,8 @@ import android.util.Log
 import com.duckbuck.app.agora.AgoraCallManager
 import com.duckbuck.app.agora.AgoraService
 import com.duckbuck.app.callstate.CallStatePersistenceManager
+import com.duckbuck.app.core.AgoraServiceManager
+import com.duckbuck.app.core.CallUITrigger
 import com.duckbuck.app.notifications.CallNotificationManager
 
 /**
@@ -310,10 +312,23 @@ class WalkieTalkieService : Service() {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
                 Log.i(TAG, "✅ Service: Walkie-talkie channel joined: $channel (uid: $uid)")
                 callStatePersistence.markCallAsJoined(channelId)
+                
+                // Trigger call UI for walkie-talkie calls with actual mute state
+                val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"
+                
+                // Get the actual mute state from AgoraService
+                val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
+                
+                CallUITrigger.showCallUI(callerName, null, isMuted)
+                Log.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (muted: $isMuted)")
             }
             
             override fun onLeaveChannel() {
                 Log.i(TAG, "📻 Service: Left walkie-talkie channel: $channelId")
+                
+                // Dismiss call UI when leaving channel
+                CallUITrigger.dismissCallUI()
+                Log.i(TAG, "🎯 Dismissed call UI for walkie-talkie leave")
                 
                 // Auto-cleanup state
                 currentChannelId = null

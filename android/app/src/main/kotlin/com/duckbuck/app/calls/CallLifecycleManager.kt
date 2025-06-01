@@ -5,8 +5,10 @@ import android.util.Log
 import com.duckbuck.app.agora.AgoraCallManager
 import com.duckbuck.app.agora.AgoraService
 import com.duckbuck.app.callstate.CallStatePersistenceManager
-import com.duckbuck.app.notifications.CallNotificationManager
+import com.duckbuck.app.core.AgoraServiceManager
+import com.duckbuck.app.core.CallUITrigger
 import com.duckbuck.app.fcm.FcmDataHandler.CallData
+import com.duckbuck.app.notifications.CallNotificationManager
 
 /**
  * Call Lifecycle Manager - Coordinates call operations across all modules
@@ -174,11 +176,15 @@ class CallLifecycleManager(private val context: Context) {
     /**
      * Create event listener for call lifecycle events
      */
-    private fun createCallEventListener(channelId: String, @Suppress("UNUSED_PARAMETER") callName: String): AgoraService.AgoraEventListener {
+    private fun createCallEventListener(channelId: String, callName: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
                 Log.i(TAG, "✅ Call joined successfully: $channel")
                 callStatePersistence.markCallAsJoined(channelId)
+                
+                // Trigger call UI for regular calls with actual mute state
+                val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
+                CallUITrigger.showCallUI(callName, null, isMuted)
                 
                 // Legacy call flow - no active call notification
                 Log.i(TAG, "⚠️  Legacy call event - consider using walkie-talkie flow")
@@ -186,6 +192,10 @@ class CallLifecycleManager(private val context: Context) {
             
             override fun onLeaveChannel() {
                 Log.i(TAG, "📴 Left call: $channelId")
+                
+                // Dismiss call UI
+                CallUITrigger.dismissCallUI()
+                
                 // Full cleanup on leave
                 callStatePersistence.clearCallData()
                 notificationManager.clearWalkieTalkieNotifications()
@@ -304,16 +314,25 @@ class CallLifecycleManager(private val context: Context) {
     /**
      * Create event listener for walkie-talkie lifecycle events
      */
-    private fun createWalkieTalkieEventListener(channelId: String, @Suppress("UNUSED_PARAMETER") channelName: String): AgoraService.AgoraEventListener {
+    private fun createWalkieTalkieEventListener(channelId: String, channelName: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
                 Log.i(TAG, "✅ Walkie-talkie channel joined: $channel")
                 callStatePersistence.markCallAsJoined(channelId)
+                
+                // Trigger call UI for walkie-talkie calls with actual mute state
+                val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
+                CallUITrigger.showCallUI(channelName, null, isMuted)
+                
                 // No notification on join for walkie-talkie
             }
             
             override fun onLeaveChannel() {
                 Log.i(TAG, "📻 Left walkie-talkie channel: $channelId")
+                
+                // Dismiss call UI
+                CallUITrigger.dismissCallUI()
+                
                 // Don't show disconnection notification for self leaving
                 // Clean up state
                 callStatePersistence.clearCallData()

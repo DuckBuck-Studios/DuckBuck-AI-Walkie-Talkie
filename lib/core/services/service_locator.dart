@@ -21,6 +21,7 @@ import '../repositories/relationship_repository.dart';
 import 'logger/logger_service.dart';
 import 'relationship/relationship_service_interface.dart';
 import 'relationship/relationship_service.dart';
+import 'call/agora_token_service.dart';
 
 
 /// Global service locator instance
@@ -149,4 +150,12 @@ Future<void> setupServiceLocator() async {
     () => FCMService(),
   );
    
+  // Register Agora token service
+  serviceLocator.registerLazySingleton<AgoraTokenService>(
+    () => AgoraTokenService(
+      apiService: serviceLocator<ApiService>(),
+      authService: serviceLocator<AuthServiceInterface>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
 }

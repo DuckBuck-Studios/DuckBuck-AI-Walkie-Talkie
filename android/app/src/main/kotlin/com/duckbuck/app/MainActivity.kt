@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.util.Log
 import com.duckbuck.app.core.AgoraEngineInitializer
 import com.duckbuck.app.core.AgoraServiceManager
+import com.duckbuck.app.core.AgoraMethodChannelHandler
+import com.duckbuck.app.core.CallUITrigger
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -11,8 +13,15 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
     
-    // Channel name for Flutter-Native communication
+    // Channel names for Flutter-Native communication
     private val AGORA_CHANNEL = "com.duckbuck.app/agora_channel"
+    private val CALL_UI_CHANNEL = "com.duckbuck.app/call"
+    
+    // Method channel handler for Agora operations
+    private val agoraMethodChannelHandler = AgoraMethodChannelHandler()
+    
+    // Call UI method channel for triggering Flutter call UI
+    private var callUIMethodChannel: MethodChannel? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,14 +35,14 @@ class MainActivity : FlutterActivity() {
         
         // Set up method channel for Flutter to communicate with native Agora service
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AGORA_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "initializeAgoraEngine" -> {
-                    val success = initializeAgoraService()
-                    result.success(success)
-                }
-                else -> result.notImplemented()
-            }
+            agoraMethodChannelHandler.handleMethodCall(call, result)
         }
+        
+        // Set up call UI method channel for triggering Flutter call UI
+        callUIMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_UI_CHANNEL)
+        
+        // Set the static reference for other components to trigger call UI
+        CallUITrigger.setMethodChannel(callUIMethodChannel)
     }
     
     private fun initializeAgoraService(): Boolean {

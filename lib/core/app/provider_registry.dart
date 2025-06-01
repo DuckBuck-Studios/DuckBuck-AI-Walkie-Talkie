@@ -5,6 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart';
 import '../../features/friends/providers/friends_provider.dart';
+import '../../features/call/providers/call_provider.dart';
 
 /// Manages the app's providers in a centralized location
 ///
@@ -37,6 +38,11 @@ class ProviderRegistry {
       // Friends provider
       ChangeNotifierProvider<FriendsProvider>(
         create: (_) => FriendsProvider(),
+      ),
+      
+      // Call provider for handling call UI state
+      ChangeNotifierProvider<CallProvider>(
+        create: (_) => CallProvider(),
       ),
       
       // Add more app-wide providers here as needed

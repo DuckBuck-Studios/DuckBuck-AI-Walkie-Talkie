@@ -11,6 +11,7 @@ import 'core/services/auth/auth_security_manager.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
 import 'core/services/logger/logger_service.dart';
 import 'core/services/service_locator.dart';
+import 'features/call/widgets/call_overlay.dart';
 
 /// Main entry point for the application
 void main() async {
@@ -103,7 +104,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // This makes it easier to add/remove providers and ensures consistency
       providers: ProviderRegistry.getProviders(),
       child: MaterialApp(
-        title: 'DuckBuck - Updated',
+        title: 'DuckBuck',
         theme: AppTheme.blackTheme,
         darkTheme: AppTheme.blackTheme,
         themeMode: ThemeMode.system, // Uses system theme preference
@@ -111,6 +112,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         navigatorKey: AppRoutes.navigatorKey,
         initialRoute: _determineInitialRoute(),
         onGenerateRoute: AppRoutes.generateRoute,
+        builder: (context, child) {
+          return CallOverlay(
+            child: child ?? const SizedBox(),
+          );
+        },
       ),
     );
   }
