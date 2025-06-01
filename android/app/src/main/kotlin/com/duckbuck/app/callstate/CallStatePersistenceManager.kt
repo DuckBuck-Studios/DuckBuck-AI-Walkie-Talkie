@@ -155,11 +155,24 @@ class CallStatePersistenceManager(context: Context) {
     }
     
     /**
-     * Check if currently in an active call
+     * Check if currently in an active call with validation
      */
     fun isInActiveCall(): Boolean {
         return try {
-            callPrefs.getBoolean(PREF_IS_IN_CALL, false)
+            val isInCall = callPrefs.getBoolean(PREF_IS_IN_CALL, false)
+            val callState = getCurrentCallState()
+            
+            // Additional validation: ensure we have actual call data if marked as active
+            if (isInCall && callState == CallState.ACTIVE) {
+                val callData = getCurrentCallData()
+                if (callData == null) {
+                    Log.w(TAG, "⚠️ Marked as active call but no call data found - cleaning up")
+                    clearCallData()
+                    return false
+                }
+            }
+            
+            isInCall && callState == CallState.ACTIVE
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error checking active call state", e)
             false

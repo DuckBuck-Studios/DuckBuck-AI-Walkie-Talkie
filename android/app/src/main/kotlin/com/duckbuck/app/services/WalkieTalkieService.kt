@@ -226,6 +226,18 @@ class WalkieTalkieService : Service() {
                 leaveCurrentChannel()
             }
             
+            // CRITICAL: Save call data first before joining (for killed state UI recovery)
+            val callData = com.duckbuck.app.fcm.FcmDataHandler.CallData(
+                token = token,
+                uid = uid,
+                channelId = channelId,
+                callName = channelName,
+                callerPhoto = null,
+                timestamp = System.currentTimeMillis() / 1000
+            )
+            callStatePersistence.saveIncomingCallData(callData)
+            Log.i(TAG, "💾 Saved call data to SharedPreferences for killed state recovery")
+            
             // Store my own UID and username
             myUid = uid
             myUsername = username
@@ -247,7 +259,7 @@ class WalkieTalkieService : Service() {
                 currentChannelName = channelName
                 isChannelActive = true
                 
-                // Persist the state
+                // Mark as actively joined (after successful connection)
                 callStatePersistence.markCallAsJoined(channelId)
                 
                 Log.i(TAG, "✅ Successfully joined walkie-talkie channel: $channelName")
