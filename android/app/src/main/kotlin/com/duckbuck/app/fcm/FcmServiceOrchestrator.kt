@@ -1,8 +1,8 @@
 package com.duckbuck.app.fcm
 
-import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.duckbuck.app.core.AppLogger
 import com.duckbuck.app.services.WalkieTalkieService
 
 /**
@@ -26,7 +26,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
     
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "🚀 FCM Service Orchestrator starting up...")
+        AppLogger.i(TAG, "🚀 FCM Service Orchestrator starting up...")
         
         // Initialize managers
         initializeManagers()
@@ -41,9 +41,9 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
     private fun initializeManagers() {
         try {
             appStateDetector = FcmAppStateDetector(this)
-            Log.i(TAG, "✅ All high-level managers initialized successfully")
+            AppLogger.i(TAG, "✅ All high-level managers initialized successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error initializing managers", e)
+            AppLogger.e(TAG, "❌ Error initializing managers", e)
         }
     }
     
@@ -55,24 +55,24 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
         super<FirebaseMessagingService>.onMessageReceived(remoteMessage)
         
         try {
-            Log.i(TAG, "📨 FCM message received: ${remoteMessage.messageId}")
+            AppLogger.i(TAG, "📨 FCM message received: ${remoteMessage.messageId}")
             
             // Extract call data from message
             val callData = FcmDataHandler.extractCallData(remoteMessage)
             
             if (callData == null) {
-                Log.w(TAG, "⚠️ Invalid or non-call FCM message received")
+                AppLogger.w(TAG, "⚠️ Invalid or non-call FCM message received")
                 return
             }
             
-            Log.i(TAG, "📻 Processing walkie-talkie channel message: ${callData.callName}")
+            AppLogger.i(TAG, "📻 Processing walkie-talkie channel message: ${callData.callName}")
             
             // For walkie-talkie: Always auto-connect to channel regardless of app state
             // Use the dedicated service for persistent connection
             handleWalkieTalkieMessage(callData)
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error processing FCM message", e)
+            AppLogger.e(TAG, "❌ Error processing FCM message", e)
         }
     }
     
@@ -81,7 +81,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
      */
     override fun onNewToken(token: String) {
         super<FirebaseMessagingService>.onNewToken(token)
-        Log.i(TAG, "🔄 FCM token refreshed: ${token.take(10)}...")
+        AppLogger.i(TAG, "🔄 FCM token refreshed: ${token.take(10)}...")
         
         // TODO: Send token to app server if needed
         // This can be handled by sending the token to Flutter side
@@ -93,12 +93,12 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
     private fun handleWalkieTalkieMessage(callData: FcmDataHandler.CallData) {
         try {
             val speakerName = callData.callName
-            Log.i(TAG, "📻 FCM received: $speakerName is speaking in walkie-talkie")
+            AppLogger.i(TAG, "📻 FCM received: $speakerName is speaking in walkie-talkie")
             
             // 1. IMMEDIATELY show speaking notification when FCM arrives
             val notificationManager = com.duckbuck.app.notifications.CallNotificationManager(this)
             notificationManager.showSpeakingNotification(speakerName)
-            Log.i(TAG, "📢 IMMEDIATE notification shown: $speakerName is speaking")
+            AppLogger.i(TAG, "📢 IMMEDIATE notification shown: $speakerName is speaking")
             
             // 2. Store speaker info for proper leave notifications
             WalkieTalkieService.storeSpeakerInfo(
@@ -118,15 +118,15 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
                 username = callData.callName  // Pass username for leave notifications
             )
             
-            Log.i(TAG, "✅ Walkie-talkie channel joined to maintain active connection")
+            AppLogger.i(TAG, "✅ Walkie-talkie channel joined to maintain active connection")
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error handling walkie-talkie message", e)
+            AppLogger.e(TAG, "❌ Error handling walkie-talkie message", e)
         }
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "🛑 FCM Service Orchestrator shutting down...")
+        AppLogger.i(TAG, "🛑 FCM Service Orchestrator shutting down...")
         super<FirebaseMessagingService>.onDestroy()
     }
 }

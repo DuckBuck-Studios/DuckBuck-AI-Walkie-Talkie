@@ -1,7 +1,7 @@
 package com.duckbuck.app.agora
+import com.duckbuck.app.core.AppLogger
 
 import android.content.Context
-import android.util.Log
 import com.duckbuck.app.core.AgoraServiceManager
 import com.duckbuck.app.core.AgoraEngineInitializer
 
@@ -30,19 +30,19 @@ class AgoraCallManager(private val context: Context) {
         eventListener: AgoraService.AgoraEventListener? = null
     ): Boolean {
         try {
-            Log.i(TAG, "🔗 OPTIMIZED JOIN: Joining channel: $channelId with UID: $uid")
+            AppLogger.i(TAG, "🔗 OPTIMIZED JOIN: Joining channel: $channelId with UID: $uid")
             
             // Get or create Agora service
             val agoraService = getOrCreateAgoraService(eventListener)
             
             if (agoraService == null) {
-                Log.e(TAG, "❌ OPTIMIZED JOIN: Failed to obtain AgoraService instance")
+                AppLogger.e(TAG, "❌ OPTIMIZED JOIN: Failed to obtain AgoraService instance")
                 return false
             }
             
             // Ensure RTC engine is initialized
             if (!ensureEngineInitialized(agoraService)) {
-                Log.e(TAG, "❌ OPTIMIZED JOIN: RTC Engine not properly initialized")
+                AppLogger.e(TAG, "❌ OPTIMIZED JOIN: RTC Engine not properly initialized")
                 return false
             }
             
@@ -53,15 +53,15 @@ class AgoraCallManager(private val context: Context) {
             val joinResult = agoraService.joinChannel(channelId, token, uid)
             
             if (joinResult) {
-                Log.i(TAG, "✅ OPTIMIZED JOIN: Successfully joined channel: $channelId (UID: $uid)")
+                AppLogger.i(TAG, "✅ OPTIMIZED JOIN: Successfully joined channel: $channelId (UID: $uid)")
                 return true
             } else {
-                Log.e(TAG, "❌ OPTIMIZED JOIN: Failed to join channel: $channelId")
+                AppLogger.e(TAG, "❌ OPTIMIZED JOIN: Failed to join channel: $channelId")
                 return false
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ OPTIMIZED JOIN: Exception during call join", e)
+            AppLogger.e(TAG, "❌ OPTIMIZED JOIN: Exception during call join", e)
             return false
         }
     }
@@ -74,7 +74,7 @@ class AgoraCallManager(private val context: Context) {
         var agoraService = AgoraServiceManager.getValidatedAgoraService()
         
         if (agoraService != null) {
-            Log.i(TAG, "✅ OPTIMIZED JOIN: Using existing validated AgoraService")
+            AppLogger.i(TAG, "✅ OPTIMIZED JOIN: Using existing validated AgoraService")
             val validService = agoraService
             eventListener?.let { validService.setEventListener(it) }
             return validService
@@ -83,22 +83,22 @@ class AgoraCallManager(private val context: Context) {
         // Check if service exists but not initialized
         agoraService = AgoraServiceManager.getAgoraService()
         if (agoraService != null) {
-            Log.w(TAG, "⚠️ OPTIMIZED JOIN: Service exists but not initialized, checking holder")
+            AppLogger.w(TAG, "⚠️ OPTIMIZED JOIN: Service exists but not initialized, checking holder")
         }
         
-        Log.w(TAG, "⚠️ OPTIMIZED JOIN: No valid service found, creating new instance")
+        AppLogger.w(TAG, "⚠️ OPTIMIZED JOIN: No valid service found, creating new instance")
         
         // Create new service using initializer
         val (success, newService) = AgoraEngineInitializer.initializeAgoraService(context)
         
         if (success && newService != null) {
-            Log.i(TAG, "✅ OPTIMIZED JOIN: Created new AgoraService successfully")
+            AppLogger.i(TAG, "✅ OPTIMIZED JOIN: Created new AgoraService successfully")
             eventListener?.let { newService.setEventListener(it) }
             AgoraServiceManager.setAgoraService(newService)
             return newService
         }
         
-        Log.e(TAG, "❌ OPTIMIZED JOIN: Failed to create new AgoraService")
+        AppLogger.e(TAG, "❌ OPTIMIZED JOIN: Failed to create new AgoraService")
         return null
     }
     
@@ -110,12 +110,12 @@ class AgoraCallManager(private val context: Context) {
             return true
         }
         
-        Log.w(TAG, "⚠️ OPTIMIZED JOIN: Engine not initialized, attempting re-initialization")
+        AppLogger.w(TAG, "⚠️ OPTIMIZED JOIN: Engine not initialized, attempting re-initialization")
         
         // Try to re-initialize
         val initResult = agoraService.initializeEngine()
         if (initResult && agoraService.isEngineInitialized()) {
-            Log.i(TAG, "✅ OPTIMIZED JOIN: Engine re-initialized successfully")
+            AppLogger.i(TAG, "✅ OPTIMIZED JOIN: Engine re-initialized successfully")
             
             // Give engine time to fully initialize
             try {
@@ -127,7 +127,7 @@ class AgoraCallManager(private val context: Context) {
             return true
         }
         
-        Log.e(TAG, "❌ OPTIMIZED JOIN: Failed to re-initialize engine")
+        AppLogger.e(TAG, "❌ OPTIMIZED JOIN: Failed to re-initialize engine")
         return false
     }
     
@@ -140,14 +140,14 @@ class AgoraCallManager(private val context: Context) {
         try {
             val agoraService = AgoraServiceManager.getAgoraService()
             if (agoraService != null) {
-                Log.i(TAG, "📱 LEAVE CALL: Leaving channel - $reason")
+                AppLogger.i(TAG, "📱 LEAVE CALL: Leaving channel - $reason")
                 return agoraService.leaveChannel()
             } else {
-                Log.w(TAG, "📱 LEAVE CALL: No AgoraService available for leaving")
+                AppLogger.w(TAG, "📱 LEAVE CALL: No AgoraService available for leaving")
                 return true // Consider it successful if no service exists
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ LEAVE CALL: Exception during leave", e)
+            AppLogger.e(TAG, "❌ LEAVE CALL: Exception during leave", e)
             return false
         }
     }

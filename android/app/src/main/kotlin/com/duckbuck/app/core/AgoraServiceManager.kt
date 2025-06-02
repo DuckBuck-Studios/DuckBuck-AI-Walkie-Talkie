@@ -1,6 +1,6 @@
 package com.duckbuck.app.core
+import com.duckbuck.app.core.AppLogger
 
-import android.util.Log
 import com.duckbuck.app.agora.AgoraService
 
 /**
@@ -23,7 +23,7 @@ object AgoraServiceManager {
     fun setAgoraService(service: AgoraService) {
         synchronized(lock) {
             agoraService = service
-            Log.d(TAG, "AgoraService instance set in manager")
+            AppLogger.d(TAG, "AgoraService instance set in manager")
         }
     }
     
@@ -50,7 +50,7 @@ object AgoraServiceManager {
                 service
             } else {
                 if (service != null && !service.isEngineInitialized()) {
-                    Log.w(TAG, "AgoraService exists but engine is not initialized")
+                    AppLogger.w(TAG, "AgoraService exists but engine is not initialized")
                 }
                 null
             }
@@ -76,7 +76,7 @@ object AgoraServiceManager {
     fun clear() {
         synchronized(lock) {
             agoraService = null
-            Log.d(TAG, "AgoraService instance cleared from manager")
+            AppLogger.d(TAG, "AgoraService instance cleared from manager")
         }
     }
     
@@ -89,12 +89,12 @@ object AgoraServiceManager {
         synchronized(lock) {
             try {
                 agoraService?.destroy()
-                Log.d(TAG, "AgoraService destroyed successfully")
+                AppLogger.d(TAG, "AgoraService destroyed successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Error destroying AgoraService", e)
+                AppLogger.e(TAG, "Error destroying AgoraService", e)
             } finally {
                 agoraService = null
-                Log.d(TAG, "AgoraService instance cleared after destruction")
+                AppLogger.d(TAG, "AgoraService instance cleared after destruction")
             }
         }
     }

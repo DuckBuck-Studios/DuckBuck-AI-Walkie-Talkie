@@ -88,7 +88,12 @@ android {
             // Enable obfuscation and code shrinking for release builds
             isMinifyEnabled = true
             isShrinkResources = true
-            // ProGuard files removed - will be configured later for production
+            
+            // Add ProGuard rules for production optimization
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             
             // Disable debugging for release builds
             isDebuggable = false

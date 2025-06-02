@@ -1,4 +1,5 @@
 package com.duckbuck.app.notifications
+import com.duckbuck.app.core.AppLogger
 
 import android.app.NotificationChannel
 import android.app.NotificationManager as AndroidNotificationManager
@@ -9,7 +10,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.duckbuck.app.MainActivity
 import java.net.URL
@@ -64,7 +64,7 @@ class CallNotificationManager(private val context: Context) {
      */
     fun showSpeakingNotification(speakerName: String) {
         try {
-            Log.i(TAG, "📢 $speakerName is speaking")
+            AppLogger.i(TAG, "📢 $speakerName is speaking")
             
             val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
                 .setContentTitle("📢 $speakerName is speaking")
@@ -80,7 +80,7 @@ class CallNotificationManager(private val context: Context) {
             notificationManager?.notify(SPEAKING_NOTIFICATION_ID, notification)
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error showing speaking notification", e)
+            AppLogger.e(TAG, "❌ Error showing speaking notification", e)
         }
     }
     
@@ -89,7 +89,7 @@ class CallNotificationManager(private val context: Context) {
      */
     fun showDisconnectionNotification(userName: String = "You") {
         try {
-            Log.i(TAG, "📻 $userName over")
+            AppLogger.i(TAG, "📻 $userName over")
             
             val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
                 .setContentTitle("📻 $userName over")
@@ -103,7 +103,7 @@ class CallNotificationManager(private val context: Context) {
             notificationManager?.notify(DISCONNECTION_NOTIFICATION_ID, notification)
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error showing disconnection notification", e)
+            AppLogger.e(TAG, "❌ Error showing disconnection notification", e)
         }
     }
     
@@ -113,9 +113,9 @@ class CallNotificationManager(private val context: Context) {
     fun clearSpeakingNotification() {
         try {
             notificationManager?.cancel(SPEAKING_NOTIFICATION_ID)
-            Log.i(TAG, "✅ Speaking notification cleared")
+            AppLogger.i(TAG, "✅ Speaking notification cleared")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error clearing speaking notification", e)
+            AppLogger.e(TAG, "❌ Error clearing speaking notification", e)
         }
     }
     
@@ -126,9 +126,9 @@ class CallNotificationManager(private val context: Context) {
         try {
             notificationManager?.cancel(SPEAKING_NOTIFICATION_ID)
             notificationManager?.cancel(DISCONNECTION_NOTIFICATION_ID)
-            Log.i(TAG, "✅ Walkie-talkie notifications cleared")
+            AppLogger.i(TAG, "✅ Walkie-talkie notifications cleared")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error clearing notifications", e)
+            AppLogger.e(TAG, "❌ Error clearing notifications", e)
         }
     }
 }

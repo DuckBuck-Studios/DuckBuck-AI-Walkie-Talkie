@@ -1,7 +1,7 @@
 package com.duckbuck.app.calls
+import com.duckbuck.app.core.AppLogger
 
 import android.content.Context
-import android.util.Log
 import com.duckbuck.app.agora.AgoraCallManager
 import com.duckbuck.app.agora.AgoraService
 import com.duckbuck.app.callstate.CallStatePersistenceManager
@@ -39,13 +39,13 @@ class CallLifecycleManager(private val context: Context) {
         shouldAutoJoin: Boolean = false
     ): Boolean {
         try {
-            Log.i(TAG, "📞 Handling incoming call: ${callData.callName}")
+            AppLogger.i(TAG, "📞 Handling incoming call: ${callData.callName}")
             
             // 1. Persist the incoming call
             callStatePersistence.saveIncomingCallData(callData)
             
             // 2. For traditional calls, no auto-notification (use walkie-talkie flow instead)
-            Log.i(TAG, "⚠️  Legacy call flow - consider using walkie-talkie flow instead")
+            AppLogger.i(TAG, "⚠️  Legacy call flow - consider using walkie-talkie flow instead")
             
             // 3. Auto-join if requested (for foreground scenarios)
             if (shouldAutoJoin) {
@@ -55,7 +55,7 @@ class CallLifecycleManager(private val context: Context) {
             return true
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error handling incoming call", e)
+            AppLogger.e(TAG, "❌ Error handling incoming call", e)
             return false
         }
     }
@@ -65,7 +65,7 @@ class CallLifecycleManager(private val context: Context) {
      */
     fun joinCall(callData: CallData): Boolean {
         try {
-            Log.i(TAG, "🔗 Joining call: ${callData.channelId}")
+            AppLogger.i(TAG, "🔗 Joining call: ${callData.channelId}")
             
             // 1. Mark as joining
             callStatePersistence.markCallAsJoining(callData.channelId)
@@ -83,17 +83,17 @@ class CallLifecycleManager(private val context: Context) {
                 callStatePersistence.markCallAsJoined(callData.channelId)
                 
                 // 4. Legacy call flow - no active call notification
-                Log.i(TAG, "⚠️  Legacy call joined - consider using walkie-talkie flow")
+                AppLogger.i(TAG, "⚠️  Legacy call joined - consider using walkie-talkie flow")
                 
-                Log.i(TAG, "✅ Successfully joined call: ${callData.channelId}")
+                AppLogger.i(TAG, "✅ Successfully joined call: ${callData.channelId}")
                 return true
             } else {
-                Log.e(TAG, "❌ Failed to join call: ${callData.channelId}")
+                AppLogger.e(TAG, "❌ Failed to join call: ${callData.channelId}")
                 return false
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error joining call", e)
+            AppLogger.e(TAG, "❌ Error joining call", e)
             return false
         }
     }
@@ -105,11 +105,11 @@ class CallLifecycleManager(private val context: Context) {
         try {
             val currentCall = callStatePersistence.getCurrentCallData()
             if (currentCall == null) {
-                Log.w(TAG, "⚠️ No active call to end")
+                AppLogger.w(TAG, "⚠️ No active call to end")
                 return false
             }
             
-            Log.i(TAG, "📴 Ending call: ${currentCall.channelId}")
+            AppLogger.i(TAG, "📴 Ending call: ${currentCall.channelId}")
             
             // 1. Mark as ending
             callStatePersistence.markCallAsEnding(currentCall.channelId)
@@ -120,7 +120,7 @@ class CallLifecycleManager(private val context: Context) {
             return true
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error ending call", e)
+            AppLogger.e(TAG, "❌ Error ending call", e)
             return false
         }
     }
@@ -149,13 +149,13 @@ class CallLifecycleManager(private val context: Context) {
         return try {
             if (callStatePersistence.hasPendingCall()) {
                 val callData = callStatePersistence.getCurrentCallData()
-                Log.i(TAG, "📱 Found pending call: ${callData?.channelId}")
+                AppLogger.i(TAG, "📱 Found pending call: ${callData?.channelId}")
                 callData
             } else {
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking for pending calls", e)
+            AppLogger.e(TAG, "❌ Error checking for pending calls", e)
             null
         }
     }
@@ -165,11 +165,11 @@ class CallLifecycleManager(private val context: Context) {
      */
     fun clearAllCallData() {
         try {
-            Log.i(TAG, "🧹 Clearing all call data")
+            AppLogger.i(TAG, "🧹 Clearing all call data")
             callStatePersistence.clearCallData()
             notificationManager.clearWalkieTalkieNotifications()
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error clearing call data", e)
+            AppLogger.e(TAG, "❌ Error clearing call data", e)
         }
     }
     
@@ -179,7 +179,7 @@ class CallLifecycleManager(private val context: Context) {
     private fun createCallEventListener(channelId: String, callName: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
-                Log.i(TAG, "✅ Call joined successfully: $channel")
+                AppLogger.i(TAG, "✅ Call joined successfully: $channel")
                 callStatePersistence.markCallAsJoined(channelId)
                 
                 // Trigger call UI for regular calls with actual mute state
@@ -187,11 +187,11 @@ class CallLifecycleManager(private val context: Context) {
                 CallUITrigger.showCallUI(callName, null, isMuted)
                 
                 // Legacy call flow - no active call notification
-                Log.i(TAG, "⚠️  Legacy call event - consider using walkie-talkie flow")
+                AppLogger.i(TAG, "⚠️  Legacy call event - consider using walkie-talkie flow")
             }
             
             override fun onLeaveChannel() {
-                Log.i(TAG, "📴 Left call: $channelId")
+                AppLogger.i(TAG, "📴 Left call: $channelId")
                 
                 // Dismiss call UI
                 CallUITrigger.dismissCallUI()
@@ -202,27 +202,27 @@ class CallLifecycleManager(private val context: Context) {
             }
             
             override fun onUserJoined(uid: Int, elapsed: Int) {
-                Log.i(TAG, "👤 User joined: $uid")
+                AppLogger.i(TAG, "👤 User joined: $uid")
             }
             
             override fun onUserOffline(uid: Int, reason: Int) {
-                Log.i(TAG, "👋 User left: $uid")
+                AppLogger.i(TAG, "👋 User left: $uid")
             }
             
             override fun onMicrophoneToggled(isMuted: Boolean) {
-                Log.d(TAG, "🎤 Mic toggled: $isMuted")
+                AppLogger.d(TAG, "🎤 Mic toggled: $isMuted")
             }
             
             override fun onVideoToggled(isEnabled: Boolean) {
-                Log.d(TAG, "📹 Video toggled: $isEnabled")
+                AppLogger.d(TAG, "📹 Video toggled: $isEnabled")
             }
             
             override fun onError(errorCode: Int, errorMessage: String) {
-                Log.e(TAG, "❌ Call error: $errorCode - $errorMessage")
+                AppLogger.e(TAG, "❌ Call error: $errorCode - $errorMessage")
             }
             
             override fun onAllUsersLeft() {
-                Log.i(TAG, "👥 All users left - ending call")
+                AppLogger.i(TAG, "👥 All users left - ending call")
                 callStatePersistence.markCallAsEnding(channelId)
                 // Clear after brief delay
                 callStatePersistence.clearCallData()
@@ -230,11 +230,11 @@ class CallLifecycleManager(private val context: Context) {
             }
             
             override fun onChannelEmpty() {
-                Log.i(TAG, "🏠 Channel empty")
+                AppLogger.i(TAG, "🏠 Channel empty")
             }
             
             override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
-                Log.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume) in regular call")
+                AppLogger.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume) in regular call")
                 // Regular calls don't need speaking notifications like walkie-talkie
             }
         }
@@ -258,7 +258,7 @@ class CallLifecycleManager(private val context: Context) {
         shouldAutoJoin: Boolean = true
     ): Boolean {
         try {
-            Log.i(TAG, "📻 Handling walkie-talkie channel: ${channelData.callName}")
+            AppLogger.i(TAG, "📻 Handling walkie-talkie channel: ${channelData.callName}")
             
             // 1. Persist the channel data
             callStatePersistence.saveIncomingCallData(channelData)
@@ -271,7 +271,7 @@ class CallLifecycleManager(private val context: Context) {
             return true
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error handling walkie-talkie channel", e)
+            AppLogger.e(TAG, "❌ Error handling walkie-talkie channel", e)
             return false
         }
     }
@@ -281,7 +281,7 @@ class CallLifecycleManager(private val context: Context) {
      */
     fun joinWalkieTalkieChannel(channelData: CallData): Boolean {
         try {
-            Log.i(TAG, "📻 Auto-joining walkie-talkie channel: ${channelData.channelId}")
+            AppLogger.i(TAG, "📻 Auto-joining walkie-talkie channel: ${channelData.channelId}")
             
             // 1. Mark as joining
             callStatePersistence.markCallAsJoining(channelData.channelId)
@@ -298,15 +298,15 @@ class CallLifecycleManager(private val context: Context) {
                 // 3. Mark as successfully joined
                 callStatePersistence.markCallAsJoined(channelData.channelId)
                 
-                Log.i(TAG, "✅ Successfully joined walkie-talkie channel: ${channelData.channelId}")
+                AppLogger.i(TAG, "✅ Successfully joined walkie-talkie channel: ${channelData.channelId}")
                 return true
             } else {
-                Log.e(TAG, "❌ Failed to join walkie-talkie channel: ${channelData.channelId}")
+                AppLogger.e(TAG, "❌ Failed to join walkie-talkie channel: ${channelData.channelId}")
                 return false
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error joining walkie-talkie channel", e)
+            AppLogger.e(TAG, "❌ Error joining walkie-talkie channel", e)
             return false
         }
     }
@@ -317,7 +317,7 @@ class CallLifecycleManager(private val context: Context) {
     private fun createWalkieTalkieEventListener(channelId: String, channelName: String): AgoraService.AgoraEventListener {
         return object : AgoraService.AgoraEventListener {
             override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
-                Log.i(TAG, "✅ Walkie-talkie channel joined: $channel")
+                AppLogger.i(TAG, "✅ Walkie-talkie channel joined: $channel")
                 callStatePersistence.markCallAsJoined(channelId)
                 
                 // Trigger call UI for walkie-talkie calls with actual mute state
@@ -328,7 +328,7 @@ class CallLifecycleManager(private val context: Context) {
             }
             
             override fun onLeaveChannel() {
-                Log.i(TAG, "📻 Left walkie-talkie channel: $channelId")
+                AppLogger.i(TAG, "📻 Left walkie-talkie channel: $channelId")
                 
                 // Dismiss call UI
                 CallUITrigger.dismissCallUI()
@@ -339,39 +339,39 @@ class CallLifecycleManager(private val context: Context) {
             }
             
             override fun onUserJoined(uid: Int, elapsed: Int) {
-                Log.i(TAG, "👤 User joined walkie-talkie: $uid")
+                AppLogger.i(TAG, "👤 User joined walkie-talkie: $uid")
             }
             
             override fun onUserOffline(uid: Int, reason: Int) {
-                Log.i(TAG, "👋 User left walkie-talkie: $uid")
+                AppLogger.i(TAG, "👋 User left walkie-talkie: $uid")
             }
             
             override fun onMicrophoneToggled(isMuted: Boolean) {
-                Log.d(TAG, "🎤 Walkie-talkie mic toggled: $isMuted")
+                AppLogger.d(TAG, "🎤 Walkie-talkie mic toggled: $isMuted")
                 // Don't show speaking notifications for self
                 // These should be handled by other users receiving the audio events
             }
             
             override fun onVideoToggled(isEnabled: Boolean) {
-                Log.d(TAG, "📹 Video toggled in walkie-talkie: $isEnabled")
+                AppLogger.d(TAG, "📹 Video toggled in walkie-talkie: $isEnabled")
             }
             
             override fun onError(errorCode: Int, errorMessage: String) {
-                Log.e(TAG, "❌ Walkie-talkie error: $errorCode - $errorMessage")
+                AppLogger.e(TAG, "❌ Walkie-talkie error: $errorCode - $errorMessage")
             }
             
             override fun onAllUsersLeft() {
-                Log.i(TAG, "👥 All users left walkie-talkie")
+                AppLogger.i(TAG, "👥 All users left walkie-talkie")
                 // Don't show notification when all users leave
                 callStatePersistence.clearCallData()
             }
             
             override fun onChannelEmpty() {
-                Log.i(TAG, "🏠 Walkie-talkie channel empty")
+                AppLogger.i(TAG, "🏠 Walkie-talkie channel empty")
             }
             
             override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
-                Log.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume)")
+                AppLogger.d(TAG, "🎤 CallLifecycle: User $uid speaking: $isSpeaking (volume: $volume)")
                 // CallLifecycleManager doesn't handle notifications - that's done by WalkieTalkieService
                 // Just log for debugging purposes
             }

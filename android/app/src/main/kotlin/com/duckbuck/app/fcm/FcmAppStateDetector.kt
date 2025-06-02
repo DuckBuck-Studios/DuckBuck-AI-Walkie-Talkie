@@ -2,7 +2,7 @@ package com.duckbuck.app.fcm
 
 import android.app.ActivityManager
 import android.content.Context
-import android.util.Log
+import com.duckbuck.app.core.AppLogger
 
 /**
  * FCM App State Detector responsible for determining current app state
@@ -42,16 +42,16 @@ class FcmAppStateDetector(private val context: Context) {
                         else -> AppState.BACKGROUND
                     }
                     
-                    Log.d(TAG, "App state detected: $appState (importance: ${processInfo.importance})")
+                    AppLogger.d(TAG, "App state detected: $appState (importance: ${processInfo.importance})")
                     return appState
                 }
             }
             
-            Log.d(TAG, "App state detected: KILLED (process not found)")
+            AppLogger.d(TAG, "App state detected: KILLED (process not found)")
             AppState.KILLED
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error detecting app state", e)
+            AppLogger.e(TAG, "❌ Error detecting app state", e)
             // Default to background as safest assumption
             AppState.BACKGROUND
         }

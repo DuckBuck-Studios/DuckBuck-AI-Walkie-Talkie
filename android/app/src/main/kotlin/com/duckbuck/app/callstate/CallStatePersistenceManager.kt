@@ -1,8 +1,8 @@
 package com.duckbuck.app.callstate
+import com.duckbuck.app.core.AppLogger
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import com.duckbuck.app.fcm.FcmDataHandler.CallData
 
 /**
@@ -58,9 +58,9 @@ class CallStatePersistenceManager(context: Context) {
                 apply()
             }
             
-            Log.i(TAG, "✅ Incoming call data saved: ${callData.channelId} from ${callData.callName}")
+            AppLogger.i(TAG, "✅ Incoming call data saved: ${callData.channelId} from ${callData.callName}")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error saving incoming call data", e)
+            AppLogger.e(TAG, "❌ Error saving incoming call data", e)
         }
     }
     
@@ -76,9 +76,9 @@ class CallStatePersistenceManager(context: Context) {
                 apply()
             }
             
-            Log.i(TAG, "✅ Call marked as joined: $channelId")
+            AppLogger.i(TAG, "✅ Call marked as joined: $channelId")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error marking call as joined", e)
+            AppLogger.e(TAG, "❌ Error marking call as joined", e)
         }
     }
     
@@ -92,9 +92,9 @@ class CallStatePersistenceManager(context: Context) {
                 apply()
             }
             
-            Log.i(TAG, "📞 Call marked as joining: $channelId")
+            AppLogger.i(TAG, "📞 Call marked as joining: $channelId")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error marking call as joining", e)
+            AppLogger.e(TAG, "❌ Error marking call as joining", e)
         }
     }
     
@@ -108,9 +108,9 @@ class CallStatePersistenceManager(context: Context) {
                 apply()
             }
             
-            Log.i(TAG, "📴 Call marked as ending: $channelId")
+            AppLogger.i(TAG, "📴 Call marked as ending: $channelId")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error marking call as ending", e)
+            AppLogger.e(TAG, "❌ Error marking call as ending", e)
         }
     }
     
@@ -120,9 +120,9 @@ class CallStatePersistenceManager(context: Context) {
     fun clearCallData() {
         try {
             callPrefs.edit().clear().apply()
-            Log.i(TAG, "✅ All call data cleared")
+            AppLogger.i(TAG, "✅ All call data cleared")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error clearing call data", e)
+            AppLogger.e(TAG, "❌ Error clearing call data", e)
         }
     }
     
@@ -149,7 +149,7 @@ class CallStatePersistenceManager(context: Context) {
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error retrieving call data", e)
+            AppLogger.e(TAG, "❌ Error retrieving call data", e)
             null
         }
     }
@@ -166,7 +166,7 @@ class CallStatePersistenceManager(context: Context) {
             if (isInCall && callState == CallState.ACTIVE) {
                 val callData = getCurrentCallData()
                 if (callData == null) {
-                    Log.w(TAG, "⚠️ Marked as active call but no call data found - cleaning up")
+                    AppLogger.w(TAG, "⚠️ Marked as active call but no call data found - cleaning up")
                     clearCallData()
                     return false
                 }
@@ -174,7 +174,7 @@ class CallStatePersistenceManager(context: Context) {
             
             isInCall && callState == CallState.ACTIVE
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking active call state", e)
+            AppLogger.e(TAG, "❌ Error checking active call state", e)
             false
         }
     }
@@ -187,7 +187,7 @@ class CallStatePersistenceManager(context: Context) {
             val stateString = callPrefs.getString(PREF_CALL_STATE, CallState.ENDED.name)
             CallState.valueOf(stateString ?: CallState.ENDED.name)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error getting call state", e)
+            AppLogger.e(TAG, "❌ Error getting call state", e)
             CallState.ENDED
         }
     }
@@ -200,7 +200,7 @@ class CallStatePersistenceManager(context: Context) {
             val callState = getCurrentCallState()
             callState == CallState.INCOMING || callState == CallState.JOINING
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking pending call", e)
+            AppLogger.e(TAG, "❌ Error checking pending call", e)
             false
         }
     }
@@ -216,7 +216,7 @@ class CallStatePersistenceManager(context: Context) {
             }
             System.currentTimeMillis() - joinTimestamp
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error getting call duration", e)
+            AppLogger.e(TAG, "❌ Error getting call duration", e)
             0L
         }
     }

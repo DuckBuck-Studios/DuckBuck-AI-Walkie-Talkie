@@ -1,7 +1,7 @@
 package com.duckbuck.app.core
+import com.duckbuck.app.core.AppLogger
 
 import android.content.Context
-import android.util.Log
 import com.duckbuck.app.agora.AgoraService
 
 /**
@@ -24,7 +24,7 @@ object AgoraEngineInitializer {
         try {
             // First check if existing service is valid and initialized
             if (existingService != null && existingService.isEngineInitialized()) {
-                Log.i(TAG, "✅ Using existing initialized Agora Engine")
+                AppLogger.i(TAG, "✅ Using existing initialized Agora Engine")
                 return Pair(true, existingService)
             }
 
@@ -33,24 +33,24 @@ object AgoraEngineInitializer {
             val success = agoraService.initializeEngine()
 
             if (success) {
-                Log.i(TAG, "✅ Agora Engine initialized successfully")
+                AppLogger.i(TAG, "✅ Agora Engine initialized successfully")
 
                 // Verify initialization
                 if (agoraService.isEngineInitialized()) {
-                    Log.i(TAG, "✅ Agora Engine verification successful")
+                    AppLogger.i(TAG, "✅ Agora Engine verification successful")
                     return Pair(true, agoraService)
                 } else {
-                    Log.w(TAG, "⚠️ Agora Engine initialization succeeded but verification failed. Retrying...")
+                    AppLogger.w(TAG, "⚠️ Agora Engine initialization succeeded but verification failed. Retrying...")
                     
                     // Retry with cleanup
                     return retryInitialization(context, agoraService)
                 }
             } else {
-                Log.e(TAG, "❌ Failed to initialize Agora Engine")
+                AppLogger.e(TAG, "❌ Failed to initialize Agora Engine")
                 return Pair(false, null)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception initializing Agora Engine", e)
+            AppLogger.e(TAG, "❌ Exception initializing Agora Engine", e)
             return Pair(false, null)
         }
     }
@@ -71,14 +71,14 @@ object AgoraEngineInitializer {
             val retrySuccess = newService.initializeEngine()
 
             if (!retrySuccess || !newService.isEngineInitialized()) {
-                Log.e(TAG, "❌ Agora Engine failed to initialize even after retry")
+                AppLogger.e(TAG, "❌ Agora Engine failed to initialize even after retry")
                 return Pair(false, null)
             }
 
-            Log.i(TAG, "✅ Agora Engine initialized successfully on retry attempt")
+            AppLogger.i(TAG, "✅ Agora Engine initialized successfully on retry attempt")
             return Pair(true, newService)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception during retry initialization", e)
+            AppLogger.e(TAG, "❌ Exception during retry initialization", e)
             return Pair(false, null)
         }
     }

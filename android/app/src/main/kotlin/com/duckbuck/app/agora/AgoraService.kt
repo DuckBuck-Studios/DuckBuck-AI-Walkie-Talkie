@@ -1,7 +1,7 @@
 package com.duckbuck.app.agora
+import com.duckbuck.app.core.AppLogger
 
 import android.content.Context
-import android.util.Log
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -32,7 +32,7 @@ class AgoraService(private val context: Context) {
     private val rtcEventHandler = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
             super.onJoinChannelSuccess(channel, uid, elapsed)
-            Log.d(TAG, "Join channel success: $channel, uid: $uid")
+            AppLogger.d(TAG, "Join channel success: $channel, uid: $uid")
             isJoined = true
             currentChannelName = channel
             myUid = uid
@@ -43,7 +43,7 @@ class AgoraService(private val context: Context) {
         
         override fun onLeaveChannel(stats: RtcStats?) {
             super.onLeaveChannel(stats)
-            Log.d(TAG, "Leave channel")
+            AppLogger.d(TAG, "Leave channel")
             isJoined = false
             currentChannelName = null
             myUid = 0
@@ -54,29 +54,29 @@ class AgoraService(private val context: Context) {
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
             super.onUserJoined(uid, elapsed)
-            Log.d(TAG, "Remote user joined: $uid")
+            AppLogger.d(TAG, "Remote user joined: $uid")
             // Add user to our tracking set
             remoteUsersInChannel.add(uid)
-            Log.d(TAG, "Remote users in channel: ${remoteUsersInChannel.size}")
+            AppLogger.d(TAG, "Remote users in channel: ${remoteUsersInChannel.size}")
             eventListener?.onUserJoined(uid, elapsed)
         }
         
         override fun onUserOffline(uid: Int, reason: Int) {
             super.onUserOffline(uid, reason)
-            Log.d(TAG, "Remote user offline: $uid, reason: $reason")
+            AppLogger.d(TAG, "Remote user offline: $uid, reason: $reason")
             // Remove user from our tracking set
             remoteUsersInChannel.remove(uid)
-            Log.d(TAG, "Remote users in channel after user left: ${remoteUsersInChannel.size}")
+            AppLogger.d(TAG, "Remote users in channel after user left: ${remoteUsersInChannel.size}")
             
             // Notify about this specific user leaving
             eventListener?.onUserOffline(uid, reason)
             
             // Check if channel is now empty (only we are left)
             if (remoteUsersInChannel.isEmpty() && isJoined) {
-                Log.i(TAG, "🏃‍♂️ All other users have left the channel - triggering auto-leave")
+                AppLogger.i(TAG, "🏃‍♂️ All other users have left the channel - triggering auto-leave")
                 // Call force leave directly as a failsafe
                 val autoLeaveResult = forceLeaveChannel()
-                Log.i(TAG, "🚪 Auto-leave result: ${if(autoLeaveResult) "SUCCESS" else "FAILED"}")
+                AppLogger.i(TAG, "🚪 Auto-leave result: ${if(autoLeaveResult) "SUCCESS" else "FAILED"}")
                 
                 // Also notify listeners for additional handling
                 eventListener?.onAllUsersLeft()
@@ -86,7 +86,7 @@ class AgoraService(private val context: Context) {
         
         override fun onError(err: Int) {
             super.onError(err)
-            Log.e(TAG, "Agora error: $err")
+            AppLogger.e(TAG, "Agora error: $err")
             val errorMessage = getErrorMessage(err)
             eventListener?.onError(err, errorMessage)
         }
@@ -101,7 +101,7 @@ class AgoraService(private val context: Context) {
                 
                 // Only process remote users (not ourselves) and only when actively speaking
                 if (uid != 0 && uid != myUid && volume > 0 && vad > 0) {
-                    Log.d(TAG, "🎤 User $uid is speaking (volume: $volume, vad: $vad)")
+                    AppLogger.d(TAG, "🎤 User $uid is speaking (volume: $volume, vad: $vad)")
                     eventListener?.onUserSpeaking(uid, volume, true)
                 } else if (uid != 0 && uid != myUid && (volume == 0 || vad == 0)) {
                     // User stopped speaking
@@ -118,7 +118,7 @@ class AgoraService(private val context: Context) {
         return try {
             // Check if engine already exists and destroy it first
             if (rtcEngine != null) {
-                Log.d(TAG, "Existing RTC Engine found, destroying it before creating new one")
+                AppLogger.d(TAG, "Existing RTC Engine found, destroying it before creating new one")
                 try {
                     if (isJoined) {
                         leaveChannel()
@@ -131,9 +131,9 @@ class AgoraService(private val context: Context) {
                         RtcEngine.destroy()
                         rtcEngine = null
                     }
-                    Log.d(TAG, "Previous RTC Engine destroyed successfully")
+                    AppLogger.d(TAG, "Previous RTC Engine destroyed successfully")
                 } catch (destroyException: Exception) {
-                    Log.w(TAG, "Warning: Failed to properly destroy previous RTC Engine", destroyException)
+                    AppLogger.w(TAG, "Warning: Failed to properly destroy previous RTC Engine", destroyException)
                     // Continue with initialization even if destroy failed
                     rtcEngine = null
                 }
@@ -149,15 +149,15 @@ class AgoraService(private val context: Context) {
                 config.mAreaCode = RtcEngineConfig.AreaCode.AREA_CODE_GLOB
                 
                 // Create engine with better error handling
-                Log.d(TAG, "Creating Agora RTC Engine with config: appId=${APP_ID.substring(0, 4)}...")
+                AppLogger.d(TAG, "Creating Agora RTC Engine with config: appId=${APP_ID.substring(0, 4)}...")
                 rtcEngine = RtcEngine.create(config)
                 
                 if (rtcEngine == null) {
-                    Log.e(TAG, "RTC Engine creation returned null - critical error")
+                    AppLogger.e(TAG, "RTC Engine creation returned null - critical error")
                     return false
                 }
                 
-                Log.d(TAG, "RTC Engine created successfully, applying configuration")
+                AppLogger.d(TAG, "RTC Engine created successfully, applying configuration")
                 
                 // Apply necessary configurations right after creation
                 rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
@@ -167,7 +167,7 @@ class AgoraService(private val context: Context) {
                 // Enable audio volume indication for speaking detection
                 // Interval: 200ms, smooth: 3 (smooth the volume), reportVad: true (voice activity detection)
                 rtcEngine?.enableAudioVolumeIndication(200, 3, true)
-                Log.d(TAG, "Audio volume indication enabled for speaking detection")
+                AppLogger.d(TAG, "Audio volume indication enabled for speaking detection")
                 
                 // Set audio profile for better call quality
                 rtcEngine?.setAudioProfile(
@@ -180,26 +180,26 @@ class AgoraService(private val context: Context) {
                 
                 // Give the engine sufficient time to complete internal initialization
                 // This prevents timing issues where joinChannel is called immediately after creation
-                Log.d(TAG, "Waiting for engine to fully initialize...")
+                AppLogger.d(TAG, "Waiting for engine to fully initialize...")
                 Thread.sleep(300)
                 
                 // Extra validation to confirm initialization succeeded
                 if (rtcEngine == null) {
-                    Log.e(TAG, "Engine is null after initialization delay - something went wrong")
+                    AppLogger.e(TAG, "Engine is null after initialization delay - something went wrong")
                     return false
                 }
             } catch (e: InterruptedException) {
-                Log.w(TAG, "Engine initialization delay interrupted", e)
+                AppLogger.w(TAG, "Engine initialization delay interrupted", e)
                 Thread.currentThread().interrupt()
             } catch (e: Exception) {
-                Log.e(TAG, "Error during post-initialization configuration", e)
+                AppLogger.e(TAG, "Error during post-initialization configuration", e)
                 return false
             }
             
-            Log.d(TAG, "Agora RTC Engine initialized successfully and ready for operations")
+            AppLogger.d(TAG, "Agora RTC Engine initialized successfully and ready for operations")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Agora RTC Engine", e)
+            AppLogger.e(TAG, "Failed to initialize Agora RTC Engine", e)
             false
         }
     }
@@ -209,12 +209,12 @@ class AgoraService(private val context: Context) {
      */
     fun joinChannel(channelName: String, token: String? = null, uid: Int = 0): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
         if (isJoined) {
-            Log.w(TAG, "Already joined a channel. Leave current channel first.")
+            AppLogger.w(TAG, "Already joined a channel. Leave current channel first.")
             return false
         }
         
@@ -231,14 +231,14 @@ class AgoraService(private val context: Context) {
             val result = rtcEngine?.joinChannel(token, channelName, uid, options)
             
             return if (result == 0) {
-                Log.d(TAG, "Joining channel: $channelName")
+                AppLogger.d(TAG, "Joining channel: $channelName")
                 true
             } else {
-                Log.e(TAG, "Failed to join channel. Error code: $result")
+                AppLogger.e(TAG, "Failed to join channel. Error code: $result")
                 false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while joining channel", e)
+            AppLogger.e(TAG, "Exception while joining channel", e)
             return false
         }
     }
@@ -248,12 +248,12 @@ class AgoraService(private val context: Context) {
      */
     fun leaveChannel(): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
         if (!isJoined) {
-            Log.w(TAG, "Not currently in any channel")
+            AppLogger.w(TAG, "Not currently in any channel")
             return false
         }
         
@@ -261,14 +261,14 @@ class AgoraService(private val context: Context) {
             val result = rtcEngine?.leaveChannel()
             
             if (result == 0) {
-                Log.d(TAG, "Leaving channel: $currentChannelName")
+                AppLogger.d(TAG, "Leaving channel: $currentChannelName")
                 true
             } else {
-                Log.e(TAG, "Failed to leave channel. Error code: $result")
+                AppLogger.e(TAG, "Failed to leave channel. Error code: $result")
                 false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while leaving channel", e)
+            AppLogger.e(TAG, "Exception while leaving channel", e)
             false
         }
     }
@@ -278,7 +278,7 @@ class AgoraService(private val context: Context) {
      */
     fun toggleMicrophone(): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
@@ -287,17 +287,17 @@ class AgoraService(private val context: Context) {
             val result = rtcEngine?.muteLocalAudioStream(isMicMuted)
             
             if (result == 0) {
-                Log.d(TAG, "Microphone ${if (isMicMuted) "muted" else "unmuted"}")
+                AppLogger.d(TAG, "Microphone ${if (isMicMuted) "muted" else "unmuted"}")
                 eventListener?.onMicrophoneToggled(isMicMuted)
                 true
             } else {
-                Log.e(TAG, "Failed to toggle microphone. Error code: $result")
+                AppLogger.e(TAG, "Failed to toggle microphone. Error code: $result")
                 // Revert the state if operation failed
                 isMicMuted = !isMicMuted
                 false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while toggling microphone", e)
+            AppLogger.e(TAG, "Exception while toggling microphone", e)
             // Revert the state if operation failed
             isMicMuted = !isMicMuted
             false
@@ -329,7 +329,7 @@ class AgoraService(private val context: Context) {
      */
     fun toggleVideo(): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
@@ -338,17 +338,17 @@ class AgoraService(private val context: Context) {
             val result = rtcEngine?.muteLocalVideoStream(!isVideoEnabled)
             
             if (result == 0) {
-                Log.d(TAG, "Video ${if (isVideoEnabled) "enabled" else "disabled"}")
+                AppLogger.d(TAG, "Video ${if (isVideoEnabled) "enabled" else "disabled"}")
                 eventListener?.onVideoToggled(isVideoEnabled)
                 true
             } else {
-                Log.e(TAG, "Failed to toggle video. Error code: $result")
+                AppLogger.e(TAG, "Failed to toggle video. Error code: $result")
                 // Revert the state if operation failed
                 isVideoEnabled = !isVideoEnabled
                 false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while toggling video", e)
+            AppLogger.e(TAG, "Exception while toggling video", e)
             // Revert the state if operation failed
             isVideoEnabled = !isVideoEnabled
             false
@@ -380,17 +380,17 @@ class AgoraService(private val context: Context) {
      */
     fun setupLocalVideo(view: android.view.SurfaceView): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
         return try {
             val videoCanvas = VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0)
             rtcEngine?.setupLocalVideo(videoCanvas)
-            Log.d(TAG, "Local video setup completed")
+            AppLogger.d(TAG, "Local video setup completed")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while setting up local video", e)
+            AppLogger.e(TAG, "Exception while setting up local video", e)
             false
         }
     }
@@ -400,17 +400,17 @@ class AgoraService(private val context: Context) {
      */
     fun setupRemoteVideo(view: android.view.SurfaceView, uid: Int): Boolean {
         if (rtcEngine == null) {
-            Log.e(TAG, "RTC Engine not initialized")
+            AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
         return try {
             val videoCanvas = VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid)
             rtcEngine?.setupRemoteVideo(videoCanvas)
-            Log.d(TAG, "Remote video setup completed for uid: $uid")
+            AppLogger.d(TAG, "Remote video setup completed for uid: $uid")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while setting up remote video", e)
+            AppLogger.e(TAG, "Exception while setting up remote video", e)
             false
         }
     }
@@ -480,7 +480,7 @@ class AgoraService(private val context: Context) {
             try {
                 // Get RTC Engine state (should not throw exception if properly initialized)
                 val connectionState = rtcEngine?.getConnectionState() ?: -1
-                Log.d(TAG, "RTC Engine connection state: $connectionState")
+                AppLogger.d(TAG, "RTC Engine connection state: $connectionState")
                 
                 // Test parameter setting (safe operation that should not fail)
                 rtcEngine?.setParameters("{\"che.audio.keep_audiosession\": true}")
@@ -488,25 +488,25 @@ class AgoraService(private val context: Context) {
                 // Basic audio control that should work if engine is ready
                 rtcEngine?.setDefaultAudioRoutetoSpeakerphone(true)
                 
-                Log.d(TAG, "✅ RTC Engine is confirmed to be fully initialized and responsive")
+                AppLogger.d(TAG, "✅ RTC Engine is confirmed to be fully initialized and responsive")
                 return true
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Engine verification failed. Engine exists but is not properly initialized: ${e.message}", e)
+                AppLogger.e(TAG, "❌ Engine verification failed. Engine exists but is not properly initialized: ${e.message}", e)
                 
                 // Try to diagnose the specific issue
                 try {
                     if (rtcEngine?.getConnectionState() == Constants.CONNECTION_STATE_DISCONNECTED) {
-                        Log.d(TAG, "Engine is in disconnected state - this is normal before joining a channel")
+                        AppLogger.d(TAG, "Engine is in disconnected state - this is normal before joining a channel")
                     }
                 } catch (e2: Exception) {
-                    Log.e(TAG, "Could not even check connection state - engine is in a bad state", e2)
+                    AppLogger.e(TAG, "Could not even check connection state - engine is in a bad state", e2)
                 }
                 
                 return false
             }
         }
         
-        Log.e(TAG, "❌ RTC Engine is null - not initialized")
+        AppLogger.e(TAG, "❌ RTC Engine is null - not initialized")
         return false
     }
     
@@ -514,12 +514,12 @@ class AgoraService(private val context: Context) {
      * Force leave channel and cleanup (used for auto-leave scenarios)
      */
     fun forceLeaveChannel(): Boolean {
-        Log.i(TAG, "🚪 Force leaving channel due to auto-leave trigger")
+        AppLogger.i(TAG, "🚪 Force leaving channel due to auto-leave trigger")
         
         try {
             // Check if we're already joined to avoid unnecessary operations
             if (!isJoined) {
-                Log.w(TAG, "Not in a channel - no need to force leave")
+                AppLogger.w(TAG, "Not in a channel - no need to force leave")
                 return true
             }
             
@@ -530,12 +530,12 @@ class AgoraService(private val context: Context) {
             val leaveResult = rtcEngine?.leaveChannel() == 0
             
             if (leaveResult) {
-                Log.i(TAG, "✅ Successfully left channel via forceLeaveChannel")
+                AppLogger.i(TAG, "✅ Successfully left channel via forceLeaveChannel")
                 isJoined = false
                 currentChannelName = null
                 myUid = 0
             } else {
-                Log.e(TAG, "❌ Failed to leave channel via forceLeaveChannel")
+                AppLogger.e(TAG, "❌ Failed to leave channel via forceLeaveChannel")
                 // Force the state to be reset even if API call failed
                 isJoined = false
                 currentChannelName = null
@@ -544,7 +544,7 @@ class AgoraService(private val context: Context) {
             
             return leaveResult
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception during forceLeaveChannel", e)
+            AppLogger.e(TAG, "❌ Exception during forceLeaveChannel", e)
             // Force reset state even when exception occurs
             isJoined = false
             currentChannelName = null
@@ -571,9 +571,9 @@ class AgoraService(private val context: Context) {
                 rtcEngine = null
             }
             eventListener = null
-            Log.d(TAG, "Agora RTC Engine destroyed")
+            AppLogger.d(TAG, "Agora RTC Engine destroyed")
         } catch (e: Exception) {
-            Log.e(TAG, "Exception while destroying RTC Engine", e)
+            AppLogger.e(TAG, "Exception while destroying RTC Engine", e)
         }
     }
     

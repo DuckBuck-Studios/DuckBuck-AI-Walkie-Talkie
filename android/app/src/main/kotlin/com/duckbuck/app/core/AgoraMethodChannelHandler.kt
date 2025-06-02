@@ -1,6 +1,6 @@
 package com.duckbuck.app.core
+import com.duckbuck.app.core.AppLogger
 
-import android.util.Log
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -47,7 +47,7 @@ class AgoraMethodChannelHandler {
                 handleGetRemoteUserCount(result)
             }
             else -> {
-                Log.w(TAG, "Method not implemented: ${call.method}")
+                AppLogger.w(TAG, "Method not implemented: ${call.method}")
                 result.notImplemented()
             }
         }
@@ -55,12 +55,12 @@ class AgoraMethodChannelHandler {
     
     private fun handleInitializeEngine(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: initializeAgoraEngine")
+            AppLogger.d(TAG, "Flutter requested: initializeAgoraEngine")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.initializeEngine() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing engine", e)
+            AppLogger.e(TAG, "Error initializing engine", e)
             result.error("INITIALIZATION_ERROR", e.message, null)
         }
     }
@@ -71,7 +71,7 @@ class AgoraMethodChannelHandler {
             val token = call.argument<String?>("token")
             val uid = call.argument<Int>("uid") ?: 0
             
-            Log.d(TAG, "Flutter requested: joinChannel - $channelName")
+            AppLogger.d(TAG, "Flutter requested: joinChannel - $channelName")
             
             if (channelName != null) {
                 val agoraService = AgoraServiceManager.getValidatedAgoraService()
@@ -81,91 +81,91 @@ class AgoraMethodChannelHandler {
                 result.error("INVALID_ARGUMENT", "Channel name is required", null)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error joining channel", e)
+            AppLogger.e(TAG, "Error joining channel", e)
             result.error("JOIN_CHANNEL_ERROR", e.message, null)
         }
     }
     
     private fun handleLeaveChannel(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: leaveChannel")
+            AppLogger.d(TAG, "Flutter requested: leaveChannel")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.leaveChannel() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error leaving channel", e)
+            AppLogger.e(TAG, "Error leaving channel", e)
             result.error("LEAVE_CHANNEL_ERROR", e.message, null)
         }
     }
 
     private fun handleTurnMicrophoneOn(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: turnMicrophoneOn")
+            AppLogger.d(TAG, "Flutter requested: turnMicrophoneOn")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.turnMicrophoneOn() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error turning microphone on", e)
+            AppLogger.e(TAG, "Error turning microphone on", e)
             result.error("MIC_ON_ERROR", e.message, null)
         }
     }
     
     private fun handleTurnMicrophoneOff(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: turnMicrophoneOff")
+            AppLogger.d(TAG, "Flutter requested: turnMicrophoneOff")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.turnMicrophoneOff() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error turning microphone off", e)
+            AppLogger.e(TAG, "Error turning microphone off", e)
             result.error("MIC_OFF_ERROR", e.message, null)
         }
     }
 
     private fun handleTurnVideoOn(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: turnVideoOn")
+            AppLogger.d(TAG, "Flutter requested: turnVideoOn")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.turnVideoOn() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error turning video on", e)
+            AppLogger.e(TAG, "Error turning video on", e)
             result.error("VIDEO_ON_ERROR", e.message, null)
         }
     }
     
     private fun handleTurnVideoOff(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: turnVideoOff")
+            AppLogger.d(TAG, "Flutter requested: turnVideoOff")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.turnVideoOff() ?: false
             result.success(success)
         } catch (e: Exception) {
-            Log.e(TAG, "Error turning video off", e)
+            AppLogger.e(TAG, "Error turning video off", e)
             result.error("VIDEO_OFF_ERROR", e.message, null)
         }
     }
     
     private fun handleIsEngineActive(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: isEngineActive")
+            AppLogger.d(TAG, "Flutter requested: isEngineActive")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val isActive = agoraService?.isEngineInitialized() ?: false
             result.success(isActive)
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking engine status", e)
+            AppLogger.e(TAG, "Error checking engine status", e)
             result.error("ENGINE_STATUS_ERROR", e.message, null)
         }
     }
 
     private fun handleGetRemoteUserCount(result: MethodChannel.Result) {
         try {
-            Log.d(TAG, "Flutter requested: getRemoteUserCount")
+            AppLogger.d(TAG, "Flutter requested: getRemoteUserCount")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val count = agoraService?.getRemoteUserCount() ?: 0
             result.success(count)
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting remote user count", e)
+            AppLogger.e(TAG, "Error getting remote user count", e)
             result.error("GET_REMOTE_COUNT_ERROR", e.message, null)
         }
     }
