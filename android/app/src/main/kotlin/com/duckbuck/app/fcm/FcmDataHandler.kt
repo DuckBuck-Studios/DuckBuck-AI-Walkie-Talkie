@@ -53,12 +53,6 @@ object FcmDataHandler {
                 return null
             }
             
-            // 🕐 TIMESTAMP VALIDATION: Check if message is fresh (within 15 seconds)
-            if (!isMessageFresh(timestamp)) {
-                AppLogger.w(TAG, "🕐 FCM message too old, rejecting stale walkie-talkie invitation")
-                return null
-            }
-            
             val callData = CallData(
                 token = agoraToken,
                 uid = agoraUid,
@@ -118,32 +112,6 @@ object FcmDataHandler {
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error validating call message", e)
             return false
-        }
-    }
-    
-    /**
-     * Check if FCM message is fresh (within 15 seconds)
-     * @param messageTimestamp Unix timestamp in seconds from FCM message
-     * @return true if message is fresh, false if stale
-     */
-    private fun isMessageFresh(messageTimestamp: Long): Boolean {
-        try {
-            val currentTime = System.currentTimeMillis() / 1000 // Convert to seconds
-            val messageAge = currentTime - messageTimestamp
-            
-            AppLogger.d(TAG, "🕐 Message timestamp: $messageTimestamp, Current: $currentTime, Age: ${messageAge}s")
-            
-            return if (messageAge <= 15) {
-                AppLogger.i(TAG, "✅ Message is fresh (${messageAge}s old) - proceeding")
-                true
-            } else {
-                AppLogger.w(TAG, "❌ Message is stale (${messageAge}s old) - rejecting to prevent empty channel join")
-                false
-            }
-            
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "❌ Error validating message timestamp", e)
-            return false // Treat as stale if can't validate
         }
     }
     

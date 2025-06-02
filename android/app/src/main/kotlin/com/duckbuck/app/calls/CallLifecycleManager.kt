@@ -9,6 +9,7 @@ import com.duckbuck.app.core.AgoraServiceManager
 import com.duckbuck.app.core.CallUITrigger
 import com.duckbuck.app.fcm.FcmDataHandler.CallData
 import com.duckbuck.app.notifications.CallNotificationManager
+import com.duckbuck.app.audio.VolumeAcquireManager
 
 /**
  * Call Lifecycle Manager - Coordinates call operations across all modules
@@ -30,6 +31,7 @@ class CallLifecycleManager(private val context: Context) {
     private val callStatePersistence = CallStatePersistenceManager(context)
     private val notificationManager = CallNotificationManager(context)
     private val agoraCallManager = AgoraCallManager(context)
+    private val volumeAcquireManager = VolumeAcquireManager(context)
     
     /**
      * Handle incoming call - full lifecycle management
@@ -282,6 +284,15 @@ class CallLifecycleManager(private val context: Context) {
     fun joinWalkieTalkieChannel(channelData: CallData): Boolean {
         try {
             AppLogger.i(TAG, "📻 Auto-joining walkie-talkie channel: ${channelData.channelId}")
+            
+            // 🔊 VOLUME ACQUIRE: Set volume to 100% when manually joining walkie-talkie
+            volumeAcquireManager.acquireMaximumVolume(
+                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
+                showUIFeedback = true // Show UI feedback for manual joins
+            )
+            
+            val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
+            AppLogger.i(TAG, "🔊 Volume acquired for manual walkie-talkie join - $volumeInfo")
             
             // 1. Mark as joining
             callStatePersistence.markCallAsJoining(channelData.channelId)

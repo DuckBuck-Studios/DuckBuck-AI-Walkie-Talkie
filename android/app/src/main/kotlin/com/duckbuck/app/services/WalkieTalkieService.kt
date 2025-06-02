@@ -12,6 +12,8 @@ import com.duckbuck.app.callstate.CallStatePersistenceManager
 import com.duckbuck.app.core.AgoraServiceManager
 import com.duckbuck.app.core.CallUITrigger
 import com.duckbuck.app.notifications.CallNotificationManager
+import com.duckbuck.app.audio.VolumeAcquireManager
+import com.duckbuck.app.channel.ChannelOccupancyManager
 
 /**
  * Persistent Walkie-Talkie Foreground Service
@@ -102,6 +104,8 @@ class WalkieTalkieService : Service() {
     private lateinit var notificationManager: CallNotificationManager
     private lateinit var callStatePersistence: CallStatePersistenceManager
     private lateinit var agoraCallManager: AgoraCallManager
+    private lateinit var volumeAcquireManager: VolumeAcquireManager
+    private lateinit var occupancyManager: ChannelOccupancyManager
     private var wakeLock: PowerManager.WakeLock? = null
     
     // Current channel state
@@ -193,6 +197,9 @@ class WalkieTalkieService : Service() {
     override fun onDestroy() {
         AppLogger.i(TAG, "🛑 WalkieTalkie Service shutting down...")
         
+        // Cleanup occupancy manager
+        occupancyManager.cleanup()
+        
         leaveCurrentChannel()
         releaseWakeLock()
         
@@ -207,6 +214,8 @@ class WalkieTalkieService : Service() {
             notificationManager = CallNotificationManager(this)
             callStatePersistence = CallStatePersistenceManager(this)
             agoraCallManager = AgoraCallManager(this)
+            volumeAcquireManager = VolumeAcquireManager(this)
+            occupancyManager = ChannelOccupancyManager()
             
             AppLogger.i(TAG, "✅ Service components initialized")
         } catch (e: Exception) {
@@ -220,6 +229,16 @@ class WalkieTalkieService : Service() {
     private fun joinWalkieTalkieChannel(channelId: String, channelName: String, token: String, uid: Int, username: String?) {
         try {
             AppLogger.i(TAG, "📻 Joining walkie-talkie channel: $channelName (uid: $uid, username: $username)")
+            
+            // 🔊 VOLUME ACQUIRE: Set volume to 100% when joining via service
+            // This ensures maximum volume regardless of how the channel was joined
+            volumeAcquireManager.acquireMaximumVolume(
+                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
+                showUIFeedback = false // Don't show UI feedback in service
+            )
+            
+            val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
+            AppLogger.i(TAG, "🔊 Volume acquired in service - $volumeInfo")
             
             // Leave any existing channel first
             if (isChannelActive) {
@@ -310,6 +329,43 @@ class WalkieTalkieService : Service() {
     }
     
     /**
+     * Leave current channel silently without triggering UI/notifications (for empty channels)
+     */
+    private fun leaveCurrentChannelSilently() {
+        try {
+            if (isChannelActive && currentChannelId != null) {
+                AppLogger.i(TAG, "🤫 Leaving empty walkie-talkie channel silently: $currentChannelName")
+                
+                // Leave Agora channel without UI updates
+                agoraCallManager.leaveCall("Empty walkie-talkie channel - leaving silently")
+                
+                // Clear state
+                callStatePersistence.clearCallData()
+                
+                // Reset service state
+                currentChannelId = null
+                currentChannelName = null
+                isChannelActive = false
+                
+                // Clear username mappings
+                uidToUsernameMap.clear()
+                myUid = 0
+                myUsername = null
+                
+                // Clear speaker info
+                lastSpeakerUid = 0
+                lastSpeakerUsername = null
+                
+                // Stop the service completely without any notifications
+                AppLogger.i(TAG, "🤫 Left empty channel silently - stopping service")
+                stopSelf()
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error leaving walkie-talkie channel silently", e)
+        }
+    }
+    
+    /**
      * Get username for a given UID, with fallback to "User [UID]"
      */
     private fun getUsernameForUid(uid: Int): String {
@@ -325,14 +381,34 @@ class WalkieTalkieService : Service() {
                 AppLogger.i(TAG, "✅ Service: Walkie-talkie channel joined: $channel (uid: $uid)")
                 callStatePersistence.markCallAsJoined(channelId)
                 
-                // Trigger call UI for walkie-talkie calls with actual mute state
-                val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"
-                
-                // Get the actual mute state from AgoraService
-                val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
-                
-                CallUITrigger.showCallUI(callerName, null, isMuted)
-                AppLogger.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (muted: $isMuted)")
+                // 👥 OCCUPANCY CHECK WITH DISCOVERY DELAY: Allow time for Agora to discover existing users
+                AppLogger.i(TAG, "🔍 Starting occupancy check with discovery delay for channel: $channel")
+                occupancyManager.checkOccupancyAfterDiscovery(
+                    channelId = channel,
+                    onChannelOccupied = { userCount ->
+                        AppLogger.i(TAG, "✅ Channel has $userCount users - proceeding with normal walkie-talkie flow")
+                        
+                        // Show speaking notification for the person who triggered the FCM
+                        val speakerName = lastSpeakerUsername ?: "Someone"
+                        notificationManager.showSpeakingNotification(speakerName)
+                        AppLogger.i(TAG, "📢 Showing speaking notification: $speakerName is speaking")
+                        
+                        // Trigger call UI for walkie-talkie calls with actual mute state
+                        val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"
+                        
+                        // Get the actual mute state from AgoraService
+                        val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
+                        
+                        CallUITrigger.showCallUI(callerName, null, isMuted)
+                        AppLogger.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (muted: $isMuted)")
+                    },
+                    onChannelEmpty = {
+                        AppLogger.i(TAG, "🏃‍♂️ Channel is empty - leaving silently without notifications/UI")
+                        
+                        // Leave channel silently without triggering notifications or UI
+                        leaveCurrentChannelSilently()
+                    }
+                )
             }
             
             override fun onLeaveChannel() {

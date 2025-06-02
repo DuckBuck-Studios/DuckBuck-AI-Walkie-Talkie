@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.duckbuck.app.callstate.CallStatePersistenceManager
 import com.duckbuck.app.services.WalkieTalkieService
+import com.duckbuck.app.audio.VolumeAcquireManager
 
 /**
  * App State Manager - Handles app lifecycle state management
@@ -18,6 +19,7 @@ class AppStateManager(private val context: Context) {
     }
     
     private val callStatePersistence = CallStatePersistenceManager(context)
+    private val volumeAcquireManager = VolumeAcquireManager(context)
     
     /**
      * Check for active calls when app is resumed and trigger appropriate UI
@@ -31,6 +33,15 @@ class AppStateManager(private val context: Context) {
             
             if (callData != null) {
                 AppLogger.i(TAG, "📞 Found call data on resume: ${callData.callName}")
+                
+                // 🔊 VOLUME ACQUIRE: Set volume to 100% when resuming active call
+                volumeAcquireManager.acquireMaximumVolume(
+                    mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
+                    showUIFeedback = true // Show UI feedback when user resumes app
+                )
+                
+                val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
+                AppLogger.i(TAG, "🔊 Volume acquired on app resume - $volumeInfo")
                 
                 // Check if WalkieTalkieService is running
                 val isServiceRunning = isWalkieTalkieServiceRunning()
