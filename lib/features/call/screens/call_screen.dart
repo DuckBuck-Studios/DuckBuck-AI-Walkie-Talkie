@@ -15,11 +15,11 @@ class CallScreen extends StatelessWidget {
     return Consumer<CallProvider>(
       builder: (context, callProvider, child) {
         if (!callProvider.isInCall || callProvider.currentCall == null) {
-          return const SizedBox.shrink(); // Don't show anything if no call
+          return const SizedBox.shrink();  
         }
 
         return WillPopScope(
-          onWillPop: () async => false, // Prevent back navigation during call
+          onWillPop: () async => false, 
           child: Platform.isIOS 
               ? _buildCupertinoCallScreen(context, callProvider)
               : _buildMaterialCallScreen(context, callProvider),
@@ -223,6 +223,13 @@ class CallScreen extends StatelessWidget {
             iconSize: iconSize,
             onTap: callProvider.toggleMute,
             isIOS: isIOS,
+          )
+          .animate()
+          .scale(
+            duration: 200.ms,
+            begin: const Offset(0.95, 0.95),
+            end: const Offset(1.0, 1.0),
+            curve: Curves.easeInOut,
           ),
           
           // End call button
@@ -235,6 +242,13 @@ class CallScreen extends StatelessWidget {
             iconSize: iconSize,
             onTap: callProvider.endCall,
             isIOS: isIOS,
+          )
+          .animate()
+          .scale(
+            duration: 300.ms,
+            begin: const Offset(0.9, 0.9),
+            end: const Offset(1.0, 1.0),
+            curve: Curves.elasticOut,
           ),
           
           // Speaker button
@@ -246,6 +260,13 @@ class CallScreen extends StatelessWidget {
             iconSize: iconSize,
             onTap: callProvider.toggleSpeaker,
             isIOS: isIOS,
+          )
+          .animate()
+          .scale(
+            duration: 200.ms,
+            begin: const Offset(0.95, 0.95),
+            end: const Offset(1.0, 1.0),
+            curve: Curves.easeInOut,
           ),
         ],
       ),

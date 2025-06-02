@@ -119,9 +119,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
     return FadeTransition(
       opacity: _animationController.drive(CurveTween(curve: Curves.easeOut)),
       child: CupertinoPageScaffold(
-        backgroundColor: CupertinoColors.systemBackground.darkColor,
+        backgroundColor: CupertinoTheme.of(context).scaffoldBackgroundColor,
         navigationBar: CupertinoNavigationBar(
-          backgroundColor: AppColors.surfaceBlack,
+          backgroundColor: CupertinoTheme.of(context).barBackgroundColor,
           middle: Text(
             widget.title,
             style: const TextStyle(color: AppColors.textPrimary),
@@ -142,14 +142,15 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
 
   /// Build Android-specific UI
   Widget _buildMaterialUI() {
+    final theme = Theme.of(context);
     return FadeTransition(
       opacity: _animationController.drive(CurveTween(curve: Curves.easeOut)),
       child: Scaffold(
-        backgroundColor: AppColors.backgroundBlack,
+        backgroundColor: theme.colorScheme.background,
         appBar: AppBar(
           title: Text(widget.title),
-          backgroundColor: AppColors.surfaceBlack,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: theme.colorScheme.background,
+          foregroundColor: theme.colorScheme.onBackground,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),

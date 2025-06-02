@@ -30,11 +30,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return ErrorBoundary(
       featureName: 'privacy_settings',
       child: Scaffold(
+        backgroundColor: theme.colorScheme.background,
         appBar: AppBar(
           title: const Text('Privacy Settings'),
+          backgroundColor: theme.colorScheme.background,
+          elevation: 0,
           leading: IconButton(
             icon: _getPlatformIcon(
               Icons.arrow_back,

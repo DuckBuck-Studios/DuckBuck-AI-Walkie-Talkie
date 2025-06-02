@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 
 import '../../../core/models/relationship_model.dart';
@@ -11,6 +12,8 @@ import '../widgets/remove_friend_dialog.dart';
 import '../widgets/sections/friends_section.dart';
 import '../widgets/sections/pending_section.dart';
 import '../widgets/friend_tile.dart';
+import '../../../core/services/auth/auth_service_interface.dart';
+import '../../../core/services/service_locator.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -65,6 +68,40 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     FriendsSection.showBlockFriendDialog(context, relationship, provider);
   }
 
+  void _copyUserIdToClipboard(BuildContext context) {
+    final authService = serviceLocator<AuthServiceInterface>();
+    final uid = authService.currentUser?.uid;
+    
+    if (uid != null) {
+      Clipboard.setData(ClipboardData(text: uid));
+      
+      // Show confirmation based on platform
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('ID Copied'),
+            content: const Text('Your user ID has been copied to clipboard.'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID copied to clipboard'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildFriendsList(BuildContext context, FriendsProvider provider) {
     return FriendsSection(
       provider: provider,
@@ -75,6 +112,12 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   Widget _buildPendingList(BuildContext context, FriendsProvider provider) {
     return PendingSection(provider: provider);
+  }
+
+  // Get the current user ID
+  String? _getUserId() {
+    final authService = serviceLocator<AuthServiceInterface>();
+    return authService.currentUser?.uid;
   }
 
   @override
@@ -94,6 +137,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [],
         automaticallyImplyLeading: false,
         elevation: 0,
         backgroundColor: theme.colorScheme.background,
@@ -122,18 +166,78 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           if (provider.error != null) {
             return ErrorStateWidget(provider: provider);
           }
-          return TabBarView(
-            controller: _materialTabController,
+          
+          final userId = _getUserId();
+          
+          return Column(
             children: [
-              SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: _buildFriendsList(context, provider),
-              ),
-              SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: _buildPendingList(context, provider),
+              // User ID display section
+              if (userId != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your User ID:',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                userId,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontSize: 14,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy),
+                          tooltip: 'Copy ID',
+                          onPressed: () => _copyUserIdToClipboard(context),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              
+              // TabBarView with friends and pending lists
+              Expanded(
+                child: TabBarView(
+                  controller: _materialTabController,
+                  children: [
+                    SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: _buildFriendsList(context, provider),
+                    ),
+                    SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: _buildPendingList(context, provider),
+                    ),
+                  ],
+                ),
               ),
             ],
           );
@@ -170,7 +274,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         labelColor: theme.colorScheme.onSecondaryContainer,
         unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
         labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-        splashBorderRadius: BorderRadius.circular(25), // Added this line
+        splashBorderRadius: BorderRadius.circular(25),
         tabs: List.generate(
           tabTitles.length,
           (index) => Tab(
@@ -234,13 +338,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Friends'),
-        trailing: _currentSegment == 0
-            ? CupertinoButton(
-                padding: EdgeInsets.zero,
-                child: const Icon(CupertinoIcons.person_add),
-                onPressed: () => _showAddFriendDialog(context),
-              )
-            : null,
+        trailing: _currentSegment == 0 
+          ? CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.person_add),
+              onPressed: () => _showAddFriendDialog(context),
+            )
+          : null,
         backgroundColor: cupertinoTheme.barBackgroundColor.withOpacity(0.7),
         border: null, // Remove default border for a cleaner look with segmented control below
       ),
@@ -266,6 +370,59 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                 },
               ),
             ),
+            
+            // User ID display section
+            Builder(builder: (context) {
+              final userId = _getUserId();
+              if (userId != null) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemFill.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your User ID:',
+                                style: TextStyle(
+                                  color: CupertinoColors.label.resolveFrom(context),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                userId,
+                                style: TextStyle(
+                                  color: CupertinoColors.label.resolveFrom(context),
+                                  fontSize: 14,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(10),
+                          borderRadius: BorderRadius.circular(8),
+                          color: cupertinoTheme.primaryColor.withOpacity(0.1),
+                          onPressed: () => _copyUserIdToClipboard(context),
+                          child: const Icon(CupertinoIcons.doc_on_doc),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
             Expanded(
               child: Builder(
                 builder: (context) {
