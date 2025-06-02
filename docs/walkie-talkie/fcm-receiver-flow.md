@@ -2,45 +2,38 @@
 
 ## Overview
 
-This document provides comprehensive documentation for the FCM (Firebase Cloud Messaging) walkie-talkie receive flow in the DuckBuck app. The system handles incoming walkie-talkie calls across three different app states: **Foreground**, **Background**, and **Killed**. Each state requires different handling strategies to ensure seamless user experience and reliable call delivery.
+This document provides comprehensive documentation for the FCM (Firebase Cloud Messaging) walkie-talkie receive flow in the DuckBuck app. The system handles incoming **walkie-talkie speaking notifications** - when someone starts speaking in a channel, an FCM message is sent to notify other participants. The system works consistently across all app states: **Foreground**, **Background**, and **Killed**.
 
 ## System Architecture
 
 ### Core Design Principles
-- **Hybrid Flutter-Android Architecture**: Leverages Android's native FCM handling with Flutter UI
-- **State-Aware Routing**: Different flow paths based on app lifecycle state
-- **Persistent Service Management**: Background service ensures call continuity
+- **Walkie-Talkie Speaking Notifications**: FCM messages notify when someone starts speaking
+- **Immediate Notification Display**: Speaking notifications shown instantly when FCM arrives
+- **Persistent Connection Management**: WalkieTalkieService maintains channel connection
+- **Unified Flow**: Same service-based handling regardless of app state
 - **Data Persistence**: SharedPreferences for surviving app process death
 - **UI Recovery**: Automatic UI restoration when app resumes
 
 ### Central FCM Handler Module
 
-**`FcmServiceOrchestrator`** is the single entry point that orchestrates the entire flow:
+**`FcmServiceOrchestrator`** handles **ONLY** data-only notifications for walkie-talkie speaking events:
 
 ```mermaid
 graph TB
-    subgraph "FCM ORCHESTRATOR - Central Hub"
-        FSO[FcmServiceOrchestrator<br/>Main Entry Point]
-        FSO --> MSG{Message Type?}
-        MSG -->|Walkie-Talkie| WT[handleWalkieTalkieMessage]
-        MSG -->|Social| SOC[handleSocialMessage]
-        WT --> STATE{App State?}
+    subgraph "FCM ORCHESTRATOR - Speaking Events Only"
+        FSO[FcmServiceOrchestrator<br/>Data-Only Handler]
+        FSO --> CHECK{Data-Only Message?}
+        CHECK -->|Yes| WT[handleWalkieTalkieMessage]
+        CHECK -->|No| IGNORE[Ignore - Let Flutter Handle]
+        WT --> NOTIFY[Show Speaking Notification]
+        NOTIFY --> SVC[Start WalkieTalkieService]
     end
     
-    subgraph "STATE DETECTION"
-        STATE -->|FOREGROUND| FG[Direct UI Flow]
-        STATE -->|BACKGROUND| BG[Service Flow]
-        STATE -->|KILLED| KL[Service + Recovery Flow]
-    end
-    
-    subgraph "FLOW EXECUTION"
-        FG --> UI[CallUITrigger]
-        BG --> SVC[WalkieTalkieService]
-        KL --> SVC
-        SVC --> PERSIST[CallStatePersistenceManager]
-        SVC --> LIFECYCLE[CallLifecycleManager]
+    subgraph "SERVICE FLOW"
+        SVC --> PERSIST[Save Call Data]
+        SVC --> JOIN[Join Agora Channel]
+        JOIN --> UI[Trigger Call UI]
         UI --> FLUTTER[Flutter UI]
-        SVC --> UI
     end
 ```
 
@@ -56,137 +49,62 @@ graph TB
 - **`CallStatePersistenceManager`** - Data persistence across app lifecycle
 - **`MainActivity`** - App recovery and service detection
 
-#### Flutter Layer (UI and State Management)
-- **`FCMMessageHandler`** - Flutter-side FCM message processing
+#### Flutter Layer (UI and Social Notifications)
+- **`FCMMessageHandler`** - Handles **ALL** social notifications (display messages)
 - **`CallProvider`** - Call UI state management and user interactions
 - **`MainNavigation`** - Navigation control with back prevention
 
-## Complete Flow Execution by App State
+### Message Type Separation
 
-### 1. 🟢 Foreground State Flow
-**Scenario**: App is visible and active, user is interacting with it
+#### 🔴 Android Native (Data-Only)
+- **Walkie-Talkie Speaking Events**: Data-only FCM messages when someone speaks
+- **No UI Content**: Pure data payload with speaker information
+- **Background Processing**: Can wake app from killed state
+- **Immediate Notifications**: Speaking notifications shown on FCM arrival
 
-```mermaid
-sequenceDiagram
-    participant FCM as FCM Server
-    participant Orchestrator as FcmServiceOrchestrator
-    participant StateDetector as FcmAppStateDetector
-    participant DataHandler as FcmDataHandler
-    participant UITrigger as CallUITrigger
-    participant Flutter as Flutter Layer
-    participant CallProvider as CallProvider
+#### 🔵 Flutter Layer (Display Messages)  
+- **Social Notifications**: All notification + data messages with display content
+- **UI Notifications**: Friend requests, messages, app updates
+- **Foreground Only**: Handled when app is active
 
-    Note over FCM,CallProvider: 🟢 FOREGROUND FLOW - Direct UI Trigger
-    
-    FCM->>Orchestrator: FCM Message Received
-    Orchestrator->>StateDetector: detectAppState()
-    StateDetector-->>Orchestrator: FOREGROUND ✅
-    
-    Orchestrator->>DataHandler: validateAndProcessData(messageData)
-    DataHandler->>DataHandler: Validate required fields
-    DataHandler-->>Orchestrator: CallData object ✅
-    
-    Note over Orchestrator: Skip service - direct UI trigger
-    Orchestrator->>UITrigger: triggerIncomingCall(callData)
-    UITrigger->>UITrigger: Handler(Looper.getMainLooper())
-    UITrigger->>Flutter: methodChannel.invokeMethod("triggerIncomingCall")
-    
-    Flutter->>CallProvider: _showCallUI(callData)
-    CallProvider->>CallProvider: Update UI state
-    CallProvider->>CallProvider: Show call screen immediately ✅
-    
-    Note over Orchestrator,CallProvider: ⚡ Fast path - no persistence needed
-```
+## Walkie-Talkie Speaking Flow
 
-**Flow Characteristics**:
-- ⚡ **Speed**: Immediate UI display (< 100ms)
-- 🚫 **No Service**: Direct method channel communication
-- 🚫 **No Persistence**: Data not saved (app is active)
-- ✅ **Reliability**: High (app is running and responsive)
-
-**Key Modules**:
-- `FcmServiceOrchestrator.onMessageReceived()` → Entry point
-- `FcmAppStateDetector.detectAppState()` → Returns `FOREGROUND`
-- `FcmDataHandler.validateAndProcessData()` → Data validation
-- `CallUITrigger.triggerIncomingCall()` → Direct UI trigger
-- Flutter `CallProvider._showCallUI()` → UI display
-
-### 2. 🟡 Background State Flow
-**Scenario**: App is running but not visible, user switched to another app
+### Real Implementation Flow
+**Scenario**: Someone starts speaking in a walkie-talkie channel
 
 ```mermaid
 sequenceDiagram
     participant FCM as FCM Server
     participant Orchestrator as FcmServiceOrchestrator
-    participant StateDetector as FcmAppStateDetector
-    participant DataHandler as FcmDataHandler
+    participant NotificationMgr as CallNotificationManager
     participant Service as WalkieTalkieService
     participant Persistence as CallStatePersistenceManager
-    participant Lifecycle as CallLifecycleManager
+    participant Lifecycle as AgoraCallManager
     participant UITrigger as CallUITrigger
     participant Flutter as Flutter Layer
 
-    Note over FCM,Flutter: 🟡 BACKGROUND FLOW - Service + Notification
+    Note over FCM,Flutter: 🔄 UNIFIED FLOW - Same for all app states
     
     FCM->>Orchestrator: FCM Message Received
-    Orchestrator->>StateDetector: detectAppState()
-    StateDetector-->>Orchestrator: BACKGROUND ⚠️
+    Note over Orchestrator: handleWalkieTalkieMessage()
     
-    Orchestrator->>DataHandler: validateAndProcessData(messageData)
-    DataHandler-->>Orchestrator: CallData object ✅
+    Orchestrator->>NotificationMgr: showSpeakingNotification(speakerName)
+    NotificationMgr-->>Orchestrator: ✅ Notification shown immediately
     
-    Note over Orchestrator: Start service for background handling
-    Orchestrator->>Service: startService(WALKIE_TALKIE_CALL intent)
+    Orchestrator->>Service: storeSpeakerInfo(uid, username)
+    Orchestrator->>Service: joinChannel(channelId, token, uid)
+    
     Service->>Service: onStartCommand()
-    Service->>Service: startForeground(notification) 📱
-    
-    Note over Service: Critical: Save data BEFORE joining
+    Note over Service: Save data BEFORE joining
     Service->>Persistence: saveIncomingCallData(callData) 💾
-    Persistence->>Persistence: Save to SharedPreferences
     
-    Service->>Lifecycle: joinWalkieTalkieChannel(callData)
-    Lifecycle->>Lifecycle: Initialize Agora connection 🔊
+    Service->>Lifecycle: joinCallOptimized(token, uid, channelId)
+    Lifecycle-->>Service: onJoinChannelSuccess()
     
-    Service->>Persistence: markCallAsJoined() ✅
-    
-    Note over Service: Service runs persistently in background
-    Note over FCM,Flutter: When user returns to app...
-    
-    Service->>UITrigger: triggerIncomingCall(callData)
-    UITrigger->>Flutter: methodChannel.invokeMethod("triggerIncomingCall")
-    Flutter->>Flutter: Show call UI when app opened 📱
+    Service->>UITrigger: showCallUI(callerName, isMuted)
+    UITrigger->>Flutter: methodChannel.invokeMethod("showCallUI")
+    Flutter->>Flutter: Show call UI ✅
 ```
-
-**Flow Characteristics**:
-- 🔄 **Service**: WalkieTalkieService starts as foreground service
-- 💾 **Persistence**: Call data saved to SharedPreferences
-- 📱 **Notification**: Persistent notification shown to user
-- 🔊 **Audio**: Agora connection established immediately
-- ⏳ **UI Delay**: UI shown when user returns to app
-
-**Key Modules**:
-- `FcmServiceOrchestrator.onMessageReceived()` → Entry point
-- `FcmAppStateDetector.detectAppState()` → Returns `BACKGROUND`
-- `WalkieTalkieService.onStartCommand()` → Service lifecycle
-- `CallStatePersistenceManager.saveIncomingCallData()` → Data persistence
-- `CallLifecycleManager.joinWalkieTalkieChannel()` → Audio connection
-- `CallUITrigger` → UI trigger when app resumes
-
-### 3. 🔴 Killed State Flow
-**Scenario**: App process was terminated, FCM creates new process
-
-```mermaid
-sequenceDiagram
-    participant FCM as FCM Server
-    participant Orchestrator as FcmServiceOrchestrator
-    participant StateDetector as FcmAppStateDetector
-    participant DataHandler as FcmDataHandler
-    participant Service as WalkieTalkieService
-    participant Persistence as CallStatePersistenceManager
-    participant Lifecycle as CallLifecycleManager
-    participant MainActivity as MainActivity
-    participant UITrigger as CallUITrigger
-    participant Flutter as Flutter Layer
 
     Note over FCM,Flutter: 🔴 KILLED FLOW - Process Creation + Recovery
     
