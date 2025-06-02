@@ -37,7 +37,7 @@ class AppStateManager(private val context: Context) {
                 // 🔊 VOLUME ACQUIRE: Set volume to 100% when resuming active call
                 volumeAcquireManager.acquireMaximumVolume(
                     mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-                    showUIFeedback = true // Show UI feedback when user resumes app
+                    showUIFeedback = true  
                 )
                 
                 val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
@@ -73,15 +73,20 @@ class AppStateManager(private val context: Context) {
     
     /**
      * Check if WalkieTalkieService is currently running
+     * Modern approach: Use persistent call data to infer service state
      */
     private fun isWalkieTalkieServiceRunning(): Boolean {
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        for (service in activityManager.getRunningServices(Integer.MAX_VALUE)) {
-            if (WalkieTalkieService::class.java.name == service.service.className) {
-                return true
-            }
-        }
-        return false
+        // Instead of using deprecated getRunningServices(), we check if:
+        // 1. We have active call data AND
+        // 2. The call state indicates an active/joined call
+        // This is more reliable and doesn't require deprecated APIs
+        
+        val callData = callStatePersistence.getCurrentCallData()
+        val callState = callStatePersistence.getCurrentCallState()
+        
+        return callData != null && 
+               (callState == CallStatePersistenceManager.CallState.ACTIVE || 
+                callState == CallStatePersistenceManager.CallState.JOINING)
     }
     
     /**

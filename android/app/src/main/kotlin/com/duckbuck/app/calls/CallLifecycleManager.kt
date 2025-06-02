@@ -145,24 +145,6 @@ class CallLifecycleManager(private val context: Context) {
     }
     
     /**
-     * Check for pending calls (useful for app restart scenarios)
-     */
-    fun checkForPendingCalls(): CallData? {
-        return try {
-            if (callStatePersistence.hasPendingCall()) {
-                val callData = callStatePersistence.getCurrentCallData()
-                AppLogger.i(TAG, "📱 Found pending call: ${callData?.channelId}")
-                callData
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "❌ Error checking for pending calls", e)
-            null
-        }
-    }
-    
-    /**
      * Clear all call data and notifications (emergency cleanup)
      */
     fun clearAllCallData() {

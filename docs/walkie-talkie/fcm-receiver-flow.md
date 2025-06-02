@@ -4,6 +4,18 @@
 
 This document provides comprehensive documentation for the FCM (Firebase Cloud Messaging) walkie-talkie receive flow in the DuckBuck app. The system handles incoming **walkie-talkie speaking notifications** - when someone starts speaking in a channel, an FCM message is sent to notify other participants. The system works consistently across all app states: **Foreground**, **Background**, and **Killed**.
 
+## ⚠️ Important: CallState Enum Optimization
+
+**As of the latest optimization**, the `INCOMING` state has been **removed** from the `CallState` enum in `CallStatePersistenceManager`. This is because walkie-talkie calls auto-connect immediately upon receiving FCM messages, making the `INCOMING` state unnecessary. The actual flow is:
+
+- **FCM Received** → `saveIncomingCallData()` (now sets `JOINING`) → immediately join channel → `ACTIVE` → `ENDING` → `ENDED`
+
+The simplified `CallState` enum now contains:
+- `JOINING` - In process of joining call
+- `ACTIVE` - Successfully joined and in call  
+- `ENDING` - Call is ending
+- `ENDED` - Call has ended
+
 ## Enhanced System Architecture (with Volume Acquire + Channel Occupancy)
 
 ### Core Design Principles
@@ -575,13 +587,14 @@ private fun checkForActiveCallsOnResume() {
 }
 
 private fun isWalkieTalkieServiceRunning(): Boolean {
-    val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    for (service in activityManager.getRunningServices(Integer.MAX_VALUE)) {
-        if (WalkieTalkieService::class.java.name == service.service.className) {
-            return true
-        }
-    }
-    return false
+    // Modern approach: Use persistent call data to infer service state
+    // Instead of deprecated getRunningServices(), check if we have active call data
+    val callData = callStatePersistence.getCurrentCallData()
+    val callState = callStatePersistence.getCurrentCallState()
+    
+    return callData != null && 
+           (callState == CallStatePersistenceManager.CallState.ACTIVE || 
+            callState == CallStatePersistenceManager.CallState.JOINING)
 }
 ```
 
@@ -614,7 +627,7 @@ graph TD
         STATE --> DECISION{App State?}
         DECISION -->|🟢 Foreground| DIRECT[⚡ Direct UI]
         DECISION -->|🟡 Background| SERVICE[🔄 Service Flow]
-        DECISION -->|🔴 Killed| SERVICE
+        DECISION -->|🔴 KILLED| SERVICE
     end
     
     subgraph "3. EXECUTION PATHS"

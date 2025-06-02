@@ -29,9 +29,9 @@ class CallStatePersistenceManager(context: Context) {
     
     /**
      * Enum representing different call states
+     * Note: Removed INCOMING state as walkie-talkie calls auto-connect immediately
      */
     enum class CallState {
-        INCOMING,      // Call received but not joined yet
         JOINING,       // In process of joining call
         ACTIVE,        // Successfully joined and in call
         ENDING,        // Call is ending
@@ -42,23 +42,23 @@ class CallStatePersistenceManager(context: Context) {
         context.getSharedPreferences(CALL_PREFS_NAME, Context.MODE_PRIVATE)
     
     /**
-     * Save incoming call data (when FCM message is received)
+     * Save incoming call data and immediately mark as joining (for walkie-talkie auto-connect)
      */
     fun saveIncomingCallData(callData: CallData) {
         try {
             callPrefs.edit().apply {
-                putBoolean(PREF_IS_IN_CALL, false) // Not in call yet, just received
+                putBoolean(PREF_IS_IN_CALL, false) // Not in call yet, joining in progress
                 putString(PREF_AGORA_TOKEN, callData.token)
                 putInt(PREF_AGORA_UID, callData.uid)
                 putString(PREF_CHANNEL_ID, callData.channelId)
                 putString(PREF_CALL_NAME, callData.callName)
                 putString(PREF_CALLER_PHOTO, callData.callerPhoto ?: "")
                 putLong(PREF_JOIN_TIMESTAMP, System.currentTimeMillis())
-                putString(PREF_CALL_STATE, CallState.INCOMING.name)
+                putString(PREF_CALL_STATE, CallState.JOINING.name)
                 apply()
             }
             
-            AppLogger.i(TAG, "✅ Incoming call data saved: ${callData.channelId} from ${callData.callName}")
+            AppLogger.i(TAG, "✅ Call data saved and marked as joining: ${callData.channelId} from ${callData.callName}")
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error saving incoming call data", e)
         }
@@ -193,12 +193,12 @@ class CallStatePersistenceManager(context: Context) {
     }
     
     /**
-     * Check if there's a pending call (received but not joined)
+     * Check if there's a pending call (in joining state)
      */
     fun hasPendingCall(): Boolean {
         return try {
             val callState = getCurrentCallState()
-            callState == CallState.INCOMING || callState == CallState.JOINING
+            callState == CallState.JOINING
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error checking pending call", e)
             false
