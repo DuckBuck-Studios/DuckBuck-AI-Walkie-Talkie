@@ -37,6 +37,7 @@ class WalkieTalkieService : Service() {
         private const val EXTRA_TOKEN = "token"
         private const val EXTRA_UID = "uid"
         private const val EXTRA_USERNAME = "username"
+        private const val EXTRA_CALLER_PHOTO = "caller_photo"
         private const val EXTRA_SPEAKER_UID = "speaker_uid"
         private const val EXTRA_SPEAKER_USERNAME = "speaker_username"
         
@@ -54,7 +55,8 @@ class WalkieTalkieService : Service() {
             channelName: String,
             token: String,
             uid: Int,
-            username: String? = null
+            username: String? = null,
+            callerPhoto: String? = null
         ) {
             val intent = Intent(context, WalkieTalkieService::class.java).apply {
                 putExtra(EXTRA_ACTION, ACTION_JOIN_CHANNEL)
@@ -63,6 +65,7 @@ class WalkieTalkieService : Service() {
                 putExtra(EXTRA_TOKEN, token)
                 putExtra(EXTRA_UID, uid)
                 putExtra(EXTRA_USERNAME, username)
+                putExtra(EXTRA_CALLER_PHOTO, callerPhoto)
             }
             context.startService(intent)
         }
@@ -150,6 +153,7 @@ class WalkieTalkieService : Service() {
                 val token = intent.getStringExtra(EXTRA_TOKEN)
                 val uid = intent.getIntExtra(EXTRA_UID, 0)  
                 val username = intent.getStringExtra(EXTRA_USERNAME)
+                val callerPhoto = intent.getStringExtra(EXTRA_CALLER_PHOTO)
                 val speakerUid = intent.getIntExtra(EXTRA_SPEAKER_UID, 0)
                 val speakerUsername = intent.getStringExtra(EXTRA_SPEAKER_USERNAME)
                 
@@ -161,7 +165,7 @@ class WalkieTalkieService : Service() {
                         AppLogger.i(TAG, "📻 Stored speaker info: $speakerUsername (UID: $speakerUid)")
                     }
                     
-                    joinWalkieTalkieChannel(channelId, channelName, token, uid, username)
+                    joinWalkieTalkieChannel(channelId, channelName, token, uid, username, callerPhoto)
                 } else {
                     AppLogger.e(TAG, "❌ Invalid channel join parameters")
                 }
@@ -226,9 +230,9 @@ class WalkieTalkieService : Service() {
     /**
      * Join a walkie-talkie channel
      */
-    private fun joinWalkieTalkieChannel(channelId: String, channelName: String, token: String, uid: Int, username: String?) {
+    private fun joinWalkieTalkieChannel(channelId: String, channelName: String, token: String, uid: Int, username: String?, callerPhoto: String? = null) {
         try {
-            AppLogger.i(TAG, "📻 Joining walkie-talkie channel: $channelName (uid: $uid, username: $username)")
+            AppLogger.i(TAG, "📻 Joining walkie-talkie channel: $channelName (uid: $uid, username: $username, photo: ${if (callerPhoto != null) "present" else "none"})")
             
             // 🔊 VOLUME ACQUIRE: Set volume to 100% when joining via service
             // This ensures maximum volume regardless of how the channel was joined
@@ -251,11 +255,12 @@ class WalkieTalkieService : Service() {
                 uid = uid,
                 channelId = channelId,
                 callName = channelName,
-                callerPhoto = null,
+                // Use provided photo URL or get from existing data
+                callerPhoto = callerPhoto ?: callStatePersistence.getCurrentCallData()?.callerPhoto,
                 timestamp = System.currentTimeMillis() / 1000
             )
             callStatePersistence.saveIncomingCallData(callData)
-            AppLogger.i(TAG, "💾 Saved call data to SharedPreferences for killed state recovery")
+            AppLogger.i(TAG, "💾 Saved call data to SharedPreferences for killed state recovery (photo URL: ${if (callData.callerPhoto != null) "present" else "none"})")
             
             // Store my own UID and username
             myUid = uid
@@ -393,14 +398,17 @@ class WalkieTalkieService : Service() {
                         notificationManager.showSpeakingNotification(speakerName)
                         AppLogger.i(TAG, "📢 Showing speaking notification: $speakerName is speaking")
                         
-                        // Trigger call UI for walkie-talkie calls with actual mute state
+                        // Trigger call UI for walkie-talkie calls with actual mute state and photo
                         val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"
+                        
+                        // Get caller photo from persisted call data
+                        val callerPhoto = callStatePersistence.getCurrentCallData()?.callerPhoto
                         
                         // Get the actual mute state from AgoraService
                         val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
                         
-                        CallUITrigger.showCallUI(callerName, null, isMuted)
-                        AppLogger.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (muted: $isMuted)")
+                        CallUITrigger.showCallUI(callerName, callerPhoto, isMuted)
+                        AppLogger.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (photo: ${if (callerPhoto.isNullOrEmpty()) "none" else "present"}, muted: $isMuted)")
                     },
                     onChannelEmpty = {
                         AppLogger.i(TAG, "🏃‍♂️ Channel is empty - leaving silently without notifications/UI")

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'dart:io' show Platform;
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../providers/call_provider.dart';
 import '../../friends/widgets/profile_avatar.dart';
@@ -115,36 +116,23 @@ class CallScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(height: topPadding * 0.5),
+                  SizedBox(height: topPadding * 0.3), // Reduced spacing to move content up
                   
-                  // Call duration
-                  Text(
-                    callProvider.formattedCallDuration,
-                    style: isIOS 
-                        ? CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                            color: CupertinoColors.white,
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.w500,
-                          )
-                        : TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.w500,
-                          ),
-                  ),
-                  
-                  SizedBox(height: spacingHeight),
-                  
-                  // Caller avatar
+                  // Caller avatar with animation
                   ProfileAvatar(
                     photoURL: callProvider.currentCall!.callerPhotoUrl,
                     displayName: callProvider.currentCall!.callerName,
                     radius: avatarRadius,
-                  ),
+                  )
+                  .animate(onPlay: (controller) => controller.repeat())
+                  .shimmer(duration: 2500.ms, delay: 500.ms)
+                  .scaleXY(begin: 1.0, end: 1.05, duration: 2000.ms)
+                  .then(delay: 1000.ms)
+                  .scaleXY(begin: 1.05, end: 1.0, duration: 2000.ms),
                   
                   SizedBox(height: spacingHeight),
                   
-                  // Caller name
+                  // Caller name with animation
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(
@@ -169,25 +157,34 @@ class CallScreen extends StatelessWidget {
                       maxLines: screenWidth <= 320 ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+                  )
+                  .animate()
+                  .fadeIn(duration: 600.ms)
+                  .moveY(begin: 10, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
                   
                   SizedBox(height: spacingHeight * 0.5),
                   
-                  // Call status
+                  // Call duration with animation (moved below caller name)
                   Text(
-                    'Voice Call',
+                    callProvider.formattedCallDuration,
                     style: isIOS 
                         ? CupertinoTheme.of(context).textTheme.textStyle.copyWith(
                             color: CupertinoColors.white,
                             fontSize: 18.0,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.w500,
                           )
                         : TextStyle(
                             color: Colors.white70,
                             fontSize: 18.0,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.w500,
                           ),
-                  ),
+                  )
+                  .animate(onPlay: (controller) => controller.repeat())
+                  .fadeIn(duration: 500.ms)
+                  .then()
+                  .fadeOut(duration: 500.ms)
+                  .then()
+                  .fadeIn(duration: 500.ms),
                 ],
               ),
             ),

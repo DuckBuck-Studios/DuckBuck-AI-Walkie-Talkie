@@ -313,9 +313,10 @@ class CallLifecycleManager(private val context: Context) {
                 AppLogger.i(TAG, "✅ Walkie-talkie channel joined: $channel")
                 callStatePersistence.markCallAsJoined(channelId)
                 
-                // Trigger call UI for walkie-talkie calls with actual mute state
+                // Trigger call UI for walkie-talkie calls with actual mute state and photo
                 val isMuted = AgoraServiceManager.getAgoraService()?.isMicrophoneMuted() ?: true
-                CallUITrigger.showCallUI(channelName, null, isMuted)
+                val callerPhoto = callStatePersistence.getCurrentCallData()?.callerPhoto
+                CallUITrigger.showCallUI(channelName, callerPhoto, isMuted)
                 
                 // No notification on join for walkie-talkie
             }

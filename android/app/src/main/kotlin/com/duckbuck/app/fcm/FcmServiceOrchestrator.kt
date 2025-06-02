@@ -135,7 +135,8 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
                 channelName = callData.callName,
                 token = callData.token,
                 uid = callData.uid,
-                username = callData.callName  // Pass username for leave notifications
+                username = callData.callName,  // Pass username for leave notifications
+                callerPhoto = callData.callerPhoto  // Pass photo URL directly from FCM data
             )
             
             // 3. Start occupancy check - notifications will be shown only if channel has users

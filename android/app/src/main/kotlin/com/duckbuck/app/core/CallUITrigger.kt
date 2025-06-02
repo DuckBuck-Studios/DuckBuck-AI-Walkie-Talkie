@@ -2,6 +2,7 @@ package com.duckbuck.app.core
 
 import android.os.Handler
 import android.os.Looper
+import android.text.Html
 import io.flutter.plugin.common.MethodChannel
 
 /**
@@ -37,11 +38,25 @@ object CallUITrigger {
                     return@post
                 }
                 
+                // Decode HTML entities in the photo URL if it's not null
+                val decodedPhotoUrl = if (!callerPhotoUrl.isNullOrEmpty()) {
+                    try {
+                        @Suppress("DEPRECATION")
+                        Html.fromHtml(callerPhotoUrl).toString()
+                    } catch (e: Exception) {
+                        AppLogger.w(TAG, "Failed to decode HTML in photo URL: $callerPhotoUrl", e)
+                        callerPhotoUrl // Fall back to the original URL if decoding fails
+                    }
+                } else {
+                    ""
+                }
+                
                 AppLogger.i(TAG, "Triggering call UI for: $callerName (muted: $isMuted)")
+                AppLogger.d(TAG, "Photo URL - Original: ${callerPhotoUrl ?: "none"}, Decoded: ${if (decodedPhotoUrl.isNotEmpty()) decodedPhotoUrl else "none"}")
                 
                 val arguments = mapOf(
                     "callerName" to callerName,
-                    "callerPhotoUrl" to (callerPhotoUrl ?: ""),
+                    "callerPhotoUrl" to decodedPhotoUrl,
                     "isMuted" to isMuted
                 )
                 

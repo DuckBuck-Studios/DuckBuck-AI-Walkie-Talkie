@@ -42,7 +42,9 @@ void main() async {
         information: {'startup_stage': 'main_initialization'},
       );
     } catch (crashlyticsError)  {
-      
+      // Unable to report to Crashlytics - fallback to print since logger might not be initialized
+      debugPrint('Failed to report error to Crashlytics: $crashlyticsError');
+      debugPrint('Original error: $e');
     }
     
     // Show some kind of error UI or gracefully exit
