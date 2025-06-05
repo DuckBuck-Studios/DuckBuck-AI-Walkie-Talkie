@@ -20,6 +20,8 @@ class HomeFriendsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Debug print to see what's happening
+    print('HomeFriendsSection build: isLoading=${provider.isLoadingFriends}, friendsCount=${provider.friends.length}');
     return Platform.isIOS ? _buildCupertinoContent(context) : _buildMaterialContent(context);
   }
 
@@ -74,6 +76,7 @@ class HomeFriendsSection extends StatelessWidget {
 
     // Show only first 5 friends on home screen
     final displayFriends = provider.friends.take(5).toList();
+    print('Display friends count: ${displayFriends.length}');
 
     return CupertinoListSection.insetGrouped(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
@@ -155,6 +158,9 @@ class HomeFriendsSection extends StatelessWidget {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
     final profile = provider.getCachedProfile(relationship, currentUserId);
+    
+    // Debug output
+    print('Building friend tile: ${relationship.id}, profile: ${profile?.displayName}, isIOS: $isIOS');
 
     if (isIOS) {
       return CupertinoListTile(

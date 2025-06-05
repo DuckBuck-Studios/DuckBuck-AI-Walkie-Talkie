@@ -15,12 +15,13 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
   late PageController _pageController;
+  Widget? _fullscreenOverlay;
 
   // Define the screens for the GNav
-  static const List<Widget> _widgetOptions = <Widget>[
-    HomeScreen(),     // Home tab
-    FriendsScreen(),  // Friends tab
-    SettingsScreen(), // Settings tab
+  List<Widget> get _widgetOptions => <Widget>[
+    HomeScreen(onShowFullscreenOverlay: _showFullscreenOverlay, onHideFullscreenOverlay: _hideFullscreenOverlay),     // Home tab
+    const FriendsScreen(),  // Friends tab
+    const SettingsScreen(), // Settings tab
   ];
 
   @override
@@ -56,6 +57,18 @@ class _MainNavigationState extends State<MainNavigation> {
     }
   }
 
+  void _showFullscreenOverlay(Widget overlay) {
+    setState(() {
+      _fullscreenOverlay = overlay;
+    });
+  }
+
+  void _hideFullscreenOverlay() {
+    setState(() {
+      _fullscreenOverlay = null;
+    });
+  }
+
   /// Handle back button press - prevent navigation back to login/onboarding
   Future<bool> _onWillPop() async {
     // Show a brief haptic feedback to indicate the action was blocked
@@ -70,60 +83,69 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
-      child: Scaffold(
-        backgroundColor: Colors.black, // Set Scaffold background to black
-        body: PageView(
-          controller: _pageController,
-          onPageChanged: (index) {
-            setState(() {
-              _selectedIndex = index;
-            });
-          },
-          children: _widgetOptions,
-        ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[900], // Dark color for the Nav Bar background
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 20,
-                color: Colors.black.withOpacity(0.25), // Darker shadow
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
-              child: GNav(
-                rippleColor: Colors.grey[800]!,
-                hoverColor: Colors.grey[700]!,
-                gap: 8,
-                activeColor: Colors.white, // Active icon/text color
-                iconSize: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                duration: const Duration(milliseconds: 400),
-                tabBackgroundColor: Colors.grey[800]!, // Background color for active tab
-                color: Colors.grey[400]!, // Inactive icon/text color
-                tabs: const [
-                  GButton(
-                    icon: Icons.home_outlined,
-                    text: 'Home',
-                  ),
-                  GButton(
-                    icon: Icons.people_outline,
-                    text: 'Friends',
-                  ),
-                  GButton(
-                    icon: Icons.settings_outlined,
-                    text: 'Settings',
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: Colors.black, // Set Scaffold background to black
+            body: PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              children: _widgetOptions,
+            ),
+            bottomNavigationBar: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900], // Dark color for the Nav Bar background
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 20,
+                    color: Colors.black.withOpacity(0.25), // Darker shadow
                   ),
                 ],
-                selectedIndex: _selectedIndex,
-                onTabChange: _onItemTapped, // Use the consolidated tap handler
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
+                  child: GNav(
+                    rippleColor: Colors.grey[800]!,
+                    hoverColor: Colors.grey[700]!,
+                    gap: 8,
+                    activeColor: Colors.white, // Active icon/text color
+                    iconSize: 24,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    duration: const Duration(milliseconds: 400),
+                    tabBackgroundColor: Colors.grey[800]!, // Background color for active tab
+                    color: Colors.grey[400]!, // Inactive icon/text color
+                    tabs: const [
+                      GButton(
+                        icon: Icons.home_outlined,
+                        text: 'Home',
+                      ),
+                      GButton(
+                        icon: Icons.people_outline,
+                        text: 'Friends',
+                      ),
+                      GButton(
+                        icon: Icons.settings_outlined,
+                        text: 'Settings',
+                      ),
+                    ],
+                    selectedIndex: _selectedIndex,
+                    onTabChange: _onItemTapped, // Use the consolidated tap handler
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          // Fullscreen overlay
+          if (_fullscreenOverlay != null)
+            Positioned.fill(
+              child: _fullscreenOverlay!,
+            ),
+        ],
       ),
     );
   }
