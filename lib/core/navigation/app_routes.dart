@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:duckbuck/features/auth/screens/welcome_screen.dart';
-import 'package:duckbuck/features/auth/screens/onboarding_container.dart';
+import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
 import 'package:duckbuck/features/auth/screens/profile_completion_screen.dart';
 import 'package:duckbuck/features/main_navigation.dart'; // Import MainNavigation
 import 'package:duckbuck/core/services/preferences_service.dart';
@@ -19,9 +19,7 @@ class AppRoutes {
   static const String termsOfService = '/terms';
   static const String privacyPolicy = '/privacy';
   static const String privacySettings = '/privacy_settings';
-  static const String blockedUsers = '/blocked_users';
-  // static const String friends = '/friends'; // No longer a top-level route, handled by HomeScreen
-  // static const String settings = '/settings'; // No longer a top-level route, handled by HomeScreen
+  static const String blockedUsers = '/blocked_users'; 
 
   /// Generate routes for the app
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -34,7 +32,7 @@ class AppRoutes {
       case onboarding:
         return MaterialPageRoute(
           builder:
-              (_) => OnboardingContainer(
+              (_) => OnboardingSignupScreen(
                 onComplete:
                     () => navigatorKey.currentState?.pushReplacementNamed(home),
               ),

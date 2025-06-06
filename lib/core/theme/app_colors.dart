@@ -22,6 +22,7 @@ class AppColors {
 
   // Utility colors
   static const Color errorRed = Color(0xFFCF6679);
+  static const Color destructiveRed = Color(0xFFFF453A); // iOS destructive red
   static const Color successGreen = Color(0xFF00FF66); // Green for success
   static const Color warningYellow = Color(0xFFFFC107);
   static const Color infoBlue = Color(0xFF00FFAA); // Lighter green for info
@@ -29,8 +30,23 @@ class AppColors {
   // Transparent colors for overlays
   static Color blackOpacity10 = Colors.black.withValues(alpha: 0.1);
   static Color blackOpacity20 = Colors.black.withValues(alpha: 0.2);
+  static Color blackOpacity30 = Colors.black.withValues(alpha: 0.3);
   static Color blackOpacity50 = Colors.black.withValues(alpha: 0.5);
+  static Color blackOpacity70 = Colors.black.withValues(alpha: 0.7);
+  
+  static Color whiteOpacity08 = Colors.white.withValues(alpha: 0.08);
   static Color whiteOpacity10 = Colors.white.withValues(alpha: 0.1);
+  static Color whiteOpacity15 = Colors.white.withValues(alpha: 0.15);
   static Color whiteOpacity20 = Colors.white.withValues(alpha: 0.2);
+  static Color whiteOpacity30 = Colors.white.withValues(alpha: 0.3);
   static Color whiteOpacity50 = Colors.white.withValues(alpha: 0.5);
+  static Color whiteOpacity54 = Colors.white.withValues(alpha: 0.54);
+  
+  static Color accentBlueOpacity30 = accentBlue.withValues(alpha: 0.3);
+  static Color accentBlueOpacity50 = accentBlue.withValues(alpha: 0.5);
+  
+  // Pure colors for convenience
+  static const Color pureWhite = Colors.white;
+  static const Color pureBlack = Colors.black;
+  static const Color black87 = Colors.black87;
 }

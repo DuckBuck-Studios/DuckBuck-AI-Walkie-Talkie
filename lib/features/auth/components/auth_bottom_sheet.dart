@@ -543,7 +543,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       return CupertinoTheme(
         data: const CupertinoThemeData(
           brightness: Brightness.dark,
-          primaryColor: CupertinoColors.activeBlue,
+          primaryColor: AppColors.accentBlue,
         ),
         child: Container(
           padding: EdgeInsets.only(
@@ -553,7 +553,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
             bottom: bottomPaddingValue,
           ),
           decoration: BoxDecoration(
-            color: CupertinoColors.black,
+            color: AppColors.pureBlack,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             border: Border.all(
               color: AppColors.whiteOpacity20,

@@ -174,7 +174,7 @@ class PhoneVerificationView extends StatelessWidget {
         color: isIOS ? Colors.black : Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(isIOS ? 12 : 16),
         border: Border.all(
-          color: AppColors.accentBlue.withOpacity(0.3), // Subtle accent border
+          color: AppColors.accentBlue.withValues(alpha: 0.3), // Subtle accent border
           width: 1.5,
         ),
       ),
@@ -191,7 +191,7 @@ class PhoneVerificationView extends StatelessWidget {
             width: 1,
             height: 32,
             margin: const EdgeInsets.symmetric(vertical: 8),
-            color: AppColors.accentBlue.withOpacity(0.2),
+            color: AppColors.accentBlue.withValues(alpha: 0.2),
           ),
           
           // Phone number input field
@@ -213,7 +213,7 @@ class PhoneVerificationView extends StatelessWidget {
           color: AppColors.accentBlue,
           borderRadius: BorderRadius.circular(28), // More rounded corners for iOS
           padding: EdgeInsets.zero,
-          disabledColor: AppColors.accentBlue.withOpacity(0.5),
+          disabledColor: AppColors.accentBlue.withValues(alpha: 0.5),
           child: isLoading
               ? const CupertinoActivityIndicator(
                   color: Colors.white,

@@ -70,8 +70,8 @@ class AuthOptionsView extends StatelessWidget {
         HapticFeedback.lightImpact();
         onGoogleSelected();
       },
-      backgroundColor: Colors.white,
-      textColor: Colors.black87,
+      backgroundColor: AppColors.pureWhite,
+      textColor: AppColors.black87,
     );
   }
 
@@ -84,8 +84,8 @@ class AuthOptionsView extends StatelessWidget {
         HapticFeedback.lightImpact();
         onAppleSelected();
       },
-      backgroundColor: Colors.black,
-      textColor: Colors.white,
+      backgroundColor: AppColors.pureBlack,
+      textColor: AppColors.pureWhite,
     );
   }
 
@@ -98,7 +98,7 @@ class AuthOptionsView extends StatelessWidget {
         onPhoneSelected();
       },
       backgroundColor: AppColors.accentBlue,
-      textColor: Colors.white,
+      textColor: AppColors.pureWhite,
     );
   }
 

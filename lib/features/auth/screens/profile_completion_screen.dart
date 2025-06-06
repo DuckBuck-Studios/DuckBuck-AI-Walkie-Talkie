@@ -347,7 +347,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   /// Build Cupertino-style app bar for iOS
   PreferredSizeWidget _buildCupertinoAppBar(bool isDarkMode) {
     return CupertinoNavigationBar(
-      backgroundColor: AppColors.backgroundBlack.withOpacity(0.8),
+      backgroundColor: AppColors.backgroundBlack.withValues(alpha: 0.8),
       border: Border.all(color: Colors.transparent),
       // No leading navigator buttons
       automaticallyImplyLeading: false,
@@ -383,11 +383,8 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   /// Build main content based on current step with memory optimizations
   Widget _buildMainContent(bool isIOS) {
     return RepaintBoundary(
-      child: WillPopScope(
-        onWillPop: () async {
-          // Always prevent back press during profile completion
-          return false;
-        },
+      child: PopScope(
+        canPop: false, // Always prevent back press during profile completion
         child: SafeArea(
           child: Stack(
             children: [
@@ -448,7 +445,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   /// Build platform-specific loading overlay
   Widget _buildLoadingOverlay(bool isIOS) {
     return Container(
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withValues(alpha: 0.7),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -479,7 +476,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         color: AppColors.backgroundBlack,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -564,7 +561,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 8,
                     spreadRadius: 1,
                   )
@@ -663,7 +660,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.accentBlue.withOpacity(0.5), width: 1),
+                        border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.5), width: 1),
                       ),
                       child: CupertinoButton(
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -842,11 +839,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isIOS ? CupertinoColors.destructiveRed : Colors.redAccent,
+            color: AppColors.destructiveRed,
             borderRadius: BorderRadius.circular(isIOS ? 10 : 4),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),

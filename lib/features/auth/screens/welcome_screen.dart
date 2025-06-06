@@ -10,7 +10,7 @@ import 'package:duckbuck/core/theme/widget_styles.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
-import 'package:duckbuck/features/auth/screens/onboarding_container.dart';
+import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -48,7 +48,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final packageInfo = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          _appVersion = packageInfo.version + '+' + packageInfo.buildNumber;
+          _appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
         });
       }
     } catch (e) {
@@ -248,7 +248,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -287,7 +287,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -319,15 +319,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
     _logger.i(_tag, 'User started onboarding flow');
     
-    // Reset onboarding progress before navigating
-    PreferencesService.instance.setCurrentOnboardingStep(0);
-    
     // Use pushReplacement with a combined fade and scale transition
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => 
-          OnboardingContainer(
+          OnboardingSignupScreen(
             onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {

@@ -114,7 +114,7 @@ class OtpVerificationView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             border: Border.all(
-              color: AppColors.accentBlue.withOpacity(0.3),
+              color: AppColors.accentBlue.withValues(alpha: 0.3),
               width: 1.5,
             ),
             borderRadius: BorderRadius.circular(16),
@@ -154,14 +154,14 @@ class OtpVerificationView extends StatelessWidget {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: AppColors.accentBlue.withOpacity(0.3),
+                color: AppColors.accentBlue.withValues(alpha: 0.3),
                 width: 1.5,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: AppColors.accentBlue.withOpacity(0.3),
+                color: AppColors.accentBlue.withValues(alpha: 0.3),
                 width: 1.5,
               ),
             ),
@@ -195,7 +195,7 @@ class OtpVerificationView extends StatelessWidget {
           color: AppColors.accentBlue,
           borderRadius: BorderRadius.circular(28), // More rounded corners for iOS
           padding: EdgeInsets.zero,
-          disabledColor: AppColors.accentBlue.withOpacity(0.5),
+          disabledColor: AppColors.accentBlue.withValues(alpha: 0.5),
           child: isLoading
               ? const CupertinoActivityIndicator(
                   color: Colors.white,
@@ -262,7 +262,7 @@ class OtpVerificationView extends StatelessWidget {
           CupertinoButton(
             onPressed: isResendDisabled ? null : onResendPressed,
             padding: EdgeInsets.zero,
-            minSize: 0,
+            minimumSize: Size.zero,
             child: isLoading && isResendDisabled ? 
               // Show loading indicator for iOS
               const CupertinoActivityIndicator(radius: 8, color: AppColors.accentBlue) :
