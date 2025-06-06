@@ -8,6 +8,8 @@ import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
 import io.agora.rtc2.IRtcEngineEventHandler.AudioVolumeInfo
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class AgoraService(private val context: Context) {
     
@@ -25,6 +27,10 @@ class AgoraService(private val context: Context) {
     
     // Track remote users in the channel
     private val remoteUsersInChannel = mutableSetOf<Int>()
+    
+    // For joinChannelAndWaitForUsers functionality
+    private var userJoinedLatch: CountDownLatch? = null
+    private var isWaitingForUsers = false
     
     private var eventListener: AgoraEventListener? = null
     
@@ -57,6 +63,13 @@ class AgoraService(private val context: Context) {
             // Add user to our tracking set
             remoteUsersInChannel.add(uid)
             AppLogger.d(TAG, "Remote users in channel: ${remoteUsersInChannel.size}")
+            
+            // If we're waiting for users to join, signal the latch
+            if (isWaitingForUsers && userJoinedLatch != null) {
+                AppLogger.d(TAG, "User joined while waiting - signaling latch")
+                userJoinedLatch?.countDown()
+            }
+            
             eventListener?.onUserJoined(uid, elapsed)
         }
         
@@ -256,6 +269,67 @@ class AgoraService(private val context: Context) {
         } catch (e: Exception) {
             AppLogger.e(TAG, "Exception while joining channel", e)
             return false
+        }
+    }
+    
+    /**
+     * Join a channel and wait for other users to join within the specified timeout
+     * @param channelName The name of the channel to join
+     * @param token Optional token for channel authentication
+     * @param uid User ID (0 for auto-assignment)
+     * @param timeoutSeconds Maximum time to wait for users (default 15 seconds)
+     * @return true if users joined within timeout, false otherwise
+     */
+    fun joinChannelAndWaitForUsers(
+        channelName: String, 
+        token: String? = null, 
+        uid: Int = 0, 
+        timeoutSeconds: Int = 15
+    ): Boolean {
+        AppLogger.d(TAG, "joinChannelAndWaitForUsers: $channelName, timeout: ${timeoutSeconds}s")
+        
+        // First, try to join the channel using existing method
+        val joinResult = joinChannel(channelName, token, uid)
+        if (!joinResult) {
+            AppLogger.e(TAG, "Failed to join channel in joinChannelAndWaitForUsers")
+            return false
+        }
+        
+        // Check if there are already users in the channel
+        if (remoteUsersInChannel.isNotEmpty()) {
+            AppLogger.d(TAG, "Users already present in channel: ${remoteUsersInChannel.size}")
+            return true
+        }
+        
+        // Set up waiting mechanism
+        isWaitingForUsers = true
+        userJoinedLatch = CountDownLatch(1)
+        
+        AppLogger.d(TAG, "Waiting for users to join channel for $timeoutSeconds seconds...")
+        
+        return try {
+            // Wait for the specified timeout or until someone joins
+            val userJoined = userJoinedLatch?.await(timeoutSeconds.toLong(), TimeUnit.SECONDS) ?: false
+            
+            if (userJoined) {
+                AppLogger.d(TAG, "✅ User(s) joined within timeout! Users in channel: ${remoteUsersInChannel.size}")
+                true
+            } else {
+                AppLogger.d(TAG, "❌ No users joined within $timeoutSeconds seconds timeout")
+                false
+            }
+        } catch (e: InterruptedException) {
+            AppLogger.w(TAG, "Wait for users interrupted", e)
+            Thread.currentThread().interrupt()
+            false
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Exception while waiting for users", e)
+            false
+        } finally {
+            // Cleanup waiting state
+            isWaitingForUsers = false
+            userJoinedLatch = null
+            AppLogger.d(TAG, "Cleaned up waiting state")
         }
     }
     

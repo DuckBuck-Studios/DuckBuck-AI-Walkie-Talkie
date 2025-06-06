@@ -25,6 +25,9 @@ class AgoraMethodChannelHandler {
             "joinChannel" -> {
                 handleJoinChannel(call, result)
             }
+            "joinChannelAndWaitForUsers" -> {
+                handleJoinChannelAndWaitForUsers(call, result)
+            }
             "leaveChannel" -> {
                 handleLeaveChannel(result)
             }
@@ -83,6 +86,42 @@ class AgoraMethodChannelHandler {
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error joining channel", e)
             result.error("JOIN_CHANNEL_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleJoinChannelAndWaitForUsers(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val channelName = call.argument<String>("channelName")
+            val token = call.argument<String?>("token")
+            val uid = call.argument<Int>("uid") ?: 0
+            val timeoutSeconds = call.argument<Int>("timeoutSeconds") ?: 15
+            
+            AppLogger.d(TAG, "Flutter requested: joinChannelAndWaitForUsers - $channelName, timeout: ${timeoutSeconds}s")
+            
+            if (channelName != null) {
+                // Run in background thread to avoid blocking Flutter UI
+                Thread {
+                    try {
+                        val agoraService = AgoraServiceManager.getValidatedAgoraService()
+                        val success = agoraService?.joinChannelAndWaitForUsers(channelName, token, uid, timeoutSeconds) ?: false
+                        
+                        // Return result on main thread
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            result.success(success)
+                        }
+                    } catch (e: Exception) {
+                        AppLogger.e(TAG, "Error in joinChannelAndWaitForUsers background thread", e)
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            result.error("JOIN_AND_WAIT_ERROR", e.message, null)
+                        }
+                    }
+                }.start()
+            } else {
+                result.error("INVALID_ARGUMENT", "Channel name is required", null)
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error setting up joinChannelAndWaitForUsers", e)
+            result.error("JOIN_AND_WAIT_SETUP_ERROR", e.message, null)
         }
     }
     

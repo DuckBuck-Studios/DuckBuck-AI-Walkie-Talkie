@@ -12,14 +12,22 @@ class AgoraService {
       return false;
     }
   }
+ 
 
-  /// Join a channel with mic unmuted
-  static Future<bool> joinChannel(String channelName, {String? token, int uid = 0}) async {
+  /// Join a channel and wait for other users to join within the specified timeout
+  /// Returns true if users joined within timeout, false otherwise
+  static Future<bool> joinChannelAndWaitForUsers(
+    String channelName, {
+    String? token,
+    int uid = 0,
+    int timeoutSeconds = 15,
+  }) async {
     try {
-      final bool result = await _channel.invokeMethod('joinChannel', {
+      final bool result = await _channel.invokeMethod('joinChannelAndWaitForUsers', {
         'channelName': channelName,
         'token': token,
         'uid': uid,
+        'timeoutSeconds': timeoutSeconds,
       });
       
       if (result) {
