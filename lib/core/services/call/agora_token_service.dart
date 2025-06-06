@@ -72,9 +72,7 @@ class AgoraTokenService {
   /// Throws [TokenGenerationException] on failure
   Future<AgoraTokenResponse> generateToken({
     required int uid,
-    required String channelId,
-    required String callerPhoto,
-    required String callName,
+    required String channelId, 
   }) async {
     try {
       _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid');
@@ -91,9 +89,7 @@ class AgoraTokenService {
       // Prepare request data
       final requestData = {
         'uid': uid,
-        'channelId': channelId,
-        'callerPhoto': callerPhoto,
-        'callName': callName,
+        'channelId': channelId, 
       };
 
       _logger.d(_tag, 'Sending token generation request: $requestData');
@@ -101,9 +97,7 @@ class AgoraTokenService {
       // Make API request to generate token
       final response = await _apiService.generateAgoraToken(
         uid: uid,
-        channelId: channelId,
-        callerPhoto: callerPhoto,
-        callName: callName,
+        channelId: channelId, 
         firebaseToken: firebaseToken,
       );
 
@@ -151,9 +145,7 @@ class AgoraTokenService {
         
         return await generateToken(
           uid: uid,
-          channelId: channelId,
-          callerPhoto: callerPhoto,
-          callName: callName,
+          channelId: channelId, 
         );
         
       } catch (e) {

@@ -519,9 +519,7 @@ class ApiService {
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   Future<AgoraTokenResponse> generateAgoraToken({
     required int uid,
-    required String channelId,
-    required String callerPhoto,
-    required String callName,
+    required String channelId, 
     required String firebaseToken,
   }) async {
     try {
@@ -544,9 +542,7 @@ class ApiService {
         '/api/agora/generate-token',
         data: {
           'uid': uid,
-          'channelId': channelId,
-          'callerPhoto': callerPhoto,
-          'callName': callName,
+          'channelId': channelId, 
         },
         options: Options(
           headers: {
