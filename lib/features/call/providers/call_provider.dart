@@ -9,18 +9,13 @@ class CallProvider with ChangeNotifier {
   CallData? _currentCall;
   bool _isInCall = false;
   bool _isMuted = false;
-  bool _isVideoEnabled = false;
   bool _isSpeakerOn = true; // Speaker is on by default for calls
-  Duration _callDuration = Duration.zero;
-  DateTime? _callStartTime;
 
   // Getters
   CallData? get currentCall => _currentCall;
   bool get isInCall => _isInCall;
   bool get isMuted => _isMuted;
-  bool get isVideoEnabled => _isVideoEnabled;
   bool get isSpeakerOn => _isSpeakerOn;
-  Duration get callDuration => _callDuration;
 
   CallProvider() {
     _setupMethodChannelHandler();
@@ -33,7 +28,7 @@ class CallProvider with ChangeNotifier {
         case 'showCallUI':
           final callerName = call.arguments['callerName'] as String?;
           final callerPhotoUrl = call.arguments['callerPhotoUrl'] as String?;
-          final isMuted = call.arguments['isMuted'] as bool? ?? true; // Default to muted
+          final isMuted = call.arguments['isMuted'] as bool? ?? true;  
           
           if (callerName != null) {
             _showCallUI(CallData(
@@ -54,13 +49,9 @@ class CallProvider with ChangeNotifier {
   void _showCallUI(CallData callData, bool isMuted) {
     _currentCall = callData;
     _isInCall = true;
-    _callStartTime = DateTime.now();
     _isMuted = isMuted; // Use the actual mute state from Kotlin
-    _isVideoEnabled = false; // Default to video off
     _isSpeakerOn = true; // Default to speaker on
     
-    // Start call duration timer
-    _startCallTimer();
     
     notifyListeners();
   }
@@ -70,10 +61,7 @@ class CallProvider with ChangeNotifier {
     _currentCall = null;
     _isInCall = false;
     _isMuted = false;
-    _isVideoEnabled = false;
     _isSpeakerOn = true;
-    _callDuration = Duration.zero;
-    _callStartTime = null;
     
     notifyListeners();
   }
@@ -111,62 +99,34 @@ class CallProvider with ChangeNotifier {
     }
   }
 
-  /// Toggle video on/off
-  Future<void> toggleVideo() async {
+  /// Toggle speaker on/off
+  Future<void> toggleSpeaker() async {
     try {
-      if (_isVideoEnabled) {
-        final result = await AgoraService.turnVideoOff();
+      if (_isSpeakerOn) {
+        final result = await AgoraService.turnSpeakerOff();
         if (result) {
-          _isVideoEnabled = false;
+          _isSpeakerOn = false;
           notifyListeners();
         }
       } else {
-        final result = await AgoraService.turnVideoOn();
+        final result = await AgoraService.turnSpeakerOn();
         if (result) {
-          _isVideoEnabled = true;
+          _isSpeakerOn = true;
           notifyListeners();
         }
       }
     } catch (e) {
-      debugPrint('Error toggling video: $e');
+      debugPrint('Error toggling speaker: $e');
     }
   }
-
-  /// Toggle speaker on/off
-  /// Note: This is a UI state toggle. The actual speaker control
-  /// would need additional native implementation
-  void toggleSpeaker() {
-    _isSpeakerOn = !_isSpeakerOn;
-    notifyListeners();
-  }
-
-  /// Start the call duration timer
-  void _startCallTimer() {
-    // Update call duration every second
-    Stream.periodic(const Duration(seconds: 1)).listen((_) {
-      if (_isInCall && _callStartTime != null) {
-        _callDuration = DateTime.now().difference(_callStartTime!);
-        notifyListeners();
-      }
-    });
-  }
-
-  /// Format call duration as MM:SS
-  String get formattedCallDuration {
-    final minutes = _callDuration.inMinutes.toString().padLeft(2, '0');
-    final seconds = (_callDuration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
+ 
 
   /// Clear call state (for cleanup)
   void clearCallState() {
     _currentCall = null;
     _isInCall = false;
     _isMuted = false;
-    _isVideoEnabled = false;
     _isSpeakerOn = true;
-    _callDuration = Duration.zero;
-    _callStartTime = null;
     notifyListeners();
   }
 }

@@ -3,9 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'dart:io' show Platform;
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../providers/call_provider.dart';
-import '../../friends/widgets/profile_avatar.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
@@ -31,173 +31,242 @@ class CallScreen extends StatelessWidget {
   Widget _buildCupertinoCallScreen(BuildContext context, CallProvider callProvider) {
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: SafeArea(
-        child: _buildCallContent(context, callProvider, true),
-      ),
+      child: _buildCallContent(context, callProvider, true),
     );
   }
 
   Widget _buildMaterialCallScreen(BuildContext context, CallProvider callProvider) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: _buildCallContent(context, callProvider, false),
-      ),
+      body: _buildCallContent(context, callProvider, false),
     );
   }
 
   Widget _buildCallContent(BuildContext context, CallProvider callProvider, bool isIOS) {
-    final mediaQuery = MediaQuery.of(context);
-    final screenHeight = mediaQuery.size.height;
-    final screenWidth = mediaQuery.size.width;
+    // Get caller info
+    final callerName = callProvider.currentCall!.callerName;
+    final callerPhotoUrl = callProvider.currentCall!.callerPhotoUrl;
     
-    // Responsive sizing similar to user_screen.dart
-    double avatarRadius;
-    double spacingHeight;
-    double fontSize;
-    double horizontalPadding;
-    double topPadding;
-    
-    if (screenWidth <= 320) {
-      avatarRadius = 60.0;
-      spacingHeight = 16.0;
-      fontSize = 22.0;
-      horizontalPadding = screenWidth * 0.08;
-      topPadding = screenHeight * 0.08;
-    } else if (screenWidth <= 375) {
-      avatarRadius = 70.0;
-      spacingHeight = 20.0;
-      fontSize = 24.0;
-      horizontalPadding = screenWidth * 0.1;
-      topPadding = screenHeight * 0.1;
-    } else if (screenWidth <= 414) {
-      avatarRadius = 80.0;
-      spacingHeight = 24.0;
-      fontSize = 26.0;
-      horizontalPadding = screenWidth * 0.12;
-      topPadding = screenHeight * 0.12;
-    } else if (screenWidth <= 428) {
-      avatarRadius = 90.0;
-      spacingHeight = 28.0;
-      fontSize = 28.0;
-      horizontalPadding = screenWidth * 0.15;
-      topPadding = screenHeight * 0.15;
-    } else {
-      avatarRadius = 100.0;
-      spacingHeight = 32.0;
-      fontSize = 32.0;
-      horizontalPadding = screenWidth * 0.2;
-      topPadding = screenHeight * 0.18;
-    }
-    
-    // Adjust for screen height constraints
-    if (screenHeight < 600) {
-      avatarRadius *= 0.8;
-      spacingHeight *= 0.7;
-      fontSize *= 0.85;
-      topPadding *= 0.5;
-    } else if (screenHeight < 700) {
-      avatarRadius *= 0.9;
-      spacingHeight *= 0.85;
-      fontSize *= 0.9;
-      topPadding *= 0.7;
-    }
-
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      child: Column(
-        children: [
-          // Top section with caller info
-          Expanded(
-            flex: 3,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(height: topPadding * 0.3), // Reduced spacing to move content up
-                  
-                  // Caller avatar with animation
-                  ProfileAvatar(
-                    photoURL: callProvider.currentCall!.callerPhotoUrl,
-                    displayName: callProvider.currentCall!.callerName,
-                    radius: avatarRadius,
-                  )
-                  .animate(onPlay: (controller) => controller.repeat())
-                  .shimmer(duration: 2500.ms, delay: 500.ms)
-                  .scaleXY(begin: 1.0, end: 1.05, duration: 2000.ms)
-                  .then(delay: 1000.ms)
-                  .scaleXY(begin: 1.05, end: 1.0, duration: 2000.ms),
-                  
-                  SizedBox(height: spacingHeight),
-                  
-                  // Caller name with animation
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth > 428 ? screenWidth * 0.05 : 0,
-                    ),
-                    child: Text(
-                      callProvider.currentCall!.callerName,
-                      style: isIOS 
-                          ? CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: fontSize,
-                              color: CupertinoColors.white,
-                              letterSpacing: screenWidth > 428 ? 0.5 : 0,
-                            )
-                          : TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: fontSize,
-                              color: Colors.white,
-                              letterSpacing: screenWidth > 428 ? 0.5 : 0,
-                            ),
-                      textAlign: TextAlign.center,
-                      maxLines: screenWidth <= 320 ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(duration: 600.ms)
-                  .moveY(begin: 10, end: 0, duration: 600.ms, curve: Curves.easeOutQuad),
-                  
-                  SizedBox(height: spacingHeight * 0.5),
-                  
-                  // Call duration with animation (moved below caller name)
-                  Text(
-                    callProvider.formattedCallDuration,
-                    style: isIOS 
-                        ? CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                            color: CupertinoColors.white,
-                            fontSize: 18.0,
-                            fontWeight: FontWeight.w500,
-                          )
-                        : TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18.0,
-                            fontWeight: FontWeight.w500,
-                          ),
-                  )
-                  .animate(onPlay: (controller) => controller.repeat())
-                  .fadeIn(duration: 500.ms)
-                  .then()
-                  .fadeOut(duration: 500.ms)
-                  .then()
-                  .fadeIn(duration: 500.ms),
-                ],
-              ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Full-screen background image
+        _buildFullScreenBackground(callerPhotoUrl, callerName),
+        
+        // Gradient overlay for better text readability
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withOpacity(0.6),
+                Colors.black.withOpacity(0.2),
+                Colors.transparent,
+                Colors.black.withOpacity(0.7),
+              ],
+              stops: const [0.0, 0.2, 0.7, 1.0],
             ),
           ),
-          
-          // Bottom section with call controls
-          Expanded(
-            flex: 1,
-            child: _buildCallControls(context, callProvider, isIOS),
+        ),
+        
+        // Content overlay
+        SafeArea(
+          child: Column(
+            children: [
+              // Top section with caller name
+              _buildCallerNameSection(context, callerName, isIOS),
+              
+              // Spacer to push controls to bottom
+              const Spacer(),
+              
+              // Bottom section with call controls
+              _buildCallControls(context, callProvider, isIOS),
+              
+              // Bottom padding for controls
+              SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+            ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFullScreenBackground(String? photoUrl, String displayName) {
+    if (photoUrl != null && photoUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: photoUrl,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => _buildFallbackBackground(displayName),
+        errorWidget: (context, url, error) => _buildFallbackBackground(displayName),
+        fadeInDuration: const Duration(milliseconds: 200),
+        memCacheWidth: 800, // Optimize for performance
+        memCacheHeight: 1200,
+      );
+    } else {
+      return _buildFallbackBackground(displayName);
+    }
+  }
+
+  Widget _buildFallbackBackground(String displayName) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.blue.shade700,
+            Colors.purple.shade700,
+            Colors.indigo.shade800,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          _getInitials(displayName),
+          style: TextStyle(
+            fontSize: 120,
+            fontWeight: FontWeight.bold,
+            color: Colors.white.withOpacity(0.8),
+            letterSpacing: 4,
+          ),
+        ),
       ),
     );
+  }
+
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return '?';
+    final parts = name.trim().split(' ');
+    if (parts.length > 1 && parts.last.isNotEmpty) {
+      return (parts.first[0] + parts.last[0]).toUpperCase();
+    } else if (parts.first.isNotEmpty) {
+      return parts.first[0].toUpperCase();
+    }
+    return '?';
+  }
+
+  Widget _buildCallerNameSection(BuildContext context, String callerName, bool isIOS) {
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
+    
+    // Responsive sizing based on screen width
+    double fontSize;
+    double horizontalPadding;
+    double verticalPadding;
+    double letterSpacing;
+    int maxLines;
+    
+    if (screenWidth <= 320) {
+      // iPhone SE (1st gen) and smaller
+      fontSize = 24.0;
+      horizontalPadding = 16.0;
+      verticalPadding = 20.0;
+      letterSpacing = 0.2;
+      maxLines = 2;
+    } else if (screenWidth <= 375) {
+      // iPhone SE (2nd/3rd gen), iPhone 12 mini
+      fontSize = 28.0;
+      horizontalPadding = 20.0;
+      verticalPadding = 24.0;
+      letterSpacing = 0.3;
+      maxLines = 2;
+    } else if (screenWidth <= 390) {
+      // iPhone 12, iPhone 13
+      fontSize = 30.0;
+      horizontalPadding = 24.0;
+      verticalPadding = 28.0;
+      letterSpacing = 0.4;
+      maxLines = 2;
+    } else if (screenWidth <= 414) {
+      // iPhone 11, iPhone XR, iPhone 12/13 Pro Max
+      fontSize = 32.0;
+      horizontalPadding = 28.0;
+      verticalPadding = 32.0;
+      letterSpacing = 0.5;
+      maxLines = 2;
+    } else if (screenWidth <= 428) {
+      // iPhone 14 Pro Max, iPhone 15 Pro Max
+      fontSize = 34.0;
+      horizontalPadding = 32.0;
+      verticalPadding = 36.0;
+      letterSpacing = 0.6;
+      maxLines = 2;
+    } else {
+      // Larger screens (iPad, etc.)
+      fontSize = 36.0;
+      horizontalPadding = 40.0;
+      verticalPadding = 40.0;
+      letterSpacing = 0.8;
+      maxLines = 1;
+    }
+    
+    // Adjust for very small screens
+    if (screenHeight < 600) {
+      fontSize *= 0.9;
+      verticalPadding *= 0.8;
+    } else if (screenHeight < 700) {
+      fontSize *= 0.95;
+      verticalPadding *= 0.9;
+    }
+    
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      child: Text(
+        callerName,
+        style: isIOS 
+            ? CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: fontSize,
+                color: Colors.white,
+                letterSpacing: letterSpacing,
+                height: 1.2,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(0, 2),
+                    blurRadius: 6,
+                    color: Colors.black.withOpacity(0.8),
+                  ),
+                  Shadow(
+                    offset: const Offset(0, 1),
+                    blurRadius: 3,
+                    color: Colors.black.withOpacity(0.4),
+                  ),
+                ],
+              )
+            : TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: fontSize,
+                color: Colors.white,
+                letterSpacing: letterSpacing,
+                height: 1.2,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(0, 2),
+                    blurRadius: 6,
+                    color: Colors.black.withOpacity(0.8),
+                  ),
+                  Shadow(
+                    offset: const Offset(0, 1),
+                    blurRadius: 3,
+                    color: Colors.black.withOpacity(0.4),
+                  ),
+                ],
+              ),
+        textAlign: TextAlign.center,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      ),
+    )
+    .animate()
+    .fadeIn(duration: 600.ms)
+    .moveY(begin: -20, end: 0, duration: 600.ms, curve: Curves.easeOutQuad)
+    .shimmer(duration: 2000.ms, delay: 1000.ms);
   }
 
   Widget _buildCallControls(BuildContext context, CallProvider callProvider, bool isIOS) {
@@ -205,12 +274,15 @@ class CallScreen extends StatelessWidget {
     final screenWidth = mediaQuery.size.width;
     
     // Responsive button sizing
-    final buttonSize = screenWidth < 400 ? 60.0 : 70.0;
-    final iconSize = buttonSize * 0.4;
+    final buttonSize = screenWidth < 400 ? 70.0 : 80.0;
+    final iconSize = buttonSize * 0.35;
     final horizontalPadding = screenWidth < 400 ? 20.0 : 30.0;
     
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: 20.0,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -287,13 +359,13 @@ class CallScreen extends StatelessWidget {
     Color iconColor;
     
     if (isEndCall) {
-      backgroundColor = Colors.red;
+      backgroundColor = Colors.red.shade600;
       iconColor = Colors.white;
     } else if (isActive) {
-      backgroundColor = isIOS ? CupertinoColors.white : Colors.white;
-      iconColor = isIOS ? CupertinoColors.black : Colors.black;
+      backgroundColor = Colors.white;
+      iconColor = Colors.black87;
     } else {
-      backgroundColor = Colors.white.withOpacity(0.2);
+      backgroundColor = Colors.white.withOpacity(0.25);
       iconColor = Colors.white;
     }
     
@@ -307,8 +379,8 @@ class CallScreen extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],

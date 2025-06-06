@@ -52,11 +52,11 @@ class AppStateManager(private val context: Context) {
                     val agoraService = AgoraServiceManager.getAgoraService()
                     val isMuted = agoraService?.isMicrophoneMuted() ?: true
                     
-                    // Small delay to ensure Flutter engine is ready
+                    // Optimized delay to ensure Flutter engine is ready - reduced for faster startup
                     Handler(Looper.getMainLooper()).postDelayed({
                         onCallFound(callData.callName, callData.callerPhoto, isMuted)
                         AppLogger.i(TAG, "✅ Call UI triggered for active call: ${callData.callName} (muted: $isMuted)")
-                    }, 200) // Delay for Flutter engine readiness
+                    }, 75) // Reduced from 150ms to 75ms for faster UI response
                 } else {
                     // Service not running but call data exists - clear stale data
                     AppLogger.w(TAG, "🧹 Service not running but call data exists - clearing stale data")

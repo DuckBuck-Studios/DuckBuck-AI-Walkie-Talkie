@@ -7,7 +7,6 @@ import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
-import io.agora.rtc2.video.VideoCanvas
 import io.agora.rtc2.IRtcEngineEventHandler.AudioVolumeInfo
 
 class AgoraService(private val context: Context) {
@@ -20,7 +19,7 @@ class AgoraService(private val context: Context) {
     private var rtcEngine: RtcEngine? = null
     private var isJoined = false
     private var isMicMuted = false
-    private var isVideoEnabled = true
+    private var isSpeakerOn = true
     private var currentChannelName: String? = null
     private var myUid: Int = 0
     
@@ -161,7 +160,6 @@ class AgoraService(private val context: Context) {
                 
                 // Apply necessary configurations right after creation
                 rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
-                rtcEngine?.enableVideo()
                 rtcEngine?.enableAudio()
                 
                 // Enable audio volume indication for speaking detection
@@ -175,13 +173,31 @@ class AgoraService(private val context: Context) {
                     Constants.AUDIO_SCENARIO_CHATROOM
                 )
                 
-                // Set default audio route
-                rtcEngine?.setDefaultAudioRoutetoSpeakerphone(true)
+                // Set default audio route to speaker
+                rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
                 
                 // Give the engine sufficient time to complete internal initialization
                 // This prevents timing issues where joinChannel is called immediately after creation
                 AppLogger.d(TAG, "Waiting for engine to fully initialize...")
-                Thread.sleep(300)
+                
+                // Use asynchronous delay to avoid blocking the main thread
+                val initializationLatch = java.util.concurrent.CountDownLatch(1)
+                val initHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                
+                initHandler.postDelayed({
+                    initializationLatch.countDown()
+                }, 300)
+                
+                // Wait for initialization with timeout
+                try {
+                    val initialized = initializationLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    if (!initialized) {
+                        AppLogger.w(TAG, "Engine initialization timeout, proceeding anyway")
+                    }
+                } catch (e: InterruptedException) {
+                    AppLogger.w(TAG, "Engine initialization interrupted", e)
+                    Thread.currentThread().interrupt()
+                }
                 
                 // Extra validation to confirm initialization succeeded
                 if (rtcEngine == null) {
@@ -223,8 +239,8 @@ class AgoraService(private val context: Context) {
                 channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
                 clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
                 autoSubscribeAudio = true
-                autoSubscribeVideo = true
-                publishCameraTrack = true
+                autoSubscribeVideo = false
+                publishCameraTrack = false
                 publishMicrophoneTrack = true
             }
             
@@ -325,94 +341,54 @@ class AgoraService(private val context: Context) {
     }
     
     /**
-     * Toggle video on/off
+     * Toggle speaker on/off
      */
-    fun toggleVideo(): Boolean {
+    fun toggleSpeaker(): Boolean {
         if (rtcEngine == null) {
             AppLogger.e(TAG, "RTC Engine not initialized")
             return false
         }
         
         return try {
-            isVideoEnabled = !isVideoEnabled
-            val result = rtcEngine?.muteLocalVideoStream(!isVideoEnabled)
+            isSpeakerOn = !isSpeakerOn
+            val result = rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
             
             if (result == 0) {
-                AppLogger.d(TAG, "Video ${if (isVideoEnabled) "enabled" else "disabled"}")
-                eventListener?.onVideoToggled(isVideoEnabled)
+                AppLogger.d(TAG, "Speaker ${if (isSpeakerOn) "enabled" else "disabled"}")
+                eventListener?.onSpeakerToggled(isSpeakerOn)
                 true
             } else {
-                AppLogger.e(TAG, "Failed to toggle video. Error code: $result")
+                AppLogger.e(TAG, "Failed to toggle speaker. Error code: $result")
                 // Revert the state if operation failed
-                isVideoEnabled = !isVideoEnabled
+                isSpeakerOn = !isSpeakerOn
                 false
             }
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while toggling video", e)
+            AppLogger.e(TAG, "Exception while toggling speaker", e)
             // Revert the state if operation failed
-            isVideoEnabled = !isVideoEnabled
+            isSpeakerOn = !isSpeakerOn
             false
         }
     }
     
     /**
-     * Turn video on
+     * Turn speaker on
      */
-    fun turnVideoOn(): Boolean {
-        if (!isVideoEnabled) {
-            return toggleVideo()
+    fun turnSpeakerOn(): Boolean {
+        if (!isSpeakerOn) {
+            return toggleSpeaker()
         }
         return true // Already on
     }
     
     /**
-     * Turn video off
+     * Turn speaker off
      */
-    fun turnVideoOff(): Boolean {
-        if (isVideoEnabled) {
-            return toggleVideo()
+    fun turnSpeakerOff(): Boolean {
+        if (isSpeakerOn) {
+            return toggleSpeaker()
         }
         return true // Already off
-    }
-    
-    /**
-     * Set up local video view
-     */
-    fun setupLocalVideo(view: android.view.SurfaceView): Boolean {
-        if (rtcEngine == null) {
-            AppLogger.e(TAG, "RTC Engine not initialized")
-            return false
-        }
-        
-        return try {
-            val videoCanvas = VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0)
-            rtcEngine?.setupLocalVideo(videoCanvas)
-            AppLogger.d(TAG, "Local video setup completed")
-            true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while setting up local video", e)
-            false
-        }
-    }
-    
-    /**
-     * Set up remote video view
-     */
-    fun setupRemoteVideo(view: android.view.SurfaceView, uid: Int): Boolean {
-        if (rtcEngine == null) {
-            AppLogger.e(TAG, "RTC Engine not initialized")
-            return false
-        }
-        
-        return try {
-            val videoCanvas = VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid)
-            rtcEngine?.setupRemoteVideo(videoCanvas)
-            AppLogger.d(TAG, "Remote video setup completed for uid: $uid")
-            true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while setting up remote video", e)
-            false
-        }
     }
     
     /**
@@ -440,9 +416,9 @@ class AgoraService(private val context: Context) {
     fun isMicrophoneMuted(): Boolean = isMicMuted
     
     /**
-     * Get current video status
+     * Get current speaker status
      */
-    fun isVideoEnabled(): Boolean = isVideoEnabled
+    fun isSpeakerEnabled(): Boolean = isSpeakerOn
     
     /**
      * Get current channel name
@@ -486,7 +462,7 @@ class AgoraService(private val context: Context) {
                 rtcEngine?.setParameters("{\"che.audio.keep_audiosession\": true}")
                 
                 // Basic audio control that should work if engine is ready
-                rtcEngine?.setDefaultAudioRoutetoSpeakerphone(true)
+                rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
                 
                 AppLogger.d(TAG, "✅ RTC Engine is confirmed to be fully initialized and responsive")
                 return true
@@ -609,7 +585,7 @@ class AgoraService(private val context: Context) {
         fun onUserJoined(uid: Int, elapsed: Int)
         fun onUserOffline(uid: Int, reason: Int)
         fun onMicrophoneToggled(isMuted: Boolean)
-        fun onVideoToggled(isEnabled: Boolean)
+        fun onSpeakerToggled(isEnabled: Boolean)
         fun onError(errorCode: Int, errorMessage: String)
         fun onAllUsersLeft() {}
         fun onChannelEmpty() {}

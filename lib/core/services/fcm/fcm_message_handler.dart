@@ -160,8 +160,8 @@ class FCMMessageHandler {
       
       if (initialMessage != null) {
         _logger.i(_tag, 'App opened from notification: ${initialMessage.messageId}');
-        // Delay navigation to ensure app is fully initialized
-        Future.delayed(const Duration(milliseconds: 500), () {
+        // Reduced delay to ensure app is fully initialized - from 500ms to 300ms
+        Future.delayed(const Duration(milliseconds: 300), () {
           _navigateToFriendsScreen(initialMessage);
         });
       }

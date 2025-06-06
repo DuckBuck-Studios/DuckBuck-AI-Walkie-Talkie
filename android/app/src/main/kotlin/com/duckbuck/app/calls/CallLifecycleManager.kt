@@ -197,8 +197,8 @@ class CallLifecycleManager(private val context: Context) {
                 AppLogger.d(TAG, "🎤 Mic toggled: $isMuted")
             }
             
-            override fun onVideoToggled(isEnabled: Boolean) {
-                AppLogger.d(TAG, "📹 Video toggled: $isEnabled")
+            override fun onSpeakerToggled(isEnabled: Boolean) {
+                AppLogger.d(TAG, "🔊 Speaker toggled: $isEnabled")
             }
             
             override fun onError(errorCode: Int, errorMessage: String) {
@@ -346,8 +346,8 @@ class CallLifecycleManager(private val context: Context) {
                 // These should be handled by other users receiving the audio events
             }
             
-            override fun onVideoToggled(isEnabled: Boolean) {
-                AppLogger.d(TAG, "📹 Video toggled in walkie-talkie: $isEnabled")
+            override fun onSpeakerToggled(isEnabled: Boolean) {
+                AppLogger.d(TAG, "🔊 Speaker toggled in walkie-talkie: $isEnabled")
             }
             
             override fun onError(errorCode: Int, errorMessage: String) {

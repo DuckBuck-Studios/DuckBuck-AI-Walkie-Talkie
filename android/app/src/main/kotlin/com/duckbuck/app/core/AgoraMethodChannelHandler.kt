@@ -34,11 +34,11 @@ class AgoraMethodChannelHandler {
             "turnMicrophoneOff" -> {
                 handleTurnMicrophoneOff(result)
             }
-            "turnVideoOn" -> {
-                handleTurnVideoOn(result)
+            "turnSpeakerOn" -> {
+                handleTurnSpeakerOn(result)
             }
-            "turnVideoOff" -> {
-                handleTurnVideoOff(result)
+            "turnSpeakerOff" -> {
+                handleTurnSpeakerOff(result)
             }
             "isEngineActive" -> {
                 handleIsEngineActive(result)
@@ -106,8 +106,7 @@ class AgoraMethodChannelHandler {
             result.success(success)
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error turning microphone on", e)
-            result.error("MIC_ON_ERROR", e.message, null)
-        }
+            result.error("MIC_ON_ERROR", e.message, null)        }
     }
     
     private fun handleTurnMicrophoneOff(result: MethodChannel.Result) {
@@ -122,27 +121,27 @@ class AgoraMethodChannelHandler {
         }
     }
 
-    private fun handleTurnVideoOn(result: MethodChannel.Result) {
+    private fun handleTurnSpeakerOn(result: MethodChannel.Result) {
         try {
-            AppLogger.d(TAG, "Flutter requested: turnVideoOn")
+            AppLogger.d(TAG, "Flutter requested: turnSpeakerOn")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
-            val success = agoraService?.turnVideoOn() ?: false
+            val success = agoraService?.turnSpeakerOn() ?: false
             result.success(success)
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Error turning video on", e)
-            result.error("VIDEO_ON_ERROR", e.message, null)
+            AppLogger.e(TAG, "Error turning speaker on", e)
+            result.error("SPEAKER_ON_ERROR", e.message, null)
         }
     }
     
-    private fun handleTurnVideoOff(result: MethodChannel.Result) {
+    private fun handleTurnSpeakerOff(result: MethodChannel.Result) {
         try {
-            AppLogger.d(TAG, "Flutter requested: turnVideoOff")
+            AppLogger.d(TAG, "Flutter requested: turnSpeakerOff")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
-            val success = agoraService?.turnVideoOff() ?: false
+            val success = agoraService?.turnSpeakerOff() ?: false
             result.success(success)
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Error turning video off", e)
-            result.error("VIDEO_OFF_ERROR", e.message, null)
+            AppLogger.e(TAG, "Error turning speaker off", e)
+            result.error("SPEAKER_OFF_ERROR", e.message, null)
         }
     }
     

@@ -32,24 +32,43 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
         super.onCreate()
         AppLogger.i(TAG, "🚀 FCM Service Orchestrator starting up...")
         
-        // Initialize managers
-        initializeManagers()
+        // Initialize managers asynchronously to avoid blocking FCM message processing
+        initializeManagersAsync()
         
         // Don't start walkie-talkie service automatically
         // It will be started only when FCM message is received
     }
     
     /**
-     * Initialize high-level managers for delegation
+     * Initialize high-level managers for delegation - Asynchronous to prevent blocking
      */
-    private fun initializeManagers() {
-        try {
+    private fun initializeManagersAsync() {
+        // Use background thread to avoid blocking FCM message processing
+        Thread {
+            try {
+                appStateDetector = FcmAppStateDetector(this)
+                volumeAcquireManager = VolumeAcquireManager(this)
+                occupancyManager = ChannelOccupancyManager()
+                AppLogger.i(TAG, "✅ All high-level managers initialized successfully (async)")
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "❌ Error initializing managers (async)", e)
+            }
+        }.start()
+    }
+    
+    /**
+     * Ensure managers are initialized before use (with fallback)
+     */
+    private fun ensureManagersInitialized() {
+        if (!::appStateDetector.isInitialized) {
+            AppLogger.w(TAG, "⚠️ Managers not initialized, creating inline")
             appStateDetector = FcmAppStateDetector(this)
+        }
+        if (!::volumeAcquireManager.isInitialized) {
             volumeAcquireManager = VolumeAcquireManager(this)
+        }
+        if (!::occupancyManager.isInitialized) {
             occupancyManager = ChannelOccupancyManager()
-            AppLogger.i(TAG, "✅ All high-level managers initialized successfully")
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "❌ Error initializing managers", e)
         }
     }
     
@@ -61,6 +80,9 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
         super<FirebaseMessagingService>.onMessageReceived(remoteMessage)
         
         try {
+            // Ensure managers are initialized before processing
+            ensureManagersInitialized()
+            
             AppLogger.i(TAG, "📨 FCM message received: ${remoteMessage.messageId}")
             
             // 🕐 TIMESTAMP VALIDATION: Check if message is fresh before processing

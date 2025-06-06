@@ -117,12 +117,8 @@ class AgoraCallManager(private val context: Context) {
         if (initResult && agoraService.isEngineInitialized()) {
             AppLogger.i(TAG, "✅ OPTIMIZED JOIN: Engine re-initialized successfully")
             
-            // Give engine time to fully initialize
-            try {
-                Thread.sleep(300)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
+            // Engine initialization is now non-blocking - removed 300ms delay
+            // The engine will signal readiness through callbacks instead of blocking
             
             return true
         }

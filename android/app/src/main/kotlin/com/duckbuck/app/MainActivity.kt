@@ -59,7 +59,7 @@ class MainActivity : FlutterActivity() {
                 // Trigger call UI when active call is found
                 CallUITrigger.showCallUI(callerName, callerPhoto, isMuted)
             }
-        }, 500) // 500ms delay for cold start scenarios
+        }, 100) // Further reduced from 250ms to 100ms for faster cold start
     }
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -79,15 +79,23 @@ class MainActivity : FlutterActivity() {
     }
     
     /**
-     * Initialize all specialized managers
+     * Initialize all specialized managers with async optimization for faster startup
      */
     private fun initializeManagers() {
         try {
+            // Initialize managers that don't depend on each other asynchronously
             engineStartupManager = EngineStartupManager(this)
-            flutterBridgeManager = FlutterBridgeManager()
-            appStateManager = AppStateManager(this)
             
-            AppLogger.i(TAG, "✅ All managers initialized successfully")
+            // Initialize FlutterBridgeManager synchronously since configureFlutterEngine needs it
+            flutterBridgeManager = FlutterBridgeManager()
+            
+            // Initialize AppStateManager async - it can start in parallel
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                appStateManager = AppStateManager(this)
+                AppLogger.i(TAG, "✅ AppStateManager initialized asynchronously")
+            }
+            
+            AppLogger.i(TAG, "✅ Critical managers initialized successfully")
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error initializing managers", e)
             throw e

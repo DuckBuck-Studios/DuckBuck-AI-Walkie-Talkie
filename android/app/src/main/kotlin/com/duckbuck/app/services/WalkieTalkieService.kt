@@ -488,8 +488,8 @@ class WalkieTalkieService : Service() {
                 // Service notification updates removed - only showing speaking/over notifications
             }
             
-            override fun onVideoToggled(isEnabled: Boolean) {
-                AppLogger.d(TAG, "📹 Service: Video toggled in walkie-talkie: $isEnabled")
+            override fun onSpeakerToggled(isEnabled: Boolean) {
+                AppLogger.d(TAG, "🔊 Service: Speaker toggled in walkie-talkie: $isEnabled")
             }
             
             override fun onError(errorCode: Int, errorMessage: String) {

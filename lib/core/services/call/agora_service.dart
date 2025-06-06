@@ -13,7 +13,7 @@ class AgoraService {
     }
   }
 
-  /// Join a channel with mic unmuted and video off
+  /// Join a channel with mic unmuted
   static Future<bool> joinChannel(String channelName, {String? token, int uid = 0}) async {
     try {
       final bool result = await _channel.invokeMethod('joinChannel', {
@@ -23,9 +23,8 @@ class AgoraService {
       });
       
       if (result) {
-        // Default to mic on (unmuted) and video off after joining
+        // Default to mic on (unmuted) after joining
         await turnMicrophoneOn();
-        await turnVideoOff();
       }
       
       return result;
@@ -64,20 +63,20 @@ class AgoraService {
     }
   }
 
-  /// Turn video on
-  static Future<bool> turnVideoOn() async {
+  /// Turn speaker on
+  static Future<bool> turnSpeakerOn() async {
     try {
-      final bool result = await _channel.invokeMethod('turnVideoOn');
+      final bool result = await _channel.invokeMethod('turnSpeakerOn');
       return result;
     } catch (e) {
       return false;
     }
   }
 
-  /// Turn video off
-  static Future<bool> turnVideoOff() async {
+  /// Turn speaker off
+  static Future<bool> turnSpeakerOff() async {
     try {
-      final bool result = await _channel.invokeMethod('turnVideoOff');
+      final bool result = await _channel.invokeMethod('turnSpeakerOff');
       return result;
     } catch (e) {
       return false;
