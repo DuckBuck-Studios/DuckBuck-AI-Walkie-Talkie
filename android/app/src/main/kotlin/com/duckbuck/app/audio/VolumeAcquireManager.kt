@@ -41,13 +41,12 @@ class VolumeAcquireManager(private val context: Context) {
     /**
      * Acquire maximum volume for walkie-talkie channel joining
      * This is called when FCM triggers channel join in any app state
+     * Always operates silently without showing volume UI
      * 
      * @param mode The volume acquire mode (default: MEDIA_AND_VOICE_CALL)
-     * @param showUIFeedback Whether to show volume UI feedback to user (always false for silent operation)
      */
     fun acquireMaximumVolume(
-        mode: VolumeAcquireMode = VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-        showUIFeedback: Boolean = false
+        mode: VolumeAcquireMode = VolumeAcquireMode.MEDIA_AND_VOICE_CALL
     ) {
         try {
             AppLogger.i(TAG, "🔊 Acquiring maximum volume for walkie-talkie (mode: $mode)")
@@ -58,17 +57,17 @@ class VolumeAcquireManager(private val context: Context) {
             // Set volumes based on mode
             when (mode) {
                 VolumeAcquireMode.MEDIA_ONLY -> {
-                    setMaximumMediaVolume(false)
+                    setMaximumMediaVolume()
                 }
                 VolumeAcquireMode.VOICE_CALL_ONLY -> {
-                    setMaximumVoiceCallVolume(false)
+                    setMaximumVoiceCallVolume()
                 }
                 VolumeAcquireMode.MEDIA_AND_VOICE_CALL -> {
-                    setMaximumMediaVolume(false)
-                    setMaximumVoiceCallVolume(false)
+                    setMaximumMediaVolume()
+                    setMaximumVoiceCallVolume()
                 }
                 VolumeAcquireMode.ALL_STREAMS -> {
-                    setMaximumAllStreams(false)
+                    setMaximumAllStreams()
                 }
             }
             
@@ -81,9 +80,9 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set media volume to maximum (for music, videos, game audio)
-     * Volume UI is never shown for silent operation
+     * Always operates silently without showing volume UI
      */
-    private fun setMaximumMediaVolume(showUIFeedback: Boolean = false) {
+    private fun setMaximumMediaVolume() {
         try {
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -110,9 +109,9 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set voice call volume to maximum (for phone calls)
-     * Volume UI is never shown for silent operation
+     * Always operates silently without showing volume UI
      */
-    private fun setMaximumVoiceCallVolume(showUIFeedback: Boolean = false) {
+    private fun setMaximumVoiceCallVolume() {
         try {
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
             val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
@@ -131,15 +130,15 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set all audio stream volumes to maximum
-     * Volume UI is never shown for silent operation
+     * Always operates silently without showing volume UI
      */
-    private fun setMaximumAllStreams(showUIFeedback: Boolean = false) {
+    private fun setMaximumAllStreams() {
         try {
-            // Media stream (music, videos, games) - no UI feedback
-            setMaximumMediaVolume(false)
+            // Media stream (music, videos, games)
+            setMaximumMediaVolume()
             
-            // Voice call stream - no UI feedback
-            setMaximumVoiceCallVolume(false)
+            // Voice call stream
+            setMaximumVoiceCallVolume()
             
             // Ring stream (ringtones)
             val maxRingVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)

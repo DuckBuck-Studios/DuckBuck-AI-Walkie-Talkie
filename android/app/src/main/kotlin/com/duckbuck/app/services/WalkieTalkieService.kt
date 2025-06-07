@@ -237,8 +237,7 @@ class WalkieTalkieService : Service() {
             // 🔊 VOLUME ACQUIRE: Set volume to 100% when joining via service
             // This ensures maximum volume regardless of how the channel was joined
             volumeAcquireManager.acquireMaximumVolume(
-                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-                showUIFeedback = false // Don't show UI feedback in service
+                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL
             )
             
             val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
@@ -395,8 +394,12 @@ class WalkieTalkieService : Service() {
                         
                         // Show speaking notification for the person who triggered the FCM
                         val speakerName = lastSpeakerUsername ?: "Someone"
-                        notificationManager.showSpeakingNotification(speakerName)
-                        AppLogger.i(TAG, "📢 Showing speaking notification: $speakerName is speaking")
+                        
+                        // Get speaker photo from persisted call data
+                        val speakerPhotoUrl = callStatePersistence.getCurrentCallData()?.callerPhoto
+                        
+                        notificationManager.showSpeakingNotification(speakerName, speakerPhotoUrl)
+                        AppLogger.i(TAG, "📢 Showing speaking notification: $speakerName is speaking (photo: ${if (speakerPhotoUrl != null) "present" else "none"})")
                         
                         // Trigger call UI for walkie-talkie calls with actual mute state and photo
                         val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"

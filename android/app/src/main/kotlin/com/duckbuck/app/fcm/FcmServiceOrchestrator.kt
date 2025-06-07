@@ -136,8 +136,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
             
             // Acquire maximum volume for optimal walkie-talkie experience
             volumeAcquireManager.acquireMaximumVolume(
-                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-                showUIFeedback = currentAppState == FcmAppStateDetector.AppState.FOREGROUND
+                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL
             )
             
             val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()

@@ -62,26 +62,69 @@ class CallNotificationManager(private val context: Context) {
     /**
      * Show speaking notification when someone is talking in walkie-talkie
      */
-    fun showSpeakingNotification(speakerName: String) {
+    fun showSpeakingNotification(speakerName: String, speakerPhotoUrl: String? = null) {
         try {
             AppLogger.i(TAG, "$speakerName is speaking")
             
-            val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
-                .setContentTitle("$speakerName is speaking")
-                .setSmallIcon(R.drawable.ic_speaker)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setAutoCancel(false)
-                .setOngoing(true)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setDefaults(NotificationCompat.DEFAULT_ALL)
-                .build()
+            // Show notification immediately without photo, then update with photo if available
+            showNotificationWithoutPhoto(speakerName)
             
-            notificationManager?.notify(SPEAKING_NOTIFICATION_ID, notification)
+            // Load profile photo asynchronously and update notification
+            if (speakerPhotoUrl != null) {
+                AppLogger.d(TAG, "🖼️ Attempting to load profile photo for: $speakerName")
+                loadBitmapFromUrlAsync(speakerPhotoUrl) { bitmap ->
+                    if (bitmap != null) {
+                        AppLogger.i(TAG, "✅ Profile photo loaded successfully, updating notification")
+                        showNotificationWithPhoto(speakerName, bitmap)
+                    } else {
+                        AppLogger.w(TAG, "❌ Failed to load profile photo, notification will remain without photo")
+                    }
+                }
+            } else {
+                AppLogger.d(TAG, "📷 No profile photo URL provided for: $speakerName")
+            }
             
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error showing speaking notification", e)
         }
+    }
+    
+    /**
+     * Show notification without profile photo (immediate display)
+     */
+    private fun showNotificationWithoutPhoto(speakerName: String) {
+        val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("$speakerName is speaking")
+            .setSmallIcon(R.drawable.ic_speaker)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .build()
+        
+        notificationManager?.notify(SPEAKING_NOTIFICATION_ID, notification)
+    }
+    
+    /**
+     * Update notification with profile photo (after async load)
+     */
+    private fun showNotificationWithPhoto(speakerName: String, profileBitmap: Bitmap) {
+        val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("$speakerName is speaking")
+            .setSmallIcon(R.drawable.ic_speaker)
+            .setLargeIcon(profileBitmap)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .build()
+        
+        notificationManager?.notify(SPEAKING_NOTIFICATION_ID, notification)
+        AppLogger.d(TAG, "✅ Updated notification with profile photo for: $speakerName")
     }
     
     /**
@@ -130,5 +173,120 @@ class CallNotificationManager(private val context: Context) {
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error clearing notifications", e)
         }
+    }
+    
+    /**
+     * Load bitmap from URL for profile photo asynchronously
+     * Runs on background thread to avoid NetworkOnMainThreadException
+     */
+    private fun loadBitmapFromUrlAsync(url: String, callback: (Bitmap?) -> Unit) {
+        Thread {
+            try {
+                // Decode HTML entities in URL if present
+                val decodedUrl = url
+                    .replace("&#x2F;", "/")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&quot;", "\"")
+                
+                AppLogger.d(TAG, "Loading profile photo from: $decodedUrl")
+                
+                val connection = URL(decodedUrl).openConnection()
+                connection.connectTimeout = 5000 // 5 second timeout
+                connection.readTimeout = 5000
+                connection.doInput = true
+                connection.connect()
+                
+                val inputStream = connection.getInputStream()
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream.close()
+                
+                // Create circular bitmap for better appearance
+                val circularBitmap = if (bitmap != null) {
+                    AppLogger.d(TAG, "✅ Successfully loaded bitmap (${bitmap.width}x${bitmap.height}), creating circular version")
+                    createCircularBitmap(bitmap)
+                } else {
+                    AppLogger.w(TAG, "❌ Failed to decode bitmap from URL")
+                    null
+                }
+                
+                AppLogger.d(TAG, "🔄 Posting callback to main thread with bitmap: ${if (circularBitmap != null) "present" else "null"}")
+                
+                // Run callback on main thread
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    AppLogger.d(TAG, "📱 Running callback on main thread")
+                    callback(circularBitmap)
+                }
+                
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Error loading profile photo", e)
+                // Run callback on main thread with null result
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    AppLogger.d(TAG, "📱 Running error callback on main thread")
+                    callback(null)
+                }
+            }
+        }.start()
+    }
+    
+    /**
+     * Load bitmap from URL for profile photo
+     * Returns a circular bitmap suitable for notification large icon
+     */
+    private fun loadBitmapFromUrl(url: String): Bitmap? {
+        return try {
+            AppLogger.d(TAG, "Loading profile photo from: $url")
+            
+            val connection = URL(url).openConnection()
+            connection.connectTimeout = 5000 // 5 second timeout
+            connection.readTimeout = 5000
+            connection.doInput = true
+            connection.connect()
+            
+            val inputStream = connection.getInputStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            
+            // Create circular bitmap for better appearance
+            if (bitmap != null) {
+                createCircularBitmap(bitmap)
+            } else {
+                AppLogger.w(TAG, "Failed to decode bitmap from URL")
+                null
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error loading profile photo", e)
+            null
+        }
+    }
+    
+    /**
+     * Create a circular bitmap from the original bitmap
+     */
+    private fun createCircularBitmap(originalBitmap: Bitmap): Bitmap {
+        val size = minOf(originalBitmap.width, originalBitmap.height)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        
+        val canvas = android.graphics.Canvas(output)
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.RED
+        }
+        
+        // Draw circle
+        val radius = size / 2f
+        canvas.drawCircle(radius, radius, radius, paint)
+        
+        // Apply source-in blend mode to crop image to circle
+        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+        
+        // Calculate position to center the image
+        val left = (size - originalBitmap.width) / 2f
+        val top = (size - originalBitmap.height) / 2f
+        
+        canvas.drawBitmap(originalBitmap, left, top, paint)
+        
+        return output
     }
 }

@@ -269,8 +269,7 @@ class CallLifecycleManager(private val context: Context) {
             
             // 🔊 VOLUME ACQUIRE: Set volume to 100% when manually joining walkie-talkie
             volumeAcquireManager.acquireMaximumVolume(
-                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-                showUIFeedback = true // Show UI feedback for manual joins
+                mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL
             )
             
             val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()

@@ -36,8 +36,7 @@ class AppStateManager(private val context: Context) {
                 
                 // 🔊 VOLUME ACQUIRE: Set volume to 100% when resuming active call
                 volumeAcquireManager.acquireMaximumVolume(
-                    mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
-                    showUIFeedback = true  
+                    mode = VolumeAcquireManager.Companion.VolumeAcquireMode.MEDIA_AND_VOICE_CALL
                 )
                 
                 val volumeInfo = volumeAcquireManager.getCurrentVolumeInfo()
