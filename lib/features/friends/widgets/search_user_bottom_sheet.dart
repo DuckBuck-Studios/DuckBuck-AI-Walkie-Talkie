@@ -606,7 +606,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                 color: AppColors.whiteOpacity08,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: AppColors.borderColor.withOpacity(0.3),
+                  color: AppColors.borderColor.withAlpha(77), // 0.3 * 255 = ~77
                 ),
               ),
               child: Column(
@@ -687,7 +687,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Colors.green.withAlpha(26), // 0.1 * 255 = ~26
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -767,7 +767,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.errorRed.withOpacity(0.1),
+                color: AppColors.errorRed.withAlpha(26), // 0.1 * 255 = ~26
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -876,7 +876,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withAlpha(26), // 0.1 * 255 = ~26
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

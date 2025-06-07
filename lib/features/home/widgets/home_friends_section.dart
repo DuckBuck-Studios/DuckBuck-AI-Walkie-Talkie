@@ -38,7 +38,7 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Container(
+      return SizedBox(
         height: MediaQuery.of(context).size.height * 0.6,
         width: double.infinity,
         child: Column(
@@ -110,7 +110,7 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Container(
+      return SizedBox(
         height: MediaQuery.of(context).size.height * 0.6,
         width: double.infinity,
         child: Column(

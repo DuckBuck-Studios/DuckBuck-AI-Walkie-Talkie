@@ -97,17 +97,24 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
   }
   
   /// Handle back button and animate out
-  Future<bool> _handleBackPress() async {
+  Future<void> _handleBackPress() async {
     // Reverse the animation
     await _animationController.reverse();
-    // Now actually pop
-    return true;
+    // Now actually pop if context is mounted
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _handleBackPress,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          _handleBackPress();
+        }
+      },
       child: Platform.isIOS 
         ? _buildCupertinoUI()
         : _buildMaterialUI(),
@@ -146,11 +153,11 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
     return FadeTransition(
       opacity: _animationController.drive(CurveTween(curve: Curves.easeOut)),
       child: Scaffold(
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         appBar: AppBar(
           title: Text(widget.title),
-          backgroundColor: theme.colorScheme.background,
-          foregroundColor: theme.colorScheme.onBackground,
+          backgroundColor: theme.colorScheme.surface,
+          foregroundColor: theme.colorScheme.onSurface,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),

@@ -222,7 +222,7 @@ class _UserUidCardState extends State<UserUidCard>
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          color: theme.colorScheme.primary.withAlpha(26), // 0.1 * 255 = ~26
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(

@@ -230,7 +230,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                 ? const CupertinoActivityIndicator(radius: 10)
                 : CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    minSize: 0,
+                    minimumSize: const Size(0, 0),
                     color: CupertinoColors.activeBlue,
                     borderRadius: BorderRadius.circular(16),
                     child: const Text(

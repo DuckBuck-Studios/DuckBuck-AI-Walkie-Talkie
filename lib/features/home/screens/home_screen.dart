@@ -54,12 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         } else {
           return Scaffold(
-            backgroundColor: theme.colorScheme.background,
+            backgroundColor: theme.colorScheme.surface,
             appBar: AppBar(
               title: const Text('Home'),
               automaticallyImplyLeading: false,
               centerTitle: true,
-              backgroundColor: theme.colorScheme.background,
+              backgroundColor: theme.colorScheme.surface,
               elevation: 0,
             ),
             body: SafeArea(

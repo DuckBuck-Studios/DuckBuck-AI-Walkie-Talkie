@@ -34,10 +34,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     return ErrorBoundary(
       featureName: 'privacy_settings',
       child: Scaffold(
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         appBar: AppBar(
           title: const Text('Privacy Settings'),
-          backgroundColor: theme.colorScheme.background,
+          backgroundColor: theme.colorScheme.surface,
           elevation: 0,
           leading: IconButton(
             icon: _getPlatformIcon(

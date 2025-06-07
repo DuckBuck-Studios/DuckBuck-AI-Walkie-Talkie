@@ -177,18 +177,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
           'Settings',
           style: TextStyle(
-            color: theme.colorScheme.onBackground,
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.bold,
           ),
         ),
         automaticallyImplyLeading: false,
         elevation: 0,
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         centerTitle: true,
       ),
       body: Consumer<SettingsProvider>(
@@ -383,7 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Settings'),
-        backgroundColor: cupertinoTheme.barBackgroundColor.withOpacity(0.7),
+        backgroundColor: cupertinoTheme.barBackgroundColor.withAlpha(178), // 0.7 * 255 = ~178
         border: null, // Remove default border for a cleaner look
       ),
       child: SafeArea(
@@ -391,9 +391,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, settingsProvider, child) {
             final user = settingsProvider.currentUser;
             final isLoading = settingsProvider.isLoading;
-            
-            print('🔍 [SETTINGS] _buildCupertinoPage: user photoURL: ${user?.photoURL}');
-            print('🔍 [SETTINGS] _buildCupertinoPage: isLoading: $isLoading');
             
             return ListView(
               padding: EdgeInsets.symmetric(
@@ -537,7 +534,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: TextStyle(
           fontSize: screenWidth * 0.045,
           fontWeight: FontWeight.w600,
-          color: theme.colorScheme.onBackground.withOpacity(0.7),
+          color: theme.colorScheme.onSurface.withAlpha(178), // 0.7 * 255 = ~178
         ),
       ),
     );
@@ -611,11 +608,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isIOS = Platform.isIOS;
     
-    print('🖼️ [SETTINGS] Building profile image for user: ${user.uid}');
-    print('🖼️ [SETTINGS] User photoURL from cached data: ${user.photoURL}');
+    // User profile image handling
     
     if (user.photoURL == null) {
-      print('🖼️ [SETTINGS] No photoURL found, showing default avatar');
+      // No profile photo available
       return CircleAvatar(
         radius: screenWidth * 0.12,
         backgroundColor: AppColors.accentBlue,
@@ -629,15 +625,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     
     // Check if this is a cached local file path
     final isLocalFile = user.photoURL!.startsWith('file://') || user.photoURL!.startsWith('/');
-    print('🖼️ [SETTINGS] Is local file: $isLocalFile');
     
     if (isLocalFile) {
       // Use the cached local file
       final localPath = user.photoURL!.startsWith('file://') 
           ? user.photoURL!.replaceFirst('file://', '') 
           : user.photoURL!;
-      
-      print('🖼️ [SETTINGS] Using cached local file: $localPath');
       
       return CircleAvatar(
         radius: screenWidth * 0.12,
@@ -652,7 +645,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
             cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
             errorBuilder: (context, error, stackTrace) {
-              print('🖼️ [SETTINGS] Error loading cached image, falling back to network: $error');
               // Fall back to network image if cached file fails
               return _buildNetworkImage(context, user.photoURL!, screenWidth, isIOS);
             },
@@ -662,7 +654,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     
     // Use network image for non-cached photos
-    print('🖼️ [SETTINGS] Using network image for URL: ${user.photoURL}');
     return CircleAvatar(
       radius: screenWidth * 0.12,
       backgroundColor: Colors.grey[300],
@@ -682,7 +673,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
       cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
       errorBuilder: (context, error, stackTrace) {
-        print('🖼️ [SETTINGS] Network image failed to load: $error');
         return Icon(
           isIOS ? CupertinoIcons.person : Icons.person, 
           size: screenWidth * 0.12, 

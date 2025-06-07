@@ -100,7 +100,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: CupertinoColors.systemGrey.resolveFrom(context).withOpacity(0.1),
+                        color: CupertinoColors.systemGrey.resolveFrom(context).withAlpha(26), // 0.1 * 255 = ~26
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -248,7 +248,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: CupertinoColors.activeBlue.resolveFrom(context).withOpacity(0.3),
+                        color: CupertinoColors.activeBlue.resolveFrom(context).withAlpha(77), // 0.3 * 255 = ~77
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -272,16 +272,16 @@ class _FriendsScreenState extends State<FriendsScreen>
     final theme = Theme.of(context);
     
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
           'Friends',
           style: TextStyle(
-            color: theme.colorScheme.onBackground,
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -293,11 +293,11 @@ class _FriendsScreenState extends State<FriendsScreen>
             margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              color: theme.colorScheme.surfaceContainerHighest.withAlpha(77), // 0.3 * 255 = ~77
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: theme.colorScheme.shadow.withOpacity(0.1),
+                  color: theme.colorScheme.shadow.withAlpha(26), // 0.1 * 255 = ~26
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -325,7 +325,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                         boxShadow: _selectedSegment == 0
                             ? [
                                 BoxShadow(
-                                  color: theme.colorScheme.shadow.withOpacity(0.15),
+                                  color: theme.colorScheme.shadow.withAlpha(38), // 0.15 * 255 = ~38
                                   blurRadius: 4,
                                   offset: const Offset(0, 1),
                                 ),
@@ -379,7 +379,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                         boxShadow: _selectedSegment == 1
                             ? [
                                 BoxShadow(
-                                  color: theme.colorScheme.shadow.withOpacity(0.15),
+                                  color: theme.colorScheme.shadow.withAlpha(38), // 0.15 * 255 = ~38
                                   blurRadius: 4,
                                   offset: const Offset(0, 1),
                                 ),
