@@ -117,7 +117,13 @@ class RemoveFriendDialog extends StatelessWidget {
 
   Future<void> _handleRemoveFriend(BuildContext context, bool isIOS) async {
     Navigator.of(context).pop();
-    final success = await provider.removeFriend(relationship.id);
+    
+    // Get the target user ID (the friend to remove)
+    final authService = serviceLocator<AuthServiceInterface>();
+    final currentUserId = authService.currentUser?.uid ?? '';
+    final targetUserId = relationship.getFriendId(currentUserId);
+    
+    final success = await provider.removeFriend(targetUserId);
     if (context.mounted) {
       final snackBar = SnackBar(
         content: Text(

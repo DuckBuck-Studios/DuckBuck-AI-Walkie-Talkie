@@ -99,6 +99,10 @@ class RelationshipRepository {
       
       final resultId = await _relationshipService.acceptFriendRequest(relationshipId);
       
+      // Note: No need to force refresh caches here - the real-time streams will
+      // automatically update when the Firestore document status changes from 'pending' to 'accepted'
+      _logger.d(_tag, 'Friend request accepted - real-time streams will handle UI updates');
+      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_request_accepted',
@@ -143,6 +147,10 @@ class RelationshipRepository {
       _logger.d(_tag, 'Rejecting friend request: $relationshipId');
       
       final result = await _relationshipService.rejectFriendRequest(relationshipId);
+      
+      // Note: No need to force refresh caches here - the real-time streams will
+      // automatically update when the Firestore document status changes from 'pending' to 'declined'
+      _logger.d(_tag, 'Friend request rejected - real-time streams will handle UI updates');
       
       // Track success analytics
       await _analytics.logEvent(
@@ -190,6 +198,10 @@ class RelationshipRepository {
       _logger.d(_tag, 'Removing friend: $targetUserId');
       
       final result = await _relationshipService.removeFriend(targetUserId);
+      
+      // Note: No need to force refresh caches here - the real-time streams will
+      // automatically update when the Firestore relationship document is deleted
+      _logger.d(_tag, 'Friend removed - real-time streams will handle UI updates');
       
       // Track success analytics
       await _analytics.logEvent(

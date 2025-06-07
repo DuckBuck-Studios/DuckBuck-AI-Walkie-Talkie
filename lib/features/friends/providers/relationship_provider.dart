@@ -122,7 +122,7 @@ class RelationshipProvider extends ChangeNotifier {
     _friendsSubscription?.cancel();
     _friendsSubscription = _relationshipRepository.getFriendsStream().listen(
       (friendsData) {
-        _friends = _convertToRelationshipModels(friendsData);
+        _friends = _convertToRelationshipModels(friendsData, streamStatus: RelationshipStatus.accepted);
         _summary['friends'] = _friends.length;
         _isLoadingFriends = false;
         _error = null;
@@ -160,8 +160,8 @@ class RelationshipProvider extends ChangeNotifier {
           }
         }
         
-        _incomingRequests = _convertToRelationshipModels(incoming);
-        _outgoingRequests = _convertToRelationshipModels(outgoing);
+        _incomingRequests = _convertToRelationshipModels(incoming, streamStatus: RelationshipStatus.pending);
+        _outgoingRequests = _convertToRelationshipModels(outgoing, streamStatus: RelationshipStatus.pending);
         
         _summary['pending_received'] = _incomingRequests.length;
         _summary['pending_sent'] = _outgoingRequests.length;
@@ -194,7 +194,7 @@ class RelationshipProvider extends ChangeNotifier {
     _blockedUsersSubscription?.cancel();
     _blockedUsersSubscription = _relationshipRepository.getBlockedUsersStream().listen(
       (blockedData) {
-        _blockedUsers = _convertToRelationshipModels(blockedData);
+        _blockedUsers = _convertToRelationshipModels(blockedData, streamStatus: RelationshipStatus.blocked);
         _summary['blocked'] = _blockedUsers.length;
         _isLoadingBlocked = false;
         _error = null;
@@ -217,7 +217,8 @@ class RelationshipProvider extends ChangeNotifier {
   }
 
   /// Convert List<Map<String, dynamic>> to List<RelationshipModel>
-  List<RelationshipModel> _convertToRelationshipModels(List<Map<String, dynamic>> data) {
+  /// Each stream is already filtered by status, so we trust the stream context
+  List<RelationshipModel> _convertToRelationshipModels(List<Map<String, dynamic>> data, {RelationshipStatus? streamStatus}) {
     final models = <RelationshipModel>[];
     
     for (final item in data) {
@@ -233,12 +234,23 @@ class RelationshipProvider extends ChangeNotifier {
           final currentUserId = _authService.currentUser?.uid ?? '';
           final participants = RelationshipModel.sortParticipants([currentUserId, uid]);
           
-          // Determine status based on context (friends are accepted, others are pending/blocked)
-          RelationshipStatus status = RelationshipStatus.pending;
-          if (_isLoadingFriends || (!_isLoadingFriends && _friends.isNotEmpty)) {
-            status = RelationshipStatus.accepted; // Friends stream
-          } else if (_isLoadingBlocked || (!_isLoadingBlocked && _blockedUsers.isNotEmpty)) {
-            status = RelationshipStatus.blocked; // Blocked stream
+          // Use provided stream status or infer from item data
+          RelationshipStatus status = streamStatus ?? RelationshipStatus.pending;
+          
+          // If status is provided in item data, use it (takes precedence)
+          final itemStatus = item['status'] as String?;
+          if (itemStatus != null) {
+            switch (itemStatus) {
+              case 'accepted':
+                status = RelationshipStatus.accepted;
+                break;
+              case 'pending':
+                status = RelationshipStatus.pending;
+                break;
+              case 'blocked':
+                status = RelationshipStatus.blocked;
+                break;  
+            }
           }
           
           final model = RelationshipModel(
@@ -257,8 +269,7 @@ class RelationshipProvider extends ChangeNotifier {
           _userProfiles[uid] = {
             'uid': uid,
             'displayName': item['displayName'],
-            'photoURL': item['photoURL'],
-            'email': item['email'], // if available
+            'photoURL': item['photoURL'], 
           };
         }
       } catch (e) {
@@ -321,6 +332,7 @@ class RelationshipProvider extends ChangeNotifier {
     try {
       _logger.d(_tag, 'Accepting friend request: $relationshipId');
       await _relationshipRepository.acceptFriendRequest(relationshipId);
+      
       _logger.i(_tag, 'Friend request accepted successfully');
       return true;
     } catch (e) {
@@ -341,6 +353,7 @@ class RelationshipProvider extends ChangeNotifier {
     try {
       _logger.d(_tag, 'Declining friend request: $relationshipId');
       await _relationshipRepository.rejectFriendRequest(relationshipId);
+      
       _logger.i(_tag, 'Friend request declined successfully');
       return true;
     } catch (e) {
@@ -363,6 +376,7 @@ class RelationshipProvider extends ChangeNotifier {
       _logger.d(_tag, 'Cancelling friend request: $relationshipId');
       // For now, use rejectFriendRequest as cancel functionality
       await _relationshipRepository.rejectFriendRequest(relationshipId);
+      
       _logger.i(_tag, 'Friend request cancelled successfully');
       return true;
     } catch (e) {
@@ -380,9 +394,14 @@ class RelationshipProvider extends ChangeNotifier {
   Future<bool> removeFriend(String targetUserId) async {
     try {
       _logger.d(_tag, 'Removing friend: $targetUserId');
+      
+      // Repository handles the actual removal and cache refresh
+      // UI will update via stream listeners after successful operation
       await _relationshipRepository.removeFriend(targetUserId);
+      
       _logger.i(_tag, 'Friend removed successfully');
       return true;
+      
     } catch (e) {
       _logger.e(_tag, 'Failed to remove friend: ${e.toString()}');
       _error = _getErrorMessage(e);
@@ -497,7 +516,7 @@ class RelationshipProvider extends ChangeNotifier {
       _logger.d(_tag, 'Loading blocked users');
       
       final result = await _relationshipRepository.getCachedBlockedUsers();
-      _blockedUsers = _convertToRelationshipModels(result);
+      _blockedUsers = _convertToRelationshipModels(result, streamStatus: RelationshipStatus.blocked);
       
       _logger.i(_tag, 'Blocked users loaded: ${_blockedUsers.length} users');
       

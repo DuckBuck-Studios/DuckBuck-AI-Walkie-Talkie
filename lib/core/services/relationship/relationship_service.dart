@@ -774,27 +774,30 @@ class RelationshipService implements RelationshipServiceInterface {
 
   /// Update relationship within transaction
   Future<void> _updateRelationshipInTransaction(
-    dynamic transaction,
+    Transaction transaction,
     String relationshipId,
     Map<String, dynamic> updates,
   ) async {
-    await _databaseService.setDocument(
-      collection: _relationshipCollection,
-      documentId: relationshipId,
-      data: updates,
-      merge: true,
-    );
+    final docRef = _databaseService.firestoreInstance
+        .collection(_relationshipCollection)
+        .doc(relationshipId);
+    
+    transaction.update(docRef, {
+      ...updates,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Delete relationship within transaction
   Future<void> _deleteRelationshipInTransaction(
-    dynamic transaction,
+    Transaction transaction,
     String relationshipId,
   ) async {
-    await _databaseService.deleteDocument(
-      collection: _relationshipCollection,
-      documentId: relationshipId,
-    );
+    final docRef = _databaseService.firestoreInstance
+        .collection(_relationshipCollection)
+        .doc(relationshipId);
+    
+    transaction.delete(docRef);
   }
 
   /// Send friend request notification

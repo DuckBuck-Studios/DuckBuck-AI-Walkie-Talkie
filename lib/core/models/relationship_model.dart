@@ -36,12 +36,29 @@ class RelationshipModel {
         (e) => e.name == map['status'],
         orElse: () => RelationshipStatus.pending,
       ),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
+      updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
       initiatorId: map['initiatorId'],
       blockerId: map['blockerId'], // Added this line to capture blockerId
-      acceptedAt: (map['acceptedAt'] as Timestamp?)?.toDate(),
+      acceptedAt: _parseDateTime(map['acceptedAt']),
     );
+  }
+
+  /// Helper method to parse DateTime from either Timestamp or String
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    
+    if (value is Timestamp) {
+      return value.toDate();
+    } else if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    
+    return null;
   }
 
   Map<String, dynamic> toMap() {
