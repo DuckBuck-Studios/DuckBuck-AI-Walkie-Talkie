@@ -45,6 +45,8 @@ dependencies:
   cached_network_image: ^3.4.1
   rive: ^0.13.15
   async: ^2.11.0
+  path: ^1.9.1
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

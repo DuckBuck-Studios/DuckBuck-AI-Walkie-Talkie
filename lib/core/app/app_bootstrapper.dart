@@ -42,10 +42,9 @@ class AppBootstrapper {
   Future<void> _initializeFirebase() async {
     try {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-      print('[Firebase] Firebase initialized successfully');
+      // Firebase initialized successfully
     } catch (e) {
-      print('[Firebase] Failed to initialize Firebase: $e');
-      // Allow app to continue with limited functionality
+      // Failed to initialize Firebase - allow app to continue with limited functionality
     }
   }
 
@@ -63,9 +62,9 @@ class AppBootstrapper {
         return true;
       };
       
-      print('[Crashlytics] Firebase Crashlytics initialized successfully');
+      // Firebase Crashlytics initialized successfully
     } catch (e) {
-      print('[Crashlytics] Failed to initialize Firebase Crashlytics: $e');
+      // Failed to initialize Firebase Crashlytics - app can function without Crashlytics
       // App can function without Crashlytics, with reduced error reporting
     }
   }
@@ -74,9 +73,9 @@ class AppBootstrapper {
     try {
       final appCheckService = FirebaseAppCheckService();
       await appCheckService.initialize();
-      print('[AppCheck] Firebase App Check initialized successfully');
+      // Firebase App Check initialized successfully
     } catch (e) {
-      print('[AppCheck] Failed to initialize Firebase App Check: $e');
+      // Failed to initialize Firebase App Check - app can still function with reduced security
       // App can still function without App Check, with reduced security
     }
   }
@@ -85,9 +84,9 @@ class AppBootstrapper {
     try {
       // LocalDatabaseService is automatically initialized when accessed
       // No separate initialization needed like SharedPreferences
-      print('[Database] LocalDatabaseService ready for app settings storage');
+      // LocalDatabaseService ready for app settings storage
     } catch (e) {
-      print('[Database] Failed to initialize database service: $e');
+      // Failed to initialize database service - critical error
       // Critical error - app depends on local storage
       rethrow;
     }
@@ -96,9 +95,9 @@ class AppBootstrapper {
   Future<void> _initializeServiceLocator() async {
     try {
       await setupServiceLocator();
-      print('[ServiceLocator] Service locator initialized successfully');
+      // Service locator initialized successfully
     } catch (e) {
-      print('[ServiceLocator] Failed to setup service locator: $e');
+      // Failed to setup service locator - critical error
       // Critical error - app depends on services
       rethrow;
     }

@@ -48,7 +48,7 @@ class CrashlyticsConsentManager {
       
       if (!hasUserConsented) {
         // Default to disabled in debug mode and enabled in release mode
-        _logger.i(_tag, 'No existing consent found, setting default: ${kReleaseMode}');
+        _logger.i(_tag, 'No existing consent found, setting default: $kReleaseMode');
         await setUserConsent(enabled: kReleaseMode);
       } else {
         // Load user preference and apply it
@@ -149,7 +149,7 @@ class CrashlyticsConsentManager {
     final manager = CrashlyticsConsentManager.create();
     final hasChoice = await manager.hasUserMadeChoice();
     
-    if (!hasChoice) {
+    if (!hasChoice && context.mounted) {
       await showConsentDialog(context);
     }
   }

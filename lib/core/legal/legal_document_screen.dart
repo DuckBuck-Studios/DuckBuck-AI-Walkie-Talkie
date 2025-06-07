@@ -110,7 +110,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
           _handleBackPress();
         }

@@ -81,8 +81,16 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          final shouldPop = await _onWillPop();
+          if (shouldPop && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        }
+      },
       child: Stack(
         children: [
           Scaffold(
@@ -102,7 +110,7 @@ class _MainNavigationState extends State<MainNavigation> {
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 20,
-                    color: Colors.black.withOpacity(0.25), // Darker shadow
+                    color: Colors.black.withAlpha((0.25 * 255).round()), // Darker shadow
                   ),
                 ],
               ),

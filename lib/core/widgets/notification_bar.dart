@@ -82,10 +82,9 @@ class _NotificationBarState extends State<NotificationBar> {
                 ),
                 // Platform-specific close button
                 if (!widget.autoDismiss) // Only show close button if not auto-dismissing
-                  isIOS
-                      ? CupertinoButton(
+                  isIOS                        ? CupertinoButton(
                           padding: EdgeInsets.zero,
-                          minSize: 20,
+                          minimumSize: const Size(20, 20),
                           onPressed: widget.onDismiss,
                           child: Icon(
                             CupertinoIcons.clear, 
