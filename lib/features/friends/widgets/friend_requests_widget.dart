@@ -372,61 +372,23 @@ class _FriendRequestTile extends StatelessWidget {
   Future<void> _acceptRequest(BuildContext context, String? relationshipId) async {
     if (relationshipId == null) return;
 
-    final success = await provider.acceptFriendRequest(relationshipId);
-    
-    if (!success && context.mounted) {
-      final errorMessage = provider.error ?? 'Failed to accept friend request';
-      _showError(context, errorMessage);
-    }
+    // Silent operation - no external error notifications
+    await provider.acceptFriendRequest(relationshipId);
   }
 
   /// Rejects a friend request
   Future<void> _rejectRequest(BuildContext context, String? relationshipId) async {
     if (relationshipId == null) return;
 
-    final success = await provider.rejectFriendRequest(relationshipId);
-    
-    if (!success && context.mounted) {
-      final errorMessage = provider.error ?? 'Failed to reject friend request';
-      _showError(context, errorMessage);
-    }
+    // Silent operation - no external error notifications
+    await provider.rejectFriendRequest(relationshipId);
   }
 
   /// Cancels a sent friend request
   Future<void> _cancelRequest(BuildContext context, String? relationshipId) async {
     if (relationshipId == null) return;
 
-    final success = await provider.cancelFriendRequest(relationshipId);
-    
-    if (!success && context.mounted) {
-      final errorMessage = provider.error ?? 'Failed to cancel friend request';
-      _showError(context, errorMessage);
-    }
-  }
-
-  /// Shows error message to user
-  void _showError(BuildContext context, String message) {
-    if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: Text(message),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
+    // Silent operation - no external error notifications
+    await provider.cancelFriendRequest(relationshipId);
   }
 }

@@ -245,34 +245,8 @@ class FriendsListWidget extends StatelessWidget {
   Future<void> _removeFriend(BuildContext context, String userId) async {
     final provider = Provider.of<RelationshipProvider>(context, listen: false);
     
-    final success = await provider.removeFriend(userId);
-    
-    if (!success && context.mounted) {
-      final errorMessage = provider.error ?? 'Failed to remove friend';
-      
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Error'),
-            content: Text(errorMessage),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
+    // Silent operation - no external error notifications
+    await provider.removeFriend(userId);
   }
 
   /// Shows confirmation dialog for blocking a friend
@@ -337,57 +311,7 @@ class FriendsListWidget extends StatelessWidget {
   Future<void> _blockFriend(BuildContext context, String userId, String friendName) async {
     final provider = Provider.of<RelationshipProvider>(context, listen: false);
     
-    final success = await provider.blockUser(userId);
-    
-    if (!success && context.mounted) {
-      final errorMessage = provider.error ?? 'Failed to block friend';
-      
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Error'),
-            content: Text(errorMessage),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } else if (success && context.mounted) {
-      // Show success message
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Friend Blocked'),
-            content: Text('$friendName has been blocked successfully.'),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$friendName has been blocked'),
-            backgroundColor: Theme.of(context).colorScheme.secondary,
-          ),
-        );
-      }
-    }
+    // Silent operation - no external error or success notifications
+    await provider.blockUser(userId);
   }
 }

@@ -49,6 +49,10 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
   bool _isSearching = false;
   String? _searchError;
   bool _isSendingRequest = false;
+  
+  // Friend request result states
+  String? _requestSuccessMessage;
+  String? _requestErrorMessage;
 
   @override
   void initState() {
@@ -161,7 +165,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               padding: EdgeInsets.only(bottom: bottomPadding),
               child: SafeArea(
                 top: false,
-                child: Column(
+                child: _shouldShowBottomButtons() ? Column(
                   children: [
                     // Primary action button (Search or Send Friend Request)
                     SizedBox(
@@ -196,6 +200,18 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                       ),
                     ),
                   ],
+                ) : SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: screenWidth * 0.04,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -304,7 +320,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               ),
               child: SafeArea(
                 top: false,
-                child: Column(
+                child: _shouldShowBottomButtons() ? Column(
                   children: [
                     // Primary action button (Search or Send Friend Request)
                     SizedBox(
@@ -361,6 +377,26 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                       ),
                     ),
                   ],
+                ) : SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: AppColors.textSecondary),
+                      foregroundColor: AppColors.textSecondary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -372,6 +408,18 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
 
   /// Builds the main content area based on current state
   Widget _buildContent() {
+    if (_isSendingRequest) {
+      return _buildSendingRequestState();
+    }
+
+    if (_requestSuccessMessage != null) {
+      return _buildSuccessState();
+    }
+
+    if (_requestErrorMessage != null) {
+      return _buildRequestErrorState();
+    }
+
     if (_isSearching) {
       return _buildLoadingState();
     }
@@ -599,6 +647,226 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     );
   }
 
+  /// Builds sending request loading state
+  Widget _buildSendingRequestState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (Platform.isIOS)
+            CupertinoActivityIndicator(
+              radius: 16,
+              color: AppColors.accentBlue,
+            )
+          else
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.accentBlue),
+            ),
+          const SizedBox(height: 16),
+          Text(
+            'Sending friend request...',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds success state
+  Widget _buildSuccessState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Platform.isIOS ? CupertinoIcons.check_mark_circled_solid : Icons.check_circle,
+                size: 48,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Request Sent!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _requestSuccessMessage ?? 'Friend request sent successfully!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Search for another user button
+            SizedBox(
+              width: double.infinity,
+              child: Platform.isIOS
+                  ? CupertinoButton(
+                      onPressed: _resetToSearch,
+                      color: AppColors.accentBlue,
+                      child: Text(
+                        'Search Another User',
+                        style: TextStyle(
+                          color: AppColors.primaryBlack,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _resetToSearch,
+                      icon: Icon(Icons.search, color: AppColors.primaryBlack),
+                      label: Text(
+                        'Search Another User',
+                        style: TextStyle(
+                          color: AppColors.primaryBlack,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds request error state
+  Widget _buildRequestErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.errorRed.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Platform.isIOS ? CupertinoIcons.xmark_circle_fill : Icons.error,
+                size: 48,
+                color: AppColors.errorRed,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Request Failed',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _requestErrorMessage ?? 'Failed to send friend request',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Try again button
+            SizedBox(
+              width: double.infinity,
+              child: Platform.isIOS
+                  ? CupertinoButton(
+                      onPressed: _retryRequest,
+                      color: AppColors.accentBlue,
+                      child: Text(
+                        'Try Again',
+                        style: TextStyle(
+                          color: AppColors.primaryBlack,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _retryRequest,
+                      icon: Icon(Icons.refresh, color: AppColors.primaryBlack),
+                      label: Text(
+                        'Try Again',
+                        style: TextStyle(
+                          color: AppColors.primaryBlack,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            // Search another user button
+            SizedBox(
+              width: double.infinity,
+              child: Platform.isIOS
+                  ? CupertinoButton(
+                      onPressed: _resetToSearch,
+                      child: Text(
+                        'Search Another User',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: _resetToSearch,
+                      icon: Icon(Icons.search, color: AppColors.textSecondary),
+                      label: Text(
+                        'Search Another User',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: AppColors.textSecondary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
 
   /// Builds user avatar
@@ -745,175 +1013,44 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
       _searchResult = null;
     });
 
-    try {
-      final provider = Provider.of<RelationshipProvider>(context, listen: false);
-      final result = await provider.searchUserByUid(trimmedUid);
+    final provider = Provider.of<RelationshipProvider>(context, listen: false);
+    final result = await provider.searchUserByUid(trimmedUid);
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      setState(() {
-        _isSearching = false;
-        if (result != null) {
-          _searchResult = result;
-        } else {
-          _searchError = 'No user found with ID "$trimmedUid"';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      
-      setState(() {
-        _isSearching = false;
-        _searchError = e.toString().contains('network') 
-            ? 'Network error. Please check your connection.'
-            : 'Search failed. Please try again.';
-      });
-    }
+    setState(() {
+      _isSearching = false;
+      if (result != null) {
+        _searchResult = result;
+      } else {
+        // Use provider's error if available, otherwise show user not found
+        _searchError = provider.error ?? 'No user found with ID "$trimmedUid"';
+      }
+    });
   }
 
   /// Sends friend request
   Future<void> _sendFriendRequest(String userId) async {
     setState(() {
       _isSendingRequest = true;
+      _requestErrorMessage = null;
+      _requestSuccessMessage = null;
     });
 
-    try {
-      final provider = Provider.of<RelationshipProvider>(context, listen: false);
-      final success = await provider.sendFriendRequest(userId);
+    final provider = Provider.of<RelationshipProvider>(context, listen: false);
+    final success = await provider.sendFriendRequest(userId);
 
-      if (!mounted) return;
+    if (!mounted) return;
 
+    setState(() {
+      _isSendingRequest = false;
       if (success) {
-        Navigator.pop(context);
-        _showSuccessMessage();
+        _requestSuccessMessage = 'Friend request sent successfully! They will be notified of your request.';
       } else {
-        final errorMessage = provider.error ?? 'Failed to send friend request';
-        _showErrorMessage(_getFriendlyErrorMessage(errorMessage));
+        // Use the provider's error message directly since it comes from RelationshipException
+        _requestErrorMessage = provider.error ?? 'Failed to send friend request';
       }
-    } catch (e) {
-      if (!mounted) return;
-      
-      _showErrorMessage(_getFriendlyErrorMessage(e.toString()));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSendingRequest = false;
-        });
-      }
-    }
-  }
-
-  /// Gets user-friendly error message
-  String _getFriendlyErrorMessage(String error) {
-    final lowerError = error.toLowerCase();
-    
-    if (lowerError.contains('already')) {
-      return 'You have already sent a friend request to this user';
-    } else if (lowerError.contains('yourself')) {
-      return 'You cannot send a friend request to yourself';
-    } else if (lowerError.contains('blocked')) {
-      return 'Unable to send friend request to this user';
-    } else if (lowerError.contains('network')) {
-      return 'Network error. Please check your connection and try again';
-    } else if (lowerError.contains('permission')) {
-      return 'Permission denied. Please try again later';
-    } else {
-      return 'Failed to send friend request. Please try again';
-    }
-  }
-
-  /// Shows success message
-  void _showSuccessMessage() {
-    if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: Row(
-            children: [
-              Icon(CupertinoIcons.check_mark_circled_solid, 
-                   color: CupertinoColors.systemGreen),
-              const SizedBox(width: 8),
-              const Text('Success'),
-            ],
-          ),
-          content: const Text('Friend request sent successfully! They will be notified of your request.'),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('Great!'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Friend request sent successfully!',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
-  /// Shows error message
-  void _showErrorMessage(String message) {
-    if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: Row(
-            children: [
-              Icon(CupertinoIcons.exclamationmark_triangle_fill, 
-                   color: CupertinoColors.destructiveRed),
-              const SizedBox(width: 8),
-              const Text('Error'),
-            ],
-          ),
-          content: Text(message),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
+    });
   }
 
   /// Clears search
@@ -922,6 +1059,8 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     setState(() {
       _searchError = null;
       _searchResult = null;
+      _requestSuccessMessage = null;
+      _requestErrorMessage = null;
     });
   }
 
@@ -945,6 +1084,36 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
       return 'Send Friend Request';
     } else {
       return 'Search';
+    }
+  }
+
+  /// Determines if bottom buttons should be shown (not in success/error states)
+  bool _shouldShowBottomButtons() {
+    return _requestSuccessMessage == null && _requestErrorMessage == null;
+  }
+
+  /// Resets to search state
+  void _resetToSearch() {
+    setState(() {
+      _searchResult = null;
+      _searchError = null;
+      _requestSuccessMessage = null;
+      _requestErrorMessage = null;
+    });
+    _searchController.clear();
+    _searchFocusNode.requestFocus();
+  }
+
+  /// Retries the friend request
+  void _retryRequest() {
+    if (_searchResult != null) {
+      final userId = _searchResult!['uid'] ?? _searchResult!['id'];
+      if (userId != null) {
+        setState(() {
+          _requestErrorMessage = null;
+        });
+        _sendFriendRequest(userId);
+      }
     }
   }
 }
