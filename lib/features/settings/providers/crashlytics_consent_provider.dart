@@ -5,7 +5,7 @@ import '../../../core/services/service_locator.dart';
 /// Provider to manage crashlytics consent state in the app
 class CrashlyticsConsentProvider with ChangeNotifier {
   CrashlyticsConsentManager? _manager;
-  bool _isEnabled = kReleaseMode; // Default to enabled in release mode
+  bool _isEnabled = kReleaseMode;  
   bool _isInitialized = false;
 
   /// Creates a new CrashlyticsConsentProvider
