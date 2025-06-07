@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
-import '../providers/friends_provider.dart';
+import '../providers/relationship_provider.dart';
 
 class ErrorStateWidget extends StatelessWidget {
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
 
   const ErrorStateWidget({
     super.key,

@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import '../../../core/models/relationship_model.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
-import '../providers/friends_provider.dart';
+import '../providers/relationship_provider.dart';
 import 'profile_avatar.dart';
 
 class RequestTile extends StatelessWidget {
   final RelationshipModel relationship;
   final bool isIncoming;
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
   final bool isLoadingAccept;
   final bool isLoadingDecline;
   final bool isLoadingCancel;  
@@ -43,16 +43,16 @@ class RequestTile extends StatelessWidget {
   Widget _buildMaterialTile(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: ProfileAvatar(
-        photoURL: profile?.photoURL,
-        displayName: profile?.displayName ?? 'Unknown User',
+        photoURL: profile?['photoURL'],
+        displayName: profile?['displayName'] ?? 'Unknown User',
       ),
       title: Text(
-        profile?.displayName ?? 'Unknown User',
+        profile?['displayName'] ?? 'Unknown User',
         style: const TextStyle(
           fontWeight: FontWeight.w500,
           // color: Colors.white, // Assuming dark theme, adjust if needed
@@ -113,16 +113,16 @@ class RequestTile extends StatelessWidget {
   Widget _buildCupertinoTile(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
 
     return CupertinoListTile(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       leading: ProfileAvatar(
-        photoURL: profile?.photoURL,
-        displayName: profile?.displayName ?? 'Unknown User',
+        photoURL: profile?['photoURL'],
+        displayName: profile?['displayName'] ?? 'Unknown User',
       ),
       title: Text(
-        profile?.displayName ?? 'Unknown User',
+        profile?['displayName'] ?? 'Unknown User',
         style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(fontWeight: FontWeight.w600),
       ),
       subtitle: Text(

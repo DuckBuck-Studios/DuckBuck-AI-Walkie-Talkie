@@ -22,12 +22,15 @@ class LocalDatabaseService {
 
   // Database configuration
   static const String _databaseName = 'duckbuck_local.db';
-  static const int _databaseVersion = 4; // Incremented for new tables
+  static const int _databaseVersion = 5; // Incremented for relationship tables
 
   // Table names
   static const String _usersTable = 'users';
   static const String _userSessionsTable = 'user_sessions';
   static const String _appSettingsTable = 'app_settings'; // New table for app-wide settings
+  static const String _friendsTable = 'cached_friends'; // Cached friends data
+  static const String _pendingRequestsTable = 'cached_pending_requests'; // Cached pending requests
+  static const String _blockedUsersTable = 'cached_blocked_users'; // Cached blocked users
 
   // Singleton pattern
   LocalDatabaseService._internal() {
@@ -114,6 +117,48 @@ class LocalDatabaseService {
         )
       ''');
 
+      // Cached friends table - for storing friend relationships data
+      await db.execute('''
+        CREATE TABLE $_friendsTable (
+          uid TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          display_name TEXT,
+          photo_url TEXT,
+          relationship_id TEXT NOT NULL,
+          cached_at INTEGER NOT NULL,
+          PRIMARY KEY (uid, user_id),
+          FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+        )
+      ''');
+
+      // Cached pending requests table - for storing pending friend requests
+      await db.execute('''
+        CREATE TABLE $_pendingRequestsTable (
+          uid TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          display_name TEXT,
+          photo_url TEXT,
+          relationship_id TEXT NOT NULL,
+          cached_at INTEGER NOT NULL,
+          PRIMARY KEY (uid, user_id),
+          FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+        )
+      ''');
+
+      // Cached blocked users table - for storing blocked users data
+      await db.execute('''
+        CREATE TABLE $_blockedUsersTable (
+          uid TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          display_name TEXT,
+          photo_url TEXT,
+          relationship_id TEXT NOT NULL,
+          cached_at INTEGER NOT NULL,
+          PRIMARY KEY (uid, user_id),
+          FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+        )
+      ''');
+
       // Create indexes for better performance
       await db.execute('CREATE INDEX idx_users_uid ON $_usersTable (uid)');
       await db.execute('CREATE INDEX idx_users_email ON $_usersTable (email)');
@@ -121,6 +166,12 @@ class LocalDatabaseService {
       await db.execute('CREATE INDEX idx_users_logged_in ON $_usersTable (is_logged_in)');
       await db.execute('CREATE INDEX idx_sessions_uid ON $_userSessionsTable (uid)');
       await db.execute('CREATE INDEX idx_settings_key ON $_appSettingsTable (key)');
+      await db.execute('CREATE INDEX idx_friends_uid ON $_friendsTable (uid)');
+      await db.execute('CREATE INDEX idx_friends_cached_at ON $_friendsTable (cached_at)');
+      await db.execute('CREATE INDEX idx_pending_uid ON $_pendingRequestsTable (uid)');
+      await db.execute('CREATE INDEX idx_pending_cached_at ON $_pendingRequestsTable (cached_at)');
+      await db.execute('CREATE INDEX idx_blocked_uid ON $_blockedUsersTable (uid)');
+      await db.execute('CREATE INDEX idx_blocked_cached_at ON $_blockedUsersTable (cached_at)');
       
       _logger.i(_tag, 'Database tables created successfully');
     } catch (e) {
@@ -159,6 +210,63 @@ class LocalDatabaseService {
         _logger.i(_tag, 'Added app_settings table for version 4');
       } catch (e) {
         _logger.w(_tag, 'Failed to add app_settings table, might already exist: ${e.toString()}');
+      }
+    }
+
+    if (oldVersion < 5) {
+      // Add relationship tables for version 5
+      try {
+        // Cached friends table
+        await db.execute('''
+          CREATE TABLE $_friendsTable (
+            uid TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            display_name TEXT,
+            photo_url TEXT,
+            relationship_id TEXT NOT NULL,
+            cached_at INTEGER NOT NULL,
+            PRIMARY KEY (uid, user_id),
+            FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_friends_uid ON $_friendsTable (uid)');
+        await db.execute('CREATE INDEX idx_friends_cached_at ON $_friendsTable (cached_at)');
+
+        // Cached pending requests table
+        await db.execute('''
+          CREATE TABLE $_pendingRequestsTable (
+            uid TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            display_name TEXT,
+            photo_url TEXT,
+            relationship_id TEXT NOT NULL,
+            cached_at INTEGER NOT NULL,
+            PRIMARY KEY (uid, user_id),
+            FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_pending_uid ON $_pendingRequestsTable (uid)');
+        await db.execute('CREATE INDEX idx_pending_cached_at ON $_pendingRequestsTable (cached_at)');
+
+        // Cached blocked users table
+        await db.execute('''
+          CREATE TABLE $_blockedUsersTable (
+            uid TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            display_name TEXT,
+            photo_url TEXT,
+            relationship_id TEXT NOT NULL,
+            cached_at INTEGER NOT NULL,
+            PRIMARY KEY (uid, user_id),
+            FOREIGN KEY (uid) REFERENCES $_usersTable (uid) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_blocked_uid ON $_blockedUsersTable (uid)');
+        await db.execute('CREATE INDEX idx_blocked_cached_at ON $_blockedUsersTable (cached_at)');
+        
+        _logger.i(_tag, 'Added relationship tables for version 5');
+      } catch (e) {
+        _logger.w(_tag, 'Failed to add relationship tables, might already exist: ${e.toString()}');
       }
     }
   }
@@ -375,10 +483,13 @@ class LocalDatabaseService {
       // Clear all cached photos first
       await clearAllCachedPhotos();
       
-      // Delete all data from both tables (complete wipe)
+      // Delete all data from all tables (complete wipe)
       await db.delete(_usersTable);
       await db.delete(_userSessionsTable);
       await db.delete(_appSettingsTable); // Clear app settings table
+      await db.delete(_friendsTable); // Clear relationship cache
+      await db.delete(_pendingRequestsTable); // Clear pending requests cache
+      await db.delete(_blockedUsersTable); // Clear blocked users cache
 
       _logger.i(_tag, 'Entire local database and cached photos cleared');
     } catch (e) {
@@ -816,6 +927,191 @@ class LocalDatabaseService {
     } catch (e) {
       _logger.e(_tag, 'Failed to get all settings: ${e.toString()}');
       return {};
+    }
+  }
+
+  // --- Relationship Caching Methods ---
+
+  /// Cache friends list for a user
+  Future<void> cacheFriends(String uid, List<Map<String, dynamic>> friends) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      
+      // Clear existing cached friends for this user
+      await db.delete(_friendsTable, where: 'uid = ?', whereArgs: [uid]);
+      
+      // Insert new friends data
+      for (final friend in friends) {
+        await db.insert(_friendsTable, {
+          'uid': uid,
+          'user_id': friend['uid'] as String,
+          'display_name': friend['displayName'] as String?,
+          'photo_url': friend['photoURL'] as String?,
+          'relationship_id': friend['relationshipId'] as String,
+          'cached_at': now,
+        });
+      }
+      
+      _logger.i(_tag, 'Cached ${friends.length} friends for user: $uid');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cache friends: ${e.toString()}');
+    }
+  }
+
+  /// Get cached friends for a user
+  Future<List<Map<String, dynamic>>> getCachedFriends(String uid) async {
+    try {
+      final db = await database;
+      
+      final results = await db.query(
+        _friendsTable,
+        where: 'uid = ?',
+        whereArgs: [uid],
+        orderBy: 'cached_at DESC',
+      );
+      
+      return results.map((row) => {
+        'uid': row['user_id'] as String,
+        'displayName': row['display_name'] as String?,
+        'photoURL': row['photo_url'] as String?,
+        'relationshipId': row['relationship_id'] as String,
+      }).toList();
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get cached friends: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Cache pending requests for a user
+  Future<void> cachePendingRequests(String uid, List<Map<String, dynamic>> requests) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      
+      // Clear existing cached pending requests for this user
+      await db.delete(_pendingRequestsTable, where: 'uid = ?', whereArgs: [uid]);
+      
+      // Insert new pending requests data
+      for (final request in requests) {
+        await db.insert(_pendingRequestsTable, {
+          'uid': uid,
+          'user_id': request['uid'] as String,
+          'display_name': request['displayName'] as String?,
+          'photo_url': request['photoURL'] as String?,
+          'relationship_id': request['relationshipId'] as String,
+          'cached_at': now,
+        });
+      }
+      
+      _logger.i(_tag, 'Cached ${requests.length} pending requests for user: $uid');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cache pending requests: ${e.toString()}');
+    }
+  }
+
+  /// Get cached pending requests for a user
+  Future<List<Map<String, dynamic>>> getCachedPendingRequests(String uid) async {
+    try {
+      final db = await database;
+      
+      final results = await db.query(
+        _pendingRequestsTable,
+        where: 'uid = ?',
+        whereArgs: [uid],
+        orderBy: 'cached_at DESC',
+      );
+      
+      return results.map((row) => {
+        'uid': row['user_id'] as String,
+        'displayName': row['display_name'] as String?,
+        'photoURL': row['photo_url'] as String?,
+        'relationshipId': row['relationship_id'] as String,
+      }).toList();
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get cached pending requests: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Cache blocked users for a user
+  Future<void> cacheBlockedUsers(String uid, List<Map<String, dynamic>> blockedUsers) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      
+      // Clear existing cached blocked users for this user
+      await db.delete(_blockedUsersTable, where: 'uid = ?', whereArgs: [uid]);
+      
+      // Insert new blocked users data
+      for (final blockedUser in blockedUsers) {
+        await db.insert(_blockedUsersTable, {
+          'uid': uid,
+          'user_id': blockedUser['uid'] as String,
+          'display_name': blockedUser['displayName'] as String?,
+          'photo_url': blockedUser['photoURL'] as String?,
+          'relationship_id': blockedUser['relationshipId'] as String,
+          'cached_at': now,
+        });
+      }
+      
+      _logger.i(_tag, 'Cached ${blockedUsers.length} blocked users for user: $uid');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cache blocked users: ${e.toString()}');
+    }
+  }
+
+  /// Get cached blocked users for a user
+  Future<List<Map<String, dynamic>>> getCachedBlockedUsers(String uid) async {
+    try {
+      final db = await database;
+      
+      final results = await db.query(
+        _blockedUsersTable,
+        where: 'uid = ?',
+        whereArgs: [uid],
+        orderBy: 'cached_at DESC',
+      );
+      
+      return results.map((row) => {
+        'uid': row['user_id'] as String,
+        'displayName': row['display_name'] as String?,
+        'photoURL': row['photo_url'] as String?,
+        'relationshipId': row['relationship_id'] as String,
+      }).toList();
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get cached blocked users: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Clear all relationship cache for a user
+  Future<void> clearRelationshipCache(String uid) async {
+    try {
+      final db = await database;
+      
+      await db.delete(_friendsTable, where: 'uid = ?', whereArgs: [uid]);
+      await db.delete(_pendingRequestsTable, where: 'uid = ?', whereArgs: [uid]);
+      await db.delete(_blockedUsersTable, where: 'uid = ?', whereArgs: [uid]);
+      
+      _logger.i(_tag, 'Cleared all relationship cache for user: $uid');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to clear relationship cache: ${e.toString()}');
+    }
+  }
+
+  /// Clear all relationship cache for all users
+  Future<void> clearAllRelationshipCache() async {
+    try {
+      final db = await database;
+      
+      await db.delete(_friendsTable);
+      await db.delete(_pendingRequestsTable);
+      await db.delete(_blockedUsersTable);
+      
+      _logger.i(_tag, 'Cleared all relationship cache for all users');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to clear all relationship cache: ${e.toString()}');
     }
   }
 }

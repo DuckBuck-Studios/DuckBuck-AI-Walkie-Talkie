@@ -21,6 +21,8 @@ import 'logger/logger_service.dart';
 import 'relationship/relationship_service_interface.dart';
 import 'relationship/relationship_service.dart';
 import 'call/agora_token_service.dart';
+import 'cache/cache_sync_service.dart';
+import 'lifecycle/app_lifecycle_manager.dart';
 
 
 /// Global service locator instance
@@ -98,6 +100,8 @@ Future<void> setupServiceLocator() async {
       relationshipService: serviceLocator<RelationshipServiceInterface>(),
       analytics: serviceLocator<FirebaseAnalyticsService>(),
       crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
+      logger: serviceLocator<LoggerService>(),
+      authService: serviceLocator<AuthServiceInterface>(),
     ),
   );
    
@@ -148,6 +152,22 @@ Future<void> setupServiceLocator() async {
     () => AgoraTokenService(
       apiService: serviceLocator<ApiService>(),
       authService: serviceLocator<AuthServiceInterface>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+  
+  // Register Cache Sync service
+  serviceLocator.registerLazySingleton<CacheSyncService>(
+    () => CacheSyncService(
+      relationshipRepository: serviceLocator<RelationshipRepository>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+  
+  // Register App Lifecycle manager
+  serviceLocator.registerLazySingleton<AppLifecycleManager>(
+    () => AppLifecycleManager(
+      cacheSyncService: serviceLocator<CacheSyncService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );

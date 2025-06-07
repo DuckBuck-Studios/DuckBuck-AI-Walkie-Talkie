@@ -1,13 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
-import '../../providers/friends_provider.dart';
+import '../../providers/relationship_provider.dart';
 import '../sections/incoming_requests_section.dart';
 import '../sections/outgoing_requests_section.dart';
 
 /// A combined section that contains both incoming and outgoing friend requests
 class PendingSection extends StatefulWidget {
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
 
   const PendingSection({
     super.key,

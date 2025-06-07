@@ -4,11 +4,11 @@ import 'dart:io' show Platform;
 import '../../../../core/models/relationship_model.dart';
 import '../../../../core/services/auth/auth_service_interface.dart';
 import '../../../../core/services/service_locator.dart';
-import '../../providers/friends_provider.dart';
+import '../../providers/relationship_provider.dart';
 import '../friend_tile.dart';
 
 class FriendsSection extends StatelessWidget {
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
   final Function(BuildContext, RelationshipModel) showRemoveFriendDialog;
   final Function(BuildContext, RelationshipModel)? showBlockUserDialog; // Add parameter for block dialog
 
@@ -184,11 +184,11 @@ class FriendsSection extends StatelessWidget {
   }
   
   /// Shows a platform-specific dialog to confirm blocking a user
-  static void showBlockFriendDialog(BuildContext context, RelationshipModel relationship, FriendsProvider provider) {
+  static void showBlockFriendDialog(BuildContext context, RelationshipModel relationship, RelationshipProvider provider) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
-    final userName = profile?.displayName ?? 'this user';
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
+    final userName = profile?['displayName'] ?? 'this user';
     
     if (Platform.isIOS) {
       // iOS-style dialog

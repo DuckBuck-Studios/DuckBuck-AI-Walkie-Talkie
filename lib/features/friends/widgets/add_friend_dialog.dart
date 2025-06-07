@@ -2,18 +2,18 @@ import 'dart:io' show Platform;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../providers/friends_provider.dart';
+import '../providers/relationship_provider.dart';
 import 'profile_avatar.dart';
 
 class AddFriendDialog extends StatefulWidget {
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
 
   const AddFriendDialog({
     super.key,
     required this.provider,
   });
 
-  static Future<void> show(BuildContext context, FriendsProvider provider) {
+  static Future<void> show(BuildContext context, RelationshipProvider provider) {
     if (Platform.isIOS) {
       return showCupertinoModalBottomSheet(context, provider);
     } else {
@@ -22,7 +22,7 @@ class AddFriendDialog extends StatefulWidget {
   }
   
   // iOS-specific bottom sheet
-  static Future<void> showCupertinoModalBottomSheet(BuildContext context, FriendsProvider provider) {
+  static Future<void> showCupertinoModalBottomSheet(BuildContext context, RelationshipProvider provider) {
     // Adjust height based on device size (smaller on smaller devices, larger on tablets)
     final mediaQuery = MediaQuery.of(context);
     final isSmallDevice = mediaQuery.size.height < 700;
@@ -56,7 +56,7 @@ class AddFriendDialog extends StatefulWidget {
   }
   
   // Android/Material-specific bottom sheet
-  static Future<void> showMaterialModalBottomSheet(BuildContext context, FriendsProvider provider) {
+  static Future<void> showMaterialModalBottomSheet(BuildContext context, RelationshipProvider provider) {
     // Adjust height based on device size (smaller on smaller devices, larger on tablets)
     final mediaQuery = MediaQuery.of(context);
     final isSmallDevice = mediaQuery.size.height < 700;

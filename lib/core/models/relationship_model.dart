@@ -11,9 +11,6 @@ class RelationshipModel {
   final String? initiatorId;
   final DateTime? acceptedAt;
   final String? blockerId; // Added to track who initiated the block
-  
-  // Cached profile data for quick access
-  final Map<String, CachedProfile> cachedProfiles;
 
   const RelationshipModel({
     required this.id,
@@ -25,7 +22,6 @@ class RelationshipModel {
     this.initiatorId,
     this.acceptedAt,
     this.blockerId,
-    this.cachedProfiles = const {},
   });
 
   factory RelationshipModel.fromMap(Map<String, dynamic> map, String id) {
@@ -45,11 +41,6 @@ class RelationshipModel {
       initiatorId: map['initiatorId'],
       blockerId: map['blockerId'], // Added this line to capture blockerId
       acceptedAt: (map['acceptedAt'] as Timestamp?)?.toDate(),
-      cachedProfiles: Map<String, CachedProfile>.from(
-        (map['cachedProfiles'] ?? {}).map(
-          (key, value) => MapEntry(key, CachedProfile.fromMap(value)),
-        ),
-      ),
     );
   }
 
@@ -62,9 +53,7 @@ class RelationshipModel {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'initiatorId': initiatorId,
       'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null,
-      'cachedProfiles': cachedProfiles.map(
-        (key, value) => MapEntry(key, value.toMap()),
-      ),
+      'blockerId': blockerId, // Added this line to include blockerId
     };
   }
 
@@ -77,7 +66,7 @@ class RelationshipModel {
     DateTime? updatedAt,
     String? initiatorId,
     DateTime? acceptedAt,
-    Map<String, CachedProfile>? cachedProfiles,
+    String? blockerId,
   }) {
     return RelationshipModel(
       id: id ?? this.id,
@@ -88,18 +77,13 @@ class RelationshipModel {
       updatedAt: updatedAt ?? this.updatedAt,
       initiatorId: initiatorId ?? this.initiatorId,
       acceptedAt: acceptedAt ?? this.acceptedAt,
-      cachedProfiles: cachedProfiles ?? this.cachedProfiles,
+      blockerId: blockerId ?? this.blockerId,
     );
   }
 
   /// Get the friend's ID (the other participant)
   String getFriendId(String currentUserId) {
     return participants.firstWhere((id) => id != currentUserId);
-  }
-
-  /// Get cached profile for a user
-  CachedProfile? getCachedProfile(String userId) {
-    return cachedProfiles[userId];
   }
 
   /// Check if relationship is a friendship
@@ -110,47 +94,6 @@ class RelationshipModel {
     final sorted = List<String>.from(participants);
     sorted.sort();
     return sorted;
-  }
-}
-
-/// Cached profile data stored in relationship documents
-class CachedProfile {
-  final String displayName;
-  final String? photoURL;
-  final DateTime lastUpdated;
-
-  const CachedProfile({
-    required this.displayName,
-    this.photoURL,
-    required this.lastUpdated,
-  });
-
-  factory CachedProfile.fromMap(Map<String, dynamic> map) {
-    return CachedProfile(
-      displayName: map['displayName'] ?? '',
-      photoURL: map['photoURL'],
-      lastUpdated: (map['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'displayName': displayName,
-      'photoURL': photoURL,
-      'lastUpdated': Timestamp.fromDate(lastUpdated),
-    };
-  }
-
-  CachedProfile copyWith({
-    String? displayName,
-    String? photoURL,
-    DateTime? lastUpdated,
-  }) {
-    return CachedProfile(
-      displayName: displayName ?? this.displayName,
-      photoURL: photoURL ?? this.photoURL,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-    );
   }
 }
 

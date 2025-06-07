@@ -1,68 +1,42 @@
-import '../../models/relationship_model.dart';
-
-/// Pagination result for relationship queries
-class PaginatedRelationshipResult {
-  final List<RelationshipModel> relationships;
-  final bool hasMore;
-  final String? lastDocumentId;
-
-  const PaginatedRelationshipResult({
-    required this.relationships,
-    required this.hasMore,
-    this.lastDocumentId,
-  });
-}
-
-/// Interface for relationship service operations (friendships)
+/// Interface for relationship service operations
 abstract class RelationshipServiceInterface {
   /// Send a friend request to another user
+  /// Returns the relationship ID if successful
   Future<String> sendFriendRequest(String targetUserId);
   
   /// Accept a pending friend request
-  Future<void> acceptFriendRequest(String relationshipId);
+  /// Returns the relationship ID if successful
+  Future<String> acceptFriendRequest(String relationshipId);
   
-  /// Decline a pending friend request
-  Future<void> declineFriendRequest(String relationshipId);
-  
-  /// Cancel a sent friend request (before acceptance)
-  Future<void> cancelFriendRequest(String relationshipId);
+  /// Reject/decline a pending friend request
+  /// Returns true if successful
+  Future<bool> rejectFriendRequest(String relationshipId);
   
   /// Remove an existing friend
-  Future<void> removeFriend(String relationshipId);
+  /// Returns true if successful
+  Future<bool> removeFriend(String targetUserId);
   
-  /// Block a user (prevents future requests)
-  Future<void> blockUser(String relationshipId);
+  /// Block a user
+  /// Returns the relationship ID if successful
+  Future<String> blockUser(String targetUserId);
   
   /// Unblock a user
-  Future<void> unblockUser(String relationshipId);
+  /// Returns true if successful
+  Future<bool> unblockUser(String targetUserId);
   
-  /// Get all accepted friendships for a user with pagination support
-  Future<PaginatedRelationshipResult> getFriends(String userId, {int limit = 20, String? startAfter});
+  /// Get real-time stream of friends list (accepted relationships)
+  /// Returns stream of user data for friends with real-time updates
+  Stream<List<Map<String, dynamic>>> getFriendsStream();
   
-  /// Get pending friend requests (received by user) with pagination support
-  Future<PaginatedRelationshipResult> getPendingRequests(String userId, {int limit = 20, String? startAfter});
-  
-  /// Get sent friend requests (sent by user) with pagination support
-  Future<PaginatedRelationshipResult> getSentRequests(String userId, {int limit = 20, String? startAfter});
-  
-  /// Get blocked relationships for a user with pagination support
-  Future<PaginatedRelationshipResult> getBlockedUsers(String userId, {int limit = 20, String? startAfter});
+  /// Get real-time stream of pending friend requests (received)
+  /// Returns stream of user data for users who sent requests with real-time updates
+  Stream<List<Map<String, dynamic>>> getPendingRequestsStream();
 
-  /// Stream of accepted friendships for a user
-  Stream<List<RelationshipModel>> getFriendsStream(String userId);
-
-  /// Stream of pending friend requests (received by user)
-  Stream<List<RelationshipModel>> getPendingRequestsStream(String userId);
-
-  /// Stream of sent friend requests (sent by user)
-  Stream<List<RelationshipModel>> getSentRequestsStream(String userId);
+  /// Get real-time stream of blocked users
+  /// Returns stream of user data for blocked users with real-time updates
+  Stream<List<Map<String, dynamic>>> getBlockedUsersStream();
   
-  /// Stream of blocked users (only users that the current user has blocked)
-  Stream<List<RelationshipModel>> getBlockedUsersStream(String userId);
-
-  /// Search user by UID to send friend request
+  /// Search for a user by their UID directly from the users collection
+  /// Returns user data if found, null if not found
   Future<Map<String, dynamic>?> searchUserByUid(String uid);
-  
-  /// Get relationship summary (counts of different types)
-  Future<Map<String, int>> getUserRelationshipsSummary(String userId);
 }

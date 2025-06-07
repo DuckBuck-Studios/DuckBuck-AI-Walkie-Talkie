@@ -4,7 +4,7 @@ import 'package:provider/single_child_widget.dart';
 
 import '../../features/settings/providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart';
-import '../../features/friends/providers/friends_provider.dart';
+import '../../features/friends/providers/relationship_provider.dart';
 import '../../features/call/providers/call_provider.dart';
 import '../../features/settings/providers/settings_provider.dart';
 
@@ -36,9 +36,9 @@ class ProviderRegistry {
         },
       ),
       
-      // Friends provider
-      ChangeNotifierProvider<FriendsProvider>(
-        create: (_) => FriendsProvider(),
+      // Relationship provider (friends and relationships management)
+      ChangeNotifierProvider<RelationshipProvider>(
+        create: (_) => RelationshipProvider(),
       ),
       
       // Call provider for handling call UI state

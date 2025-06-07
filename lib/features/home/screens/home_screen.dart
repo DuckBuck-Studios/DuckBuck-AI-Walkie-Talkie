@@ -4,9 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/home_provider.dart';
 import '../widgets/home_friends_section.dart';
-import '../../../core/models/relationship_model.dart';
-import '../../../core/services/auth/auth_service_interface.dart';
-import '../../../core/services/service_locator.dart';
 import 'dart:io' show Platform;
 
 class HomeScreen extends StatefulWidget {
@@ -52,7 +49,7 @@ class HomeScreenContent extends StatefulWidget {
 
 class _HomeScreenContentState extends State<HomeScreenContent>
     with TickerProviderStateMixin {
-  RelationshipModel? _selectedFriend;
+  Map<String, dynamic>? _selectedFriend;
   bool _isExpanded = false;
   bool _isInCall = false;
   bool _isConnecting = false;
@@ -110,9 +107,9 @@ class _HomeScreenContentState extends State<HomeScreenContent>
     super.dispose();
   }
 
-  void _expandFriend(RelationshipModel relationship) {
+  void _expandFriend(Map<String, dynamic> friendProfile) {
     setState(() {
-      _selectedFriend = relationship;
+      _selectedFriend = friendProfile;
       _isExpanded = true;
     });
     _animationController.forward();
@@ -141,12 +138,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
       
       // Show fullscreen overlay only after connecting animation completes
       if (widget.onShowFullscreenOverlay != null && _selectedFriend != null) {
-        final authService = serviceLocator<AuthServiceInterface>();
-        final currentUserId = authService.currentUser?.uid ?? '';
-        final homeProvider = Provider.of<HomeProvider>(context, listen: false);
-        final profile = homeProvider.getCachedProfile(_selectedFriend!, currentUserId);
-        
-        widget.onShowFullscreenOverlay!(_buildFullscreenCallOverlay(profile));
+        widget.onShowFullscreenOverlay!(_buildFullscreenCallOverlay(_selectedFriend!));
       }
     });
   }
@@ -278,9 +270,6 @@ class _HomeScreenContentState extends State<HomeScreenContent>
   Widget _buildExpandedView(BuildContext context, HomeProvider homeProvider) {
     if (_selectedFriend == null) return const SizedBox.shrink();
 
-    final authService = serviceLocator<AuthServiceInterface>();
-    final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = homeProvider.getCachedProfile(_selectedFriend!, currentUserId);
     final isIOS = Platform.isIOS;
 
     return AnimatedBuilder(
@@ -300,7 +289,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
               children: [
                 // Fullscreen Photo Background
                 Positioned.fill(
-                  child: _buildFullscreenPhoto(profile),
+                  child: _buildFullscreenPhoto(_selectedFriend!),
                 ),
                 
                 // Bottom Section - name section only (no call controls in local view)
@@ -317,7 +306,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
                         bottom: MediaQuery.of(context).padding.bottom + 16,
                         top: 16,
                       ),
-                      child: _buildBottomNameSection(context, profile, isIOS),
+                      child: _buildBottomNameSection(context, _selectedFriend!, isIOS),
                     ),
                   ),
                 ),
@@ -329,7 +318,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
     );
   }
 
-  Widget _buildFullscreenCallOverlay(CachedProfile? profile) {
+  Widget _buildFullscreenCallOverlay(Map<String, dynamic> friendProfile) {
     if (_selectedFriend == null) return const SizedBox.shrink();
     
     return Material(
@@ -344,7 +333,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
           children: [
             // Fullscreen Photo Background
             Positioned.fill(
-              child: _buildFullscreenPhoto(profile),
+              child: _buildFullscreenPhoto(friendProfile),
             ),
             
             // Top section with friend name and status
@@ -355,11 +344,11 @@ class _HomeScreenContentState extends State<HomeScreenContent>
               child: Column(
                 children: [
                   Hero(
-                    tag: 'friend_name_${_selectedFriend!.id}',
+                    tag: 'friend_name_${friendProfile['uid']}',
                     child: Material(
                       color: Colors.transparent,
                       child: Text(
-                        profile?.displayName ?? 'Unknown User',
+                        friendProfile['displayName'] ?? 'Unknown User',
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -404,7 +393,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
               bottom: 0,
               left: 0,
               right: 0,
-              child: _buildFullscreenCallControls(context, profile),
+              child: _buildFullscreenCallControls(context, friendProfile),
             ),
           ],
         ),
@@ -412,7 +401,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
     );
   }
 
-  Widget _buildFullscreenCallControls(BuildContext context, CachedProfile? profile) {
+  Widget _buildFullscreenCallControls(BuildContext context, Map<String, dynamic> friendProfile) {
     return Container(
       width: double.infinity,
       child: Padding(
@@ -516,14 +505,14 @@ class _HomeScreenContentState extends State<HomeScreenContent>
     );
   }
 
-  Widget _buildFullscreenPhoto(CachedProfile? profile) {
-    final hasImage = profile?.photoURL != null && profile!.photoURL!.isNotEmpty;
+  Widget _buildFullscreenPhoto(Map<String, dynamic> friendProfile) {
+    final hasImage = friendProfile['photoURL'] != null && friendProfile['photoURL'].toString().isNotEmpty;
     
     if (hasImage) {
       return Hero(
-        tag: 'friend_photo_${_selectedFriend!.id}',
+        tag: 'friend_photo_${friendProfile['uid']}',
         child: CachedNetworkImage(
-          imageUrl: profile.photoURL!,
+          imageUrl: friendProfile['photoURL'],
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
@@ -533,17 +522,17 @@ class _HomeScreenContentState extends State<HomeScreenContent>
               child: CircularProgressIndicator(color: Colors.white),
             ),
           ),
-          errorWidget: (context, url, error) => _buildFallbackPhoto(profile),
+          errorWidget: (context, url, error) => _buildFallbackPhoto(friendProfile),
         ),
       );
     } else {
-      return _buildFallbackPhoto(profile);
+      return _buildFallbackPhoto(friendProfile);
     }
   }
 
-  Widget _buildFallbackPhoto(CachedProfile? profile) {
+  Widget _buildFallbackPhoto(Map<String, dynamic> friendProfile) {
     return Hero(
-      tag: 'friend_photo_${_selectedFriend!.id}',
+      tag: 'friend_photo_${friendProfile['uid']}',
       child: Container(
         width: double.infinity,
         height: double.infinity,
@@ -560,7 +549,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
         ),
         child: Center(
           child: Text(
-            _getInitials(profile?.displayName ?? 'Unknown User'),
+            _getInitials(friendProfile['displayName'] ?? 'Unknown User'),
             style: TextStyle(
               fontSize: MediaQuery.of(context).size.width * 0.4,
               fontWeight: FontWeight.bold,
@@ -607,7 +596,7 @@ class _HomeScreenContentState extends State<HomeScreenContent>
     );
   }
 
-  Widget _buildBottomNameSection(BuildContext context, CachedProfile? profile, bool isIOS) {
+  Widget _buildBottomNameSection(BuildContext context, Map<String, dynamic> friendProfile, bool isIOS) {
     return GestureDetector(
       onTap: _isConnecting ? null : _collapseFriend, // Disable tap when connecting
       onLongPress: _isConnecting ? null : _startCall, // Disable long press when connecting
@@ -629,11 +618,11 @@ class _HomeScreenContentState extends State<HomeScreenContent>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Hero(
-                    tag: 'friend_name_${_selectedFriend!.id}',
+                    tag: 'friend_name_${friendProfile['uid']}',
                     child: Material(
                       color: Colors.transparent,
                       child: Text(
-                        profile?.displayName ?? 'Unknown User',
+                        friendProfile['displayName'] ?? 'Unknown User',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

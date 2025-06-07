@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 
 import '../../../core/models/relationship_model.dart';
-import '../providers/friends_provider.dart';
+import '../providers/relationship_provider.dart';
 import '../widgets/error_state_widget.dart';
 import '../widgets/add_friend_dialog.dart';
 import '../widgets/remove_friend_dialog.dart';
@@ -43,7 +43,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FriendsProvider>().initialize();
+      context.read<RelationshipProvider>().initialize();
     });
   }
   
@@ -54,17 +54,17 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   }
 
   void _showAddFriendDialog(BuildContext context) {
-    final provider = Provider.of<FriendsProvider>(context, listen: false);
+    final provider = Provider.of<RelationshipProvider>(context, listen: false);
     AddFriendDialog.show(context, provider);
   }
 
   void _showRemoveFriendDialog(BuildContext context, RelationshipModel relationship) {
-    final provider = Provider.of<FriendsProvider>(context, listen: false);
+    final provider = Provider.of<RelationshipProvider>(context, listen: false);
     RemoveFriendDialog.show(context, relationship, provider);
   }
 
   void _showBlockUserDialog(BuildContext context, RelationshipModel relationship) {
-    final provider = Provider.of<FriendsProvider>(context, listen: false);
+    final provider = Provider.of<RelationshipProvider>(context, listen: false);
     FriendsSection.showBlockFriendDialog(context, relationship, provider);
   }
 
@@ -102,7 +102,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
-  Widget _buildFriendsList(BuildContext context, FriendsProvider provider) {
+  Widget _buildFriendsList(BuildContext context, RelationshipProvider provider) {
     return FriendsSection(
       provider: provider,
       showRemoveFriendDialog: _showRemoveFriendDialog,
@@ -110,7 +110,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPendingList(BuildContext context, FriendsProvider provider) {
+  Widget _buildPendingList(BuildContext context, RelationshipProvider provider) {
     return PendingSection(provider: provider);
   }
 
@@ -147,7 +147,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           child: _buildMaterialTabBar(context, theme),
         ),
       ),
-      body: Consumer<FriendsProvider>(
+      body: Consumer<RelationshipProvider>(
         builder: (context, provider, child) {
           if (provider.isLoadingSummary) {
             return Padding(
@@ -250,7 +250,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   Widget _buildMaterialTabBar(BuildContext context, ThemeData theme) {
     final List<String> tabTitles = ['Friends', 'Pending'];
     final List<IconData> tabIcons = [Icons.people, Icons.pending_actions];
-    final provider = context.watch<FriendsProvider>();
+    final provider = context.watch<RelationshipProvider>();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -332,7 +332,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   Widget _buildCupertinoPage(BuildContext context) {
     final cupertinoTheme = CupertinoTheme.of(context);
-    final provider = context.watch<FriendsProvider>();
+    final provider = context.watch<RelationshipProvider>();
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),

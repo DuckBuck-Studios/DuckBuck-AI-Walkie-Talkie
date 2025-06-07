@@ -3,20 +3,28 @@ import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/logger/logger_service.dart';
 import '../services/service_locator.dart';
+import '../services/database/local_database_service.dart';
 import '../exceptions/relationship_exceptions.dart';
-import '../models/relationship_model.dart';
 import '../services/auth/auth_service_interface.dart';
+import 'dart:async';
 
 /// Repository to handle relationship data operations
 /// 
 /// Provides a clean abstraction layer between the UI/business logic and the relationship service.
 /// Follows the repository pattern to coordinate between services, handle error logging,
 /// and provide analytics tracking for all relationship operations.
+/// 
+/// Features:
+/// - Real-time streams for friends, pending requests, and blocked users (15 items paginated)
+/// - Comprehensive analytics tracking for all operations
+/// - Error handling with Crashlytics integration
+/// - Transaction-safe relationship operations
 class RelationshipRepository {
   final RelationshipServiceInterface _relationshipService;
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
+  final LocalDatabaseService _localDb;
   final AuthServiceInterface _authService;
 
   static const String _tag = 'RELATIONSHIP_REPO';
@@ -26,10 +34,14 @@ class RelationshipRepository {
     RelationshipServiceInterface? relationshipService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
+    LoggerService? logger,
     AuthServiceInterface? authService,
+    LocalDatabaseService? localDb,
   }) : _relationshipService = relationshipService ?? serviceLocator<RelationshipServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
+       _logger = logger ?? serviceLocator<LoggerService>(),
+       _localDb = localDb ?? LocalDatabaseService.instance,
        _authService = authService ?? serviceLocator<AuthServiceInterface>();
 
   // ========== FRIEND REQUEST OPERATIONS ==========
@@ -80,11 +92,12 @@ class RelationshipRepository {
   }
 
   /// Accept a pending friend request
-  Future<void> acceptFriendRequest(String relationshipId) async {
+  /// Returns the relationship ID if successful
+  Future<String> acceptFriendRequest(String relationshipId) async {
     try {
       _logger.d(_tag, 'Accepting friend request: $relationshipId');
       
-      await _relationshipService.acceptFriendRequest(relationshipId);
+      final resultId = await _relationshipService.acceptFriendRequest(relationshipId);
       
       // Track success analytics
       await _analytics.logEvent(
@@ -96,6 +109,7 @@ class RelationshipRepository {
       );
       
       _logger.i(_tag, 'Friend request accepted successfully: $relationshipId');
+      return resultId;
       
     } catch (e) {
       _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
@@ -122,30 +136,32 @@ class RelationshipRepository {
     }
   }
 
-  /// Decline a pending friend request
-  Future<void> declineFriendRequest(String relationshipId) async {
+  /// Reject/decline a pending friend request
+  /// Returns true if successful
+  Future<bool> rejectFriendRequest(String relationshipId) async {
     try {
-      _logger.d(_tag, 'Declining friend request: $relationshipId');
+      _logger.d(_tag, 'Rejecting friend request: $relationshipId');
       
-      await _relationshipService.declineFriendRequest(relationshipId);
+      final result = await _relationshipService.rejectFriendRequest(relationshipId);
       
       // Track success analytics
       await _analytics.logEvent(
-        name: 'friend_request_declined',
+        name: 'friend_request_rejected',
         parameters: {
           'relationship_id_hash': relationshipId.hashCode.toString(),
           'success': true,
         },
       );
       
-      _logger.i(_tag, 'Friend request declined successfully: $relationshipId');
+      _logger.i(_tag, 'Friend request rejected successfully: $relationshipId');
+      return result;
       
     } catch (e) {
-      _logger.e(_tag, 'Failed to decline friend request: ${e.toString()}');
+      _logger.e(_tag, 'Failed to reject friend request: ${e.toString()}');
       
       // Track failure analytics
       await _analytics.logEvent(
-        name: 'friend_request_declined',
+        name: 'friend_request_rejected',
         parameters: {
           'relationship_id_hash': relationshipId.hashCode.toString(),
           'success': false,
@@ -157,50 +173,7 @@ class RelationshipRepository {
       await _crashlytics.recordError(
         e,
         null,
-        reason: 'Failed to decline friend request',
-        fatal: false,
-      );
-      
-      rethrow;
-    }
-  }
-
-  /// Cancel a sent friend request
-  Future<void> cancelFriendRequest(String relationshipId) async {
-    try {
-      _logger.d(_tag, 'Cancelling friend request: $relationshipId');
-      
-      await _relationshipService.cancelFriendRequest(relationshipId);
-      
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'friend_request_cancelled',
-        parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
-          'success': true,
-        },
-      );
-      
-      _logger.i(_tag, 'Friend request cancelled successfully: $relationshipId');
-      
-    } catch (e) {
-      _logger.e(_tag, 'Failed to cancel friend request: ${e.toString()}');
-      
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'friend_request_cancelled',
-        parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
-        },
-      );
-      
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to cancel friend request',
+        reason: 'Failed to reject friend request',
         fatal: false,
       );
       
@@ -211,22 +184,24 @@ class RelationshipRepository {
   // ========== FRIENDSHIP MANAGEMENT ==========
 
   /// Remove an existing friend
-  Future<void> removeFriend(String relationshipId) async {
+  /// Returns true if successful
+  Future<bool> removeFriend(String targetUserId) async {
     try {
-      _logger.d(_tag, 'Removing friend: $relationshipId');
+      _logger.d(_tag, 'Removing friend: $targetUserId');
       
-      await _relationshipService.removeFriend(relationshipId);
+      final result = await _relationshipService.removeFriend(targetUserId);
       
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_removed',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': true,
         },
       );
       
-      _logger.i(_tag, 'Friend removed successfully: $relationshipId');
+      _logger.i(_tag, 'Friend removed successfully: $targetUserId');
+      return result;
       
     } catch (e) {
       _logger.e(_tag, 'Failed to remove friend: ${e.toString()}');
@@ -235,7 +210,7 @@ class RelationshipRepository {
       await _analytics.logEvent(
         name: 'friend_removed',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': false,
           'error_code': e is RelationshipException ? e.code : 'unknown',
         },
@@ -256,22 +231,24 @@ class RelationshipRepository {
   // ========== BLOCKING OPERATIONS ==========
 
   /// Block a user
-  Future<void> blockUser(String relationshipId) async {
+  /// Returns the relationship ID if successful
+  Future<String> blockUser(String targetUserId) async {
     try {
-      _logger.d(_tag, 'Blocking user: $relationshipId');
+      _logger.d(_tag, 'Blocking user: $targetUserId');
       
-      await _relationshipService.blockUser(relationshipId);
+      final relationshipId = await _relationshipService.blockUser(targetUserId);
       
       // Track success analytics
       await _analytics.logEvent(
         name: 'user_blocked',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': true,
         },
       );
       
-      _logger.i(_tag, 'User blocked successfully: $relationshipId');
+      _logger.i(_tag, 'User blocked successfully: $targetUserId');
+      return relationshipId;
       
     } catch (e) {
       _logger.e(_tag, 'Failed to block user: ${e.toString()}');
@@ -280,7 +257,7 @@ class RelationshipRepository {
       await _analytics.logEvent(
         name: 'user_blocked',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': false,
           'error_code': e is RelationshipException ? e.code : 'unknown',
         },
@@ -299,22 +276,24 @@ class RelationshipRepository {
   }
 
   /// Unblock a user
-  Future<void> unblockUser(String relationshipId) async {
+  /// Returns true if successful
+  Future<bool> unblockUser(String targetUserId) async {
     try {
-      _logger.d(_tag, 'Unblocking user: $relationshipId');
+      _logger.d(_tag, 'Unblocking user: $targetUserId');
       
-      await _relationshipService.unblockUser(relationshipId);
+      final result = await _relationshipService.unblockUser(targetUserId);
       
       // Track success analytics
       await _analytics.logEvent(
         name: 'user_unblocked',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': true,
         },
       );
       
-      _logger.i(_tag, 'User unblocked successfully: $relationshipId');
+      _logger.i(_tag, 'User unblocked successfully: $targetUserId');
+      return result;
       
     } catch (e) {
       _logger.e(_tag, 'Failed to unblock user: ${e.toString()}');
@@ -323,7 +302,7 @@ class RelationshipRepository {
       await _analytics.logEvent(
         name: 'user_unblocked',
         parameters: {
-          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'target_user_id_hash': targetUserId.hashCode.toString(),
           'success': false,
           'error_code': e is RelationshipException ? e.code : 'unknown',
         },
@@ -341,244 +320,513 @@ class RelationshipRepository {
     }
   }
 
-  // ========== DATA RETRIEVAL OPERATIONS ==========
+  // ========== REAL-TIME STREAM OPERATIONS ==========
 
-  /// Get all friends for a user with pagination
-  Future<PaginatedRelationshipResult> getFriends(
-    String userId, {
-    int limit = 20,
-    String? startAfter,
-  }) async {
+  /// Get real-time stream of friends list (accepted relationships)
+  /// Returns stream of user data for friends with real-time updates
+  /// Limited to 15 items per page for optimal performance
+  /// Implements local caching for better performance
+  Stream<List<Map<String, dynamic>>> getFriendsStream() {
     try {
-      _logger.d(_tag, 'Getting friends for user: $userId (limit: $limit)');
+      final currentUserId = _getCurrentUserId();
+      _logger.d(_tag, 'Getting friends stream with caching for current user');
       
-      final result = await _relationshipService.getFriends(
-        userId,
-        limit: limit,
-        startAfter: startAfter,
-      );
-      
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'friends_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'count': result.relationships.length,
-          'has_more': result.hasMore,
-          'success': true,
-        },
-      );
-      
-      _logger.d(_tag, 'Friends loaded successfully: ${result.relationships.length} items');
-      return result;
-      
+      return _relationshipService.getFriendsStream()
+        .asyncMap((friends) async {
+          try {
+            // Cache the friends data to local database
+            await _localDb.cacheFriends(currentUserId, friends);
+            
+            // Track stream updates for analytics
+            await _analytics.logEvent(
+              name: 'friends_stream_updated',
+              parameters: {
+                'count': friends.length,
+                'success': true,
+                'cached': true,
+              },
+            );
+            
+            _logger.d(_tag, 'Friends stream updated and cached: ${friends.length} friends');
+            return friends;
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to cache friends data: $cacheError');
+            // Continue with original data even if caching fails
+            await _analytics.logEvent(
+              name: 'friends_stream_updated',
+              parameters: {
+                'count': friends.length,
+                'success': true,
+                'cached': false,
+              },
+            );
+            return friends;
+          }
+        })
+        .handleError((error) async {
+          _logger.e(_tag, 'Error in friends stream: $error');
+          
+          try {
+            // Fallback to cached data if stream fails
+            final cachedFriends = await _localDb.getCachedFriends(currentUserId);
+            if (cachedFriends.isNotEmpty) {
+              _logger.i(_tag, 'Falling back to cached friends data: ${cachedFriends.length} friends');
+              return cachedFriends;
+            }
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to get cached friends: $cacheError');
+          }
+          
+          // Track stream errors
+          await _analytics.logEvent(
+            name: 'friends_stream_error',
+            parameters: {
+              'success': false,
+              'error_code': error is RelationshipException ? error.code : 'unknown',
+            },
+          );
+          
+          // Log to crashlytics for debugging
+          await _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to stream friends list',
+            fatal: false,
+          );
+          
+          throw error;
+        });
     } catch (e) {
-      _logger.e(_tag, 'Failed to get friends: ${e.toString()}');
+      _logger.e(_tag, 'Failed to initialize friends stream: ${e.toString()}');
       
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'friends_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
-        },
-      );
-      
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
+      // Log initialization errors
+      _crashlytics.recordError(
         e,
         null,
-        reason: 'Failed to get friends',
+        reason: 'Failed to initialize friends stream',
         fatal: false,
       );
       
+      return Stream.error(e);
+    }
+  }
+
+  /// Get real-time stream of pending friend requests (received by current user)
+  /// Returns stream of user data for users who sent requests with real-time updates
+  /// Limited to 15 items per page for optimal performance
+  /// Implements local caching for better performance
+  Stream<List<Map<String, dynamic>>> getPendingRequestsStream() {
+    try {
+      final currentUserId = _getCurrentUserId();
+      _logger.d(_tag, 'Getting pending requests stream with caching for current user');
+      
+      return _relationshipService.getPendingRequestsStream()
+        .asyncMap((requests) async {
+          try {
+            // Cache the pending requests data to local database
+            await _localDb.cachePendingRequests(currentUserId, requests);
+            
+            // Track stream updates for analytics
+            await _analytics.logEvent(
+              name: 'pending_requests_stream_updated',
+              parameters: {
+                'count': requests.length,
+                'success': true,
+                'cached': true,
+              },
+            );
+            
+            _logger.d(_tag, 'Pending requests stream updated and cached: ${requests.length} requests');
+            return requests;
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to cache pending requests data: $cacheError');
+            // Continue with original data even if caching fails
+            await _analytics.logEvent(
+              name: 'pending_requests_stream_updated',
+              parameters: {
+                'count': requests.length,
+                'success': true,
+                'cached': false,
+              },
+            );
+            return requests;
+          }
+        })
+        .handleError((error) async {
+          _logger.e(_tag, 'Error in pending requests stream: $error');
+          
+          try {
+            // Fallback to cached data if stream fails
+            final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
+            if (cachedRequests.isNotEmpty) {
+              _logger.i(_tag, 'Falling back to cached pending requests data: ${cachedRequests.length} requests');
+              return cachedRequests;
+            }
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to get cached pending requests: $cacheError');
+          }
+          
+          // Track stream errors
+          await _analytics.logEvent(
+            name: 'pending_requests_stream_error',
+            parameters: {
+              'success': false,
+              'error_code': error is RelationshipException ? error.code : 'unknown',
+            },
+          );
+          
+          // Log to crashlytics for debugging
+          await _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to stream pending requests',
+            fatal: false,
+          );
+          
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initialize pending requests stream: ${e.toString()}');
+      
+      // Log initialization errors
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initialize pending requests stream',
+        fatal: false,
+      );
+      
+      return Stream.error(e);
+    }
+  }
+
+  /// Get real-time stream of blocked users
+  /// Returns stream of user data for blocked users with real-time updates
+  /// Limited to 15 items per page for optimal performance
+  /// Implements local caching for better performance
+  Stream<List<Map<String, dynamic>>> getBlockedUsersStream() {
+    try {
+      final currentUserId = _getCurrentUserId();
+      _logger.d(_tag, 'Getting blocked users stream with caching for current user');
+      
+      return _relationshipService.getBlockedUsersStream()
+        .asyncMap((blockedUsers) async {
+          try {
+            // Cache the blocked users data to local database
+            await _localDb.cacheBlockedUsers(currentUserId, blockedUsers);
+            
+            // Track stream updates for analytics
+            await _analytics.logEvent(
+              name: 'blocked_users_stream_updated',
+              parameters: {
+                'count': blockedUsers.length,
+                'success': true,
+                'cached': true,
+              },
+            );
+            
+            _logger.d(_tag, 'Blocked users stream updated and cached: ${blockedUsers.length} blocked');
+            return blockedUsers;
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to cache blocked users data: $cacheError');
+            // Continue with original data even if caching fails
+            await _analytics.logEvent(
+              name: 'blocked_users_stream_updated',
+              parameters: {
+                'count': blockedUsers.length,
+                'success': true,
+                'cached': false,
+              },
+            );
+            return blockedUsers;
+          }
+        })
+        .handleError((error) async {
+          _logger.e(_tag, 'Error in blocked users stream: $error');
+          
+          try {
+            // Fallback to cached data if stream fails
+            final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(currentUserId);
+            if (cachedBlockedUsers.isNotEmpty) {
+              _logger.i(_tag, 'Falling back to cached blocked users data: ${cachedBlockedUsers.length} blocked');
+              return cachedBlockedUsers;
+            }
+          } catch (cacheError) {
+            _logger.w(_tag, 'Failed to get cached blocked users: $cacheError');
+          }
+          
+          // Track stream errors
+          await _analytics.logEvent(
+            name: 'blocked_users_stream_error',
+            parameters: {
+              'success': false,
+              'error_code': error is RelationshipException ? error.code : 'unknown',
+            },
+          );
+          
+          // Log to crashlytics for debugging
+          await _crashlytics.recordError(
+            error,
+            null,
+            reason: 'Failed to stream blocked users',
+            fatal: false,
+          );
+          
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initialize blocked users stream: ${e.toString()}');
+      
+      // Log initialization errors
+      _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to initialize blocked users stream',
+        fatal: false,
+      );
+      
+      return Stream.error(e);
+    }
+  }
+
+  // ========== UTILITY METHODS ==========
+
+
+
+  /// Get the current user ID
+  /// Throws RelationshipException if not authenticated
+  String _getCurrentUserId() {
+    final user = _authService.currentUser;
+    if (user == null) {
+      throw RelationshipException(
+        RelationshipErrorCodes.notLoggedIn,
+        'User must be authenticated to perform relationship operations',
+      );
+    }
+    return user.uid;
+  }
+
+  /// Clear relationship cache for current user
+  /// Useful when user signs out or wants to refresh data
+  Future<void> clearCurrentUserRelationshipCache() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      await _localDb.clearRelationshipCache(currentUserId);
+      _logger.i(_tag, 'Cleared relationship cache for current user: $currentUserId');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to clear relationship cache: ${e.toString()}');
       rethrow;
     }
   }
 
-  /// Get pending friend requests (received by user) with pagination
-  Future<PaginatedRelationshipResult> getPendingRequests(
-    String userId, {
-    int limit = 20,
-    String? startAfter,
-  }) async {
+  /// Get cached friends without stream (for offline access)
+  Future<List<Map<String, dynamic>>> getCachedFriends() async {
     try {
-      _logger.d(_tag, 'Getting pending requests for user: $userId (limit: $limit)');
-      
-      final result = await _relationshipService.getPendingRequests(
-        userId,
-        limit: limit,
-        startAfter: startAfter,
-      );
-      
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'pending_requests_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'count': result.relationships.length,
-          'has_more': result.hasMore,
-          'success': true,
-        },
-      );
-      
-      _logger.d(_tag, 'Pending requests loaded successfully: ${result.relationships.length} items');
-      return result;
-      
+      final currentUserId = _getCurrentUserId();
+      final cachedFriends = await _localDb.getCachedFriends(currentUserId);
+      _logger.d(_tag, 'Retrieved ${cachedFriends.length} cached friends');
+      return cachedFriends;
     } catch (e) {
-      _logger.e(_tag, 'Failed to get pending requests: ${e.toString()}');
-      
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'pending_requests_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
+      _logger.e(_tag, 'Failed to get cached friends: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Get cached pending requests without stream (for offline access)
+  Future<List<Map<String, dynamic>>> getCachedPendingRequests() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
+      _logger.d(_tag, 'Retrieved ${cachedRequests.length} cached pending requests');
+      return cachedRequests;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get cached pending requests: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Get cached blocked users without stream (for offline access)
+  Future<List<Map<String, dynamic>>> getCachedBlockedUsers() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(currentUserId);
+      _logger.d(_tag, 'Retrieved ${cachedBlockedUsers.length} cached blocked users');
+      return cachedBlockedUsers;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get cached blocked users: ${e.toString()}');
+      return [];
+    }
+  }
+
+  /// Force refresh all relationship caches by fetching fresh data from Firebase
+  /// This is useful when app resumes or user manually refreshes
+  /// Returns true if refresh was successful
+  Future<bool> forceRefreshAllCaches() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      _logger.i(_tag, 'Force refreshing all relationship caches for user: $currentUserId');
+
+      // Get fresh data from each stream (this will automatically update caches)
+      final futures = <Future>[];
+
+      // Refresh friends cache
+      futures.add(
+        _relationshipService.getFriendsStream().first.then((friends) {
+          _localDb.cacheFriends(currentUserId, friends);
+          _logger.d(_tag, 'Force refreshed friends cache: ${friends.length} friends');
+        }).catchError((e) {
+          _logger.w(_tag, 'Failed to force refresh friends cache: $e');
+        })
+      );
+
+      // Refresh pending requests cache
+      futures.add(
+        _relationshipService.getPendingRequestsStream().first.then((requests) {
+          _localDb.cachePendingRequests(currentUserId, requests);
+          _logger.d(_tag, 'Force refreshed pending requests cache: ${requests.length} requests');
+        }).catchError((e) {
+          _logger.w(_tag, 'Failed to force refresh pending requests cache: $e');
+        })
+      );
+
+      // Refresh blocked users cache
+      futures.add(
+        _relationshipService.getBlockedUsersStream().first.then((blockedUsers) {
+          _localDb.cacheBlockedUsers(currentUserId, blockedUsers);
+          _logger.d(_tag, 'Force refreshed blocked users cache: ${blockedUsers.length} blocked');
+        }).catchError((e) {
+          _logger.w(_tag, 'Failed to force refresh blocked users cache: $e');
+        })
+      );
+
+      // Wait for all refreshes to complete (with timeout)
+      await Future.wait(futures).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          _logger.w(_tag, 'Cache refresh timed out after 10 seconds');
+          throw TimeoutException('Cache refresh timeout', Duration(seconds: 10));
         },
       );
-      
+
+      // Update cache refresh timestamp
+      await _updateCacheRefreshTimestamp();
+
+      // Track successful refresh
+      await _analytics.logEvent(
+        name: 'relationship_cache_force_refresh',
+        parameters: {
+          'success': true,
+          'user_id_hash': currentUserId.hashCode.toString(),
+        },
+      );
+
+      _logger.i(_tag, 'Successfully force refreshed all relationship caches');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to force refresh relationship caches: ${e.toString()}');
+
+      // Track failed refresh
+      await _analytics.logEvent(
+        name: 'relationship_cache_force_refresh',
+        parameters: {
+          'success': false,
+          'error': e.toString(),
+        },
+      );
+
       // Log to crashlytics for debugging
       await _crashlytics.recordError(
         e,
         null,
-        reason: 'Failed to get pending requests',
+        reason: 'Failed to force refresh relationship caches',
         fatal: false,
       );
-      
-      rethrow;
+
+      return false;
     }
   }
 
-  /// Get sent friend requests (sent by user) with pagination
-  Future<PaginatedRelationshipResult> getSentRequests(
-    String userId, {
-    int limit = 20,
-    String? startAfter,
-  }) async {
+  /// Check if relationship cache is stale and needs refresh
+  /// Returns true if cache is older than the specified duration
+  Future<bool> isCacheStale({Duration maxAge = const Duration(minutes: 5)}) async {
     try {
-      _logger.d(_tag, 'Getting sent requests for user: $userId (limit: $limit)');
+      final currentUserId = _getCurrentUserId();
       
-      final result = await _relationshipService.getSentRequests(
-        userId,
-        limit: limit,
-        startAfter: startAfter,
-      );
+      // Check if we have any cached data
+      final cachedFriends = await _localDb.getCachedFriends(currentUserId);
+      final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
+      final cachedBlocked = await _localDb.getCachedBlockedUsers(currentUserId);
+
+      // If no cached data exists, consider it stale
+      if (cachedFriends.isEmpty && cachedRequests.isEmpty && cachedBlocked.isEmpty) {
+        _logger.d(_tag, 'No cached relationship data found - cache is stale');
+        return true;
+      }
+
+      // For simplicity, we'll use a timestamp stored in app settings
+      // This could be enhanced to check individual cache timestamps
+      final lastRefreshKey = 'relationship_cache_last_refresh_$currentUserId';
+      final lastRefreshString = await _localDb.getSetting(lastRefreshKey);
       
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'sent_requests_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'count': result.relationships.length,
-          'has_more': result.hasMore,
-          'success': true,
-        },
-      );
-      
-      _logger.d(_tag, 'Sent requests loaded successfully: ${result.relationships.length} items');
-      return result;
-      
+      if (lastRefreshString == null) {
+        _logger.d(_tag, 'No cache timestamp found - cache is stale');
+        return true;
+      }
+
+      final lastRefresh = DateTime.fromMillisecondsSinceEpoch(int.parse(lastRefreshString));
+      final age = DateTime.now().difference(lastRefresh);
+      final isStale = age > maxAge;
+
+      _logger.d(_tag, 'Cache age: ${age.inMinutes} minutes, max age: ${maxAge.inMinutes} minutes, is stale: $isStale');
+      return isStale;
+
     } catch (e) {
-      _logger.e(_tag, 'Failed to get sent requests: ${e.toString()}');
-      
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'sent_requests_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
-        },
-      );
-      
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to get sent requests',
-        fatal: false,
-      );
-      
-      rethrow;
+      _logger.e(_tag, 'Error checking cache staleness: ${e.toString()}');
+      return true; // Consider stale on error to be safe
     }
   }
 
-  /// Get blocked users with pagination
-  Future<PaginatedRelationshipResult> getBlockedUsers(
-    String userId, {
-    int limit = 20,
-    String? startAfter,
-  }) async {
+  /// Update the cache refresh timestamp
+  Future<void> _updateCacheRefreshTimestamp() async {
     try {
-      _logger.d(_tag, 'Getting blocked users for user: $userId (limit: $limit)');
+      final currentUserId = _getCurrentUserId();
+      final timestampKey = 'relationship_cache_last_refresh_$currentUserId';
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       
-      final result = await _relationshipService.getBlockedUsers(
-        userId,
-        limit: limit,
-        startAfter: startAfter,
-      );
-      
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'blocked_users_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'count': result.relationships.length,
-          'has_more': result.hasMore,
-          'success': true,
-        },
-      );
-      
-      _logger.d(_tag, 'Blocked users loaded successfully: ${result.relationships.length} items');
-      return result;
-      
+      await _localDb.setSetting(timestampKey, timestamp);
+      _logger.d(_tag, 'Updated cache refresh timestamp');
     } catch (e) {
-      _logger.e(_tag, 'Failed to get blocked users: ${e.toString()}');
-      
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'blocked_users_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
-        },
-      );
-      
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to get blocked users',
-        fatal: false,
-      );
-      
-      rethrow;
+      _logger.w(_tag, 'Failed to update cache refresh timestamp: ${e.toString()}');
     }
   }
 
-  // ========== UTILITY OPERATIONS ==========
+  // ========== USER SEARCH OPERATIONS ==========
 
-  /// Search for a user by UID to send friend request
+  /// Search for a user by their UID directly from the users collection
+  /// Returns user data if found, null if not found
+  /// Excludes email and isOnline fields, prevents self-search
   Future<Map<String, dynamic>?> searchUserByUid(String uid) async {
     try {
       _logger.d(_tag, 'Searching for user by UID: $uid');
       
       final result = await _relationshipService.searchUserByUid(uid);
       
-      // Track success analytics
+      // Track analytics
       await _analytics.logEvent(
         name: 'user_search_by_uid',
         parameters: {
-          'search_uid_hash': uid.hashCode.toString(),
-          'found': result != null,
-          'success': true,
+          'target_uid_hash': uid.hashCode.toString(),
+          'success': result != null,
         },
       );
       
-      _logger.d(_tag, 'User search completed: ${result != null ? 'found' : 'not found'}');
+      if (result != null) {
+        _logger.i(_tag, 'User found by UID: $uid, displayName: ${result['displayName']}');
+      } else {
+        _logger.d(_tag, 'User not found by UID: $uid');
+      }
+      
       return result;
       
     } catch (e) {
@@ -588,7 +836,7 @@ class RelationshipRepository {
       await _analytics.logEvent(
         name: 'user_search_by_uid',
         parameters: {
-          'search_uid_hash': uid.hashCode.toString(),
+          'target_uid_hash': uid.hashCode.toString(),
           'success': false,
           'error_code': e is RelationshipException ? e.code : 'unknown',
         },
@@ -606,233 +854,4 @@ class RelationshipRepository {
     }
   }
 
-  /// Get relationship summary (counts of different types)
-  Future<Map<String, int>> getUserRelationshipsSummary(String userId) async {
-    try {
-      _logger.d(_tag, 'Getting relationships summary for user: $userId');
-      
-      final result = await _relationshipService.getUserRelationshipsSummary(userId);
-      
-      // Track success analytics
-      await _analytics.logEvent(
-        name: 'relationships_summary_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'friends_count': result['friends'] ?? 0,
-          'pending_received_count': result['pending_received'] ?? 0,
-          'pending_sent_count': result['pending_sent'] ?? 0,
-          'blocked_count': result['blocked'] ?? 0,
-          'success': true,
-        },
-      );
-      
-      _logger.d(_tag, 'Relationships summary loaded successfully');
-      return result;
-      
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get relationships summary: ${e.toString()}');
-      
-      // Track failure analytics
-      await _analytics.logEvent(
-        name: 'relationships_summary_loaded',
-        parameters: {
-          'user_id_hash': userId.hashCode.toString(),
-          'success': false,
-          'error_code': e is RelationshipException ? e.code : 'unknown',
-        },
-      );
-      
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to get relationships summary',
-        fatal: false,
-      );
-      
-      rethrow;
-    }
-  }
-
-  // ========== STREAM-BASED METHODS ==========
-
-  /// Get a stream of accepted friendships for the current user
-  Stream<List<RelationshipModel>> getFriendsStream() {
-    try {
-      final currentUser = _authService.currentUser;
-      if (currentUser == null) {
-        _logger.w(_tag, 'Cannot get friends stream: user not authenticated');
-        return Stream.error(RelationshipException(
-          RelationshipErrorCodes.notLoggedIn,
-          'User not logged in',
-          null,
-          RelationshipOperation.getFriendsStream,
-        ));
-      }
-      final userId = currentUser.uid;
-      _logger.d(_tag, 'Getting friends stream for current user');
-      return _relationshipService.getFriendsStream(userId)
-        .map((relationships) {
-          _analytics.logEvent(
-            name: 'friends_stream_updated',
-            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
-          );
-          return relationships;
-        })
-        .handleError((error) {
-          _logger.e(_tag, 'Error in getFriendsStream from repository: $error');
-          _crashlytics.recordError(
-            error,
-            null, // Stack trace can be null
-            reason: 'Failed to get friends stream',
-            fatal: false, 
-          );
-          throw error; 
-        });
-    } catch (e) {
-      _logger.e(_tag, 'Failed to initiate getFriendsStream: ${e.toString()}');
-      _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to initiate getFriendsStream',
-        fatal: false,
-      );
-      return Stream.error(e);
-    }
-  }
-
-  /// Get a stream of pending friend requests (received by current user)
-  Stream<List<RelationshipModel>> getPendingRequestsStream() {
-    try {
-      final currentUser = _authService.currentUser;
-      if (currentUser == null) {
-        _logger.w(_tag, 'Cannot get pending requests stream: user not authenticated');
-        return Stream.error(RelationshipException(
-          RelationshipErrorCodes.notLoggedIn,
-          'User not logged in',
-          null,
-          RelationshipOperation.getPendingRequestsStream,
-        ));
-      }
-      final userId = currentUser.uid;
-      _logger.d(_tag, 'Getting pending requests stream for current user');
-      return _relationshipService.getPendingRequestsStream(userId)
-        .map((relationships) {
-          _analytics.logEvent(
-            name: 'pending_requests_stream_updated',
-            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
-          );
-          return relationships;
-        })
-        .handleError((error) {
-          _logger.e(_tag, 'Error in getPendingRequestsStream from repository: $error');
-          _crashlytics.recordError(
-            error,
-            null,
-            reason: 'Failed to get pending requests stream',
-            fatal: false,
-          );
-          throw error;
-        });
-    } catch (e) {
-      _logger.e(_tag, 'Failed to initiate getPendingRequestsStream: ${e.toString()}');
-      _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to initiate getPendingRequestsStream',
-        fatal: false,
-      );
-      return Stream.error(e);
-    }
-  }
-
-  /// Get a stream of sent friend requests (sent by current user)
-  Stream<List<RelationshipModel>> getSentRequestsStream() {
-    try {
-      final currentUser = _authService.currentUser;
-      if (currentUser == null) {
-        _logger.w(_tag, 'Cannot get sent requests stream: user not authenticated');
-        return Stream.error(RelationshipException(
-          RelationshipErrorCodes.notLoggedIn,
-          'User not logged in',
-          null,
-          RelationshipOperation.getSentRequestsStream,
-        ));
-      }
-      final userId = currentUser.uid;
-      _logger.d(_tag, 'Getting sent requests stream for current user');
-      return _relationshipService.getSentRequestsStream(userId)
-        .map((relationships) {
-          _analytics.logEvent(
-            name: 'sent_requests_stream_updated',
-            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
-          );
-          return relationships;
-        })
-        .handleError((error) {
-          _logger.e(_tag, 'Error in getSentRequestsStream from repository: $error');
-          _crashlytics.recordError(
-            error,
-            null,
-            reason: 'Failed to get sent requests stream',
-            fatal: false,
-          );
-          throw error;
-        });
-    } catch (e) {
-      _logger.e(_tag, 'Failed to initiate getSentRequestsStream: ${e.toString()}');
-      _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to initiate getSentRequestsStream',
-        fatal: false,
-      );
-      return Stream.error(e);
-    }
-  }
-  
-  /// Get a stream of blocked users (only users that the current user has blocked)
-  Stream<List<RelationshipModel>> getBlockedUsersStream() {
-    try {
-      final currentUser = _authService.currentUser;
-      if (currentUser == null) {
-        _logger.w(_tag, 'Cannot get blocked users stream: user not authenticated');
-        return Stream.error(RelationshipException(
-          RelationshipErrorCodes.notLoggedIn,
-          'User not logged in',
-          null,
-          RelationshipOperation.getBlockedUsersStream,
-        ));
-      }
-      final userId = currentUser.uid;
-      _logger.d(_tag, 'Getting blocked users stream for current user');
-      return _relationshipService.getBlockedUsersStream(userId)
-        .map((relationships) {
-          _analytics.logEvent(
-            name: 'blocked_users_stream_updated',
-            parameters: {'count': relationships.length, 'user_id_hash': userId.hashCode.toString()},
-          );
-          return relationships;
-        })
-        .handleError((error) {
-          _logger.e(_tag, 'Error in getBlockedUsersStream from repository: $error');
-          _crashlytics.recordError(
-            error,
-            null,
-            reason: 'Failed to get blocked users stream',
-            fatal: false,
-          );
-          throw error;
-        });
-    } catch (e) {
-      _logger.e(_tag, 'Failed to initiate getBlockedUsersStream: ${e.toString()}');
-      _crashlytics.recordError(
-        e,
-        null,
-        reason: 'Failed to initiate getBlockedUsersStream',
-        fatal: false,
-      );
-      return Stream.error(e);
-    }
-  }
 }

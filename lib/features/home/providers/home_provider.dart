@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../../../core/models/relationship_model.dart';
 import '../../../core/repositories/relationship_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
@@ -18,10 +17,10 @@ class HomeProvider extends ChangeNotifier {
   static const String _tag = 'HOME_PROVIDER';
 
   // Stream Subscription for friends only
-  StreamSubscription<List<RelationshipModel>>? _friendsSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _friendsSubscription;
 
-  // Friends data
-  List<RelationshipModel> _friends = [];
+  // Friends data (user profile data from friends stream)
+  List<Map<String, dynamic>> _friends = [];
 
   // Loading states
   bool _isLoadingFriends = false;
@@ -37,7 +36,7 @@ class HomeProvider extends ChangeNotifier {
        _authService = authService ?? serviceLocator<AuthServiceInterface>();
 
   // Getters
-  List<RelationshipModel> get friends => List.unmodifiable(_friends);
+  List<Map<String, dynamic>> get friends => List.unmodifiable(_friends);
   bool get isLoadingFriends => _isLoadingFriends;
   String? get error => _error;
   int get friendsCount => _friends.length;
@@ -83,10 +82,12 @@ class HomeProvider extends ChangeNotifier {
     );
   }
 
-  /// Get cached profile for a relationship
-  CachedProfile? getCachedProfile(RelationshipModel relationship, String currentUserId) {
-    final friendId = relationship.getFriendId(currentUserId);
-    return relationship.getCachedProfile(friendId);
+  /// Get cached profile for a friend by user ID
+  Map<String, dynamic>? getFriendProfile(String userId) {
+    return _friends.firstWhere(
+      (friend) => friend['uid'] == userId,
+      orElse: () => <String, dynamic>{},
+    );
   }
 
   /// Clear error state

@@ -1,12 +1,12 @@
 import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../../providers/friends_provider.dart';
+import '../../providers/relationship_provider.dart';
 import '../request_tile.dart';
 import '../request_tile_skeleton.dart';
 
 class OutgoingRequestsSection extends StatelessWidget {
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
   final bool showSectionTitle; // Added
 
   const OutgoingRequestsSection({

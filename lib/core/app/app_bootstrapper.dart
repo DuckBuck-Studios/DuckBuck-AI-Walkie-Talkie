@@ -9,6 +9,7 @@ import '../services/crashlytics_consent_manager.dart';
 import '../services/logger/logger_service.dart';
 import '../services/fcm/fcm_service.dart';
 import '../services/database/local_database_service.dart';
+import '../services/lifecycle/app_lifecycle_manager.dart';
 
 /// Handles the bootstrapping of the app
 ///
@@ -33,6 +34,7 @@ class AppBootstrapper {
     await _initializeCrashlyticsConsent();
     await _initializeFCM();
     await _syncAuthState();
+    await _initializeAppLifecycle();
     
     _logger!.i('BOOTSTRAP', 'App initialization completed successfully');
   }
@@ -151,6 +153,17 @@ class AppBootstrapper {
     } catch (e) {
       _logger!.e('AUTH', 'Error syncing auth state: $e');
       // Handle but continue execution
+    }
+  }
+
+  Future<void> _initializeAppLifecycle() async {
+    try {
+      final appLifecycleManager = serviceLocator<AppLifecycleManager>();
+      appLifecycleManager.initialize();
+      _logger!.i('LIFECYCLE', 'App lifecycle manager initialized');
+    } catch (e) {
+      _logger!.e('LIFECYCLE', 'Error initializing app lifecycle manager: $e');
+      // Continue execution even if this fails
     }
   }
 }

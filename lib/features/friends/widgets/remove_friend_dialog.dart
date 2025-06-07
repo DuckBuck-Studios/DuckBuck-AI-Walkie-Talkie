@@ -4,11 +4,11 @@ import 'dart:io' show Platform;
 import '../../../core/models/relationship_model.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
-import '../providers/friends_provider.dart';
+import '../providers/relationship_provider.dart';
 
 class RemoveFriendDialog extends StatelessWidget {
   final RelationshipModel relationship;
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
 
   const RemoveFriendDialog({
     super.key,
@@ -16,7 +16,7 @@ class RemoveFriendDialog extends StatelessWidget {
     required this.provider,
   });
 
-  static Future<void> show(BuildContext context, RelationshipModel relationship, FriendsProvider provider) {
+  static Future<void> show(BuildContext context, RelationshipModel relationship, RelationshipProvider provider) {
     if (Platform.isIOS) {
       return showCupertinoDialog(
         context: context,
@@ -52,12 +52,12 @@ class RemoveFriendDialog extends StatelessWidget {
   Widget _buildCupertinoDialog(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
 
     return CupertinoAlertDialog(
       title: const Text('Remove Friend'),
       content: Text(
-        'Are you sure you want to remove ${profile?.displayName ?? 'this user'} from your friends?',
+        'Are you sure you want to remove ${profile?['displayName'] ?? 'this user'} from your friends?',
       ),
       actions: [
         CupertinoDialogAction(
@@ -76,7 +76,7 @@ class RemoveFriendDialog extends StatelessWidget {
   Widget _buildMaterialDialog(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
     
     return AlertDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -91,7 +91,7 @@ class RemoveFriendDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       content: Text(
-        'Are you sure you want to remove ${profile?.displayName ?? 'this user'} from your friends?',
+        'Are you sure you want to remove ${profile?['displayName'] ?? 'this user'} from your friends?',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
       actions: [

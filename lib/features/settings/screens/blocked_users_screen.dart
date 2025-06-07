@@ -5,7 +5,7 @@ import 'dart:io' show Platform;
 import '../../../core/models/relationship_model.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
-import '../../friends/providers/friends_provider.dart';
+import '../../friends/providers/relationship_provider.dart';
 import '../../friends/widgets/profile_avatar.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<FriendsProvider>(context, listen: false).loadBlockedUsers();
+      Provider.of<RelationshipProvider>(context, listen: false).loadBlockedUsers();
     });
   }
 
@@ -36,7 +36,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Consumer<FriendsProvider>(
+      body: Consumer<RelationshipProvider>(
         builder: (context, provider, child) {
           if (provider.isLoadingBlocked) {
             return const Center(
@@ -119,7 +119,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
 
 class _BlockedUserTile extends StatelessWidget {
   final RelationshipModel relationship;
-  final FriendsProvider provider;
+  final RelationshipProvider provider;
 
   const _BlockedUserTile({
     required this.relationship,
@@ -130,16 +130,16 @@ class _BlockedUserTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = serviceLocator<AuthServiceInterface>();
     final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
+    final profile = provider.getProfileForRelationship(relationship, currentUserId);
     final isProcessing = provider.isBlockingUser(relationship.id);
     final bool isIOS = Platform.isIOS;
 
     return ListTile(
       leading: ProfileAvatar(
-        photoURL: profile?.photoURL,
-        displayName: profile?.displayName ?? 'Unknown User',
+        photoURL: profile?['photoURL'],
+        displayName: profile?['displayName'] ?? 'Unknown User',
       ),
-      title: Text(profile?.displayName ?? 'Unknown User'),
+      title: Text(profile?['displayName'] ?? 'Unknown User'),
       subtitle: const Text('Blocked'),
       trailing: isProcessing
           ? const SizedBox(
@@ -160,8 +160,8 @@ class _BlockedUserTile extends StatelessWidget {
   }
 
   void _showUnblockDialog(BuildContext context, RelationshipModel relationship) {
-    final profile = provider.getCachedProfile(relationship, relationship.blockerId ?? '');
-    final userName = profile?.displayName ?? 'this user';
+    final profile = provider.getProfileForRelationship(relationship, relationship.blockerId ?? '');
+    final userName = profile?['displayName'] ?? 'this user';
     final bool isIOS = Platform.isIOS;
 
     if (isIOS) {

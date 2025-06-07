@@ -1,16 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
-import '../../../core/models/relationship_model.dart';
-import '../../../core/services/auth/auth_service_interface.dart';
-import '../../../core/services/service_locator.dart';
 import '../providers/home_provider.dart';
 import '../../friends/widgets/friend_tile.dart' show FriendTileSkeleton;
 import '../../friends/widgets/profile_avatar.dart';
 
 class HomeFriendsSection extends StatelessWidget {
   final HomeProvider provider;
-  final Function(BuildContext, RelationshipModel)? onFriendTap;
+  final Function(BuildContext, Map<String, dynamic>)? onFriendTap;
 
   const HomeFriendsSection({
     super.key,
@@ -81,8 +78,8 @@ class HomeFriendsSection extends StatelessWidget {
     return CupertinoListSection.insetGrouped(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      children: displayFriends.map((relationship) =>
-        _buildFriendTile(context, relationship, true)
+      children: displayFriends.map((friendProfile) =>
+        _buildFriendTile(context, friendProfile, true)
       ).toList(),
     );
   }
@@ -147,52 +144,48 @@ class HomeFriendsSection extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
-        children: displayFriends.map((relationship) =>
-          _buildFriendTile(context, relationship, false)
+        children: displayFriends.map((friendProfile) =>
+          _buildFriendTile(context, friendProfile, false)
         ).toList(),
       ),
     );
   }
 
-  Widget _buildFriendTile(BuildContext context, RelationshipModel relationship, bool isIOS) {
-    final authService = serviceLocator<AuthServiceInterface>();
-    final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getCachedProfile(relationship, currentUserId);
-    
+  Widget _buildFriendTile(BuildContext context, Map<String, dynamic> friendProfile, bool isIOS) {
     // Debug output
-    print('Building friend tile: ${relationship.id}, profile: ${profile?.displayName}, isIOS: $isIOS');
+    print('Building friend tile: ${friendProfile['uid']}, displayName: ${friendProfile['displayName']}, isIOS: $isIOS');
 
     if (isIOS) {
       return CupertinoListTile(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: ProfileAvatar(
-          photoURL: profile?.photoURL,
-          displayName: profile?.displayName ?? 'Unknown User',
+          photoURL: friendProfile['photoURL'],
+          displayName: friendProfile['displayName'] ?? 'Unknown User',
           radius: 20, // Smaller for home screen
         ),
         title: Text(
-          profile?.displayName ?? 'Unknown User',
+          friendProfile['displayName'] ?? 'Unknown User',
           style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
             fontWeight: FontWeight.w500,
           ),
         ),
-        onTap: onFriendTap != null ? () => onFriendTap!(context, relationship) : null,
+        onTap: onFriendTap != null ? () => onFriendTap!(context, friendProfile) : null,
       );
     } else {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: ProfileAvatar(
-          photoURL: profile?.photoURL,
-          displayName: profile?.displayName ?? 'Unknown User',
+          photoURL: friendProfile['photoURL'],
+          displayName: friendProfile['displayName'] ?? 'Unknown User',
           radius: 20, // Smaller for home screen
         ),
         title: Text(
-          profile?.displayName ?? 'Unknown User',
+          friendProfile['displayName'] ?? 'Unknown User',
           style: const TextStyle(
             fontWeight: FontWeight.w500,
           ),
         ),
-        onTap: onFriendTap != null ? () => onFriendTap!(context, relationship) : null,
+        onTap: onFriendTap != null ? () => onFriendTap!(context, friendProfile) : null,
       );
     }
   }

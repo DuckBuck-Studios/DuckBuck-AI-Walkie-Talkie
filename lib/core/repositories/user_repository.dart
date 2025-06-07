@@ -1172,4 +1172,149 @@ class UserRepository {
       _logger.e(_tag, 'Error disposing UserRepository: ${e.toString()}');
     }
   }
+
+  /// Force refresh user data from Firebase and update local cache
+  /// This is useful when app resumes or user manually refreshes
+  /// Returns true if refresh was successful
+  Future<bool> forceRefreshUserData() async {
+    try {
+      final currentUserAuth = authService.currentUser;
+      if (currentUserAuth == null) {
+        _logger.d(_tag, 'No current user, no refresh needed');
+        return false;
+      }
+
+      _logger.i(_tag, 'Force refreshing user data for user: ${currentUserAuth.uid}');
+
+      // Get fresh user data from Firebase/Firestore
+      final freshUserData = await _userService.getUserData(currentUserAuth.uid);
+      if (freshUserData == null) {
+        _logger.w(_tag, 'No user data found in Firebase for refresh');
+        return false;
+      }
+
+      // Update local database with fresh data
+      final localDb = LocalDatabaseService.instance;
+      await localDb.saveUser(freshUserData);
+      
+      // Update user cache refresh timestamp
+      await _updateUserCacheRefreshTimestamp();
+
+      // Track successful refresh
+      await _analytics.logEvent(
+        name: 'user_cache_force_refresh',
+        parameters: {
+          'success': true,
+          'user_id_hash': currentUserAuth.uid.hashCode.toString(),
+        },
+      );
+
+      _logger.i(_tag, 'Successfully force refreshed user data');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to force refresh user data: ${e.toString()}');
+
+      // Track failed refresh
+      await _analytics.logEvent(
+        name: 'user_cache_force_refresh',
+        parameters: {
+          'success': false,
+          'error': e.toString(),
+        },
+      );
+
+      // Log to crashlytics for debugging
+      await _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to force refresh user cache',
+        fatal: false,
+      );
+
+      return false;
+    }
+  }
+
+  /// Check if user cache is stale and needs refresh
+  /// Returns true if cache is older than the specified duration
+  Future<bool> isUserCacheStale({Duration maxAge = const Duration(minutes: 5)}) async {
+    try {
+      final currentUserAuth = authService.currentUser;
+      if (currentUserAuth == null) {
+        _logger.d(_tag, 'No current user, cache is not stale');
+        return false;
+      }
+
+      // Check if we have any cached user data
+      final localDb = LocalDatabaseService.instance;
+      final cachedUser = await localDb.getCurrentUser();
+
+      // If no cached data exists, consider it stale
+      if (cachedUser == null) {
+        _logger.d(_tag, 'No cached user data found - cache is stale');
+        return true;
+      }
+
+      // Check cache timestamp
+      final lastRefreshKey = 'user_cache_last_refresh_${currentUserAuth.uid}';
+      final lastRefreshString = await localDb.getSetting(lastRefreshKey);
+      
+      if (lastRefreshString == null) {
+        _logger.d(_tag, 'No user cache timestamp found - cache is stale');
+        return true;
+      }
+
+      final lastRefresh = DateTime.fromMillisecondsSinceEpoch(int.parse(lastRefreshString));
+      final age = DateTime.now().difference(lastRefresh);
+      final isStale = age > maxAge;
+
+      _logger.d(_tag, 'User cache age: ${age.inMinutes} minutes, max age: ${maxAge.inMinutes} minutes, is stale: $isStale');
+      return isStale;
+
+    } catch (e) {
+      _logger.e(_tag, 'Error checking user cache staleness: ${e.toString()}');
+      return true; // Consider stale on error to be safe
+    }
+  }
+
+  /// Update the user cache refresh timestamp
+  Future<void> _updateUserCacheRefreshTimestamp() async {
+    try {
+      final currentUserAuth = authService.currentUser;
+      if (currentUserAuth == null) return;
+      
+      final timestampKey = 'user_cache_last_refresh_${currentUserAuth.uid}';
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      final localDb = LocalDatabaseService.instance;
+      await localDb.setSetting(timestampKey, timestamp);
+      _logger.d(_tag, 'Updated user cache refresh timestamp');
+    } catch (e) {
+      _logger.w(_tag, 'Failed to update user cache refresh timestamp: ${e.toString()}');
+    }
+  }
+
+  /// Clear user cache for current user
+  /// Useful when user signs out or wants to refresh data
+  Future<void> clearCurrentUserCache() async {
+    try {
+      final currentUserAuth = authService.currentUser;
+      if (currentUserAuth == null) return;
+
+      final localDb = LocalDatabaseService.instance;
+      
+      // Clear user data from local database
+      await localDb.deleteUser(currentUserAuth.uid);
+      
+      // Clear cache timestamp
+      final timestampKey = 'user_cache_last_refresh_${currentUserAuth.uid}';
+      await localDb.removeSetting(timestampKey);
+      
+      _logger.i(_tag, 'Cleared user cache for current user: ${currentUserAuth.uid}');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to clear user cache: ${e.toString()}');
+      rethrow;
+    }
+  }
 }
