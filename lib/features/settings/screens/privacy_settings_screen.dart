@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
-import '../../../core/providers/crashlytics_consent_provider.dart';
+import '../providers/crashlytics_consent_provider.dart';
 import '../../../core/widgets/error_boundary.dart';
 import '../../auth/providers/auth_state_provider.dart';
 import '../../../core/navigation/app_routes.dart';

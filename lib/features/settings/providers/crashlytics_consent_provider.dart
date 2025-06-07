@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../services/crashlytics_consent_manager.dart';
-import '../services/service_locator.dart';
+import '../../../core/services/crashlytics_consent_manager.dart';
+import '../../../core/services/service_locator.dart';
 
 /// Provider to manage crashlytics consent state in the app
 class CrashlyticsConsentProvider with ChangeNotifier {
