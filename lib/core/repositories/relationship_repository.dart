@@ -3,9 +3,7 @@ import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/logger/logger_service.dart';
 import '../services/service_locator.dart';
-import '../services/database/local_database_service.dart';
 import '../exceptions/relationship_exceptions.dart';
-import '../services/auth/auth_service_interface.dart';
 import 'dart:async';
 
 /// Repository to handle relationship data operations
@@ -15,7 +13,7 @@ import 'dart:async';
 /// and provide analytics tracking for all relationship operations.
 /// 
 /// Features:
-/// - Real-time streams for friends, pending requests, and blocked users (15 items paginated)
+/// - Real-time streams for friends, pending requests, and blocked users
 /// - Comprehensive analytics tracking for all operations
 /// - Error handling with Crashlytics integration
 /// - Transaction-safe relationship operations
@@ -24,8 +22,6 @@ class RelationshipRepository {
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final LoggerService _logger;
-  final LocalDatabaseService _localDb;
-  final AuthServiceInterface _authService;
 
   static const String _tag = 'RELATIONSHIP_REPO';
 
@@ -35,14 +31,10 @@ class RelationshipRepository {
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
     LoggerService? logger,
-    AuthServiceInterface? authService,
-    LocalDatabaseService? localDb,
   }) : _relationshipService = relationshipService ?? serviceLocator<RelationshipServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _logger = logger ?? serviceLocator<LoggerService>(),
-       _localDb = localDb ?? LocalDatabaseService.instance,
-       _authService = authService ?? serviceLocator<AuthServiceInterface>();
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   // ========== FRIEND REQUEST OPERATIONS ==========
 
@@ -99,10 +91,6 @@ class RelationshipRepository {
       
       final resultId = await _relationshipService.acceptFriendRequest(relationshipId);
       
-      // Note: No need to force refresh caches here - the real-time streams will
-      // automatically update when the Firestore document status changes from 'pending' to 'accepted'
-      _logger.d(_tag, 'Friend request accepted - real-time streams will handle UI updates');
-      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_request_accepted',
@@ -148,10 +136,6 @@ class RelationshipRepository {
       
       final result = await _relationshipService.rejectFriendRequest(relationshipId);
       
-      // Note: No need to force refresh caches here - the real-time streams will
-      // automatically update when the Firestore document status changes from 'pending' to 'declined'
-      _logger.d(_tag, 'Friend request rejected - real-time streams will handle UI updates');
-      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_request_rejected',
@@ -189,6 +173,51 @@ class RelationshipRepository {
     }
   }
 
+  /// Cancel a sent friend request
+  /// Returns true if successful
+  Future<bool> cancelFriendRequest(String relationshipId) async {
+    try {
+      _logger.d(_tag, 'Cancelling friend request: $relationshipId');
+      
+      final result = await _relationshipService.cancelFriendRequest(relationshipId);
+      
+      // Track success analytics
+      await _analytics.logEvent(
+        name: 'friend_request_cancelled',
+        parameters: {
+          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'success': true,
+        },
+      );
+      
+      _logger.i(_tag, 'Friend request cancelled successfully: $relationshipId');
+      return result;
+      
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cancel friend request: ${e.toString()}');
+      
+      // Track failure analytics
+      await _analytics.logEvent(
+        name: 'friend_request_cancelled',
+        parameters: {
+          'relationship_id_hash': relationshipId.hashCode.toString(),
+          'success': false,
+          'error_code': e is RelationshipException ? e.code : 'unknown',
+        },
+      );
+      
+      // Log to crashlytics for debugging
+      await _crashlytics.recordError(
+        e,
+        null,
+        reason: 'Failed to cancel friend request',
+        fatal: false,
+      );
+      
+      rethrow;
+    }
+  }
+
   // ========== FRIENDSHIP MANAGEMENT ==========
 
   /// Remove an existing friend
@@ -198,10 +227,6 @@ class RelationshipRepository {
       _logger.d(_tag, 'Removing friend: $targetUserId');
       
       final result = await _relationshipService.removeFriend(targetUserId);
-      
-      // Note: No need to force refresh caches here - the real-time streams will
-      // automatically update when the Firestore relationship document is deleted
-      _logger.d(_tag, 'Friend removed - real-time streams will handle UI updates');
       
       // Track success analytics
       await _analytics.logEvent(
@@ -337,57 +362,31 @@ class RelationshipRepository {
   /// Get real-time stream of friends list (accepted relationships)
   /// Returns stream of user data for friends with real-time updates
   /// Limited to 15 items per page for optimal performance
-  /// Implements local caching for better performance
   Stream<List<Map<String, dynamic>>> getFriendsStream() {
     try {
-      final currentUserId = _getCurrentUserId();
-      _logger.d(_tag, 'Getting friends stream with caching for current user');
+      _logger.d(_tag, 'Getting friends stream for current user');
       
       return _relationshipService.getFriendsStream()
         .asyncMap((friends) async {
-          try {
-            // Cache the friends data to local database
-            await _localDb.cacheFriends(currentUserId, friends);
-            
-            // Track stream updates for analytics
-            await _analytics.logEvent(
-              name: 'friends_stream_updated',
-              parameters: {
-                'count': friends.length,
-                'success': true,
-                'cached': true,
-              },
-            );
-            
-            _logger.d(_tag, 'Friends stream updated and cached: ${friends.length} friends');
-            return friends;
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to cache friends data: $cacheError');
-            // Continue with original data even if caching fails
-            await _analytics.logEvent(
-              name: 'friends_stream_updated',
-              parameters: {
-                'count': friends.length,
-                'success': true,
-                'cached': false,
-              },
-            );
-            return friends;
+          // Track stream updates for analytics
+          await _analytics.logEvent(
+            name: 'friends_stream_updated',
+            parameters: {
+              'count': friends.length,
+              'success': true,
+            },
+          );
+          
+          _logger.d(_tag, 'Friends stream updated: ${friends.length} friends');
+          // Enhanced debugging - log friend UIDs
+          for (int i = 0; i < friends.length; i++) {
+            final friend = friends[i];
+            _logger.d(_tag, 'Repository Friend $i: uid=${friend['uid']}, name=${friend['displayName']}');
           }
+          return friends;
         })
         .handleError((error) async {
           _logger.e(_tag, 'Error in friends stream: $error');
-          
-          try {
-            // Fallback to cached data if stream fails
-            final cachedFriends = await _localDb.getCachedFriends(currentUserId);
-            if (cachedFriends.isNotEmpty) {
-              _logger.i(_tag, 'Falling back to cached friends data: ${cachedFriends.length} friends');
-              return cachedFriends;
-            }
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to get cached friends: $cacheError');
-          }
           
           // Track stream errors
           await _analytics.logEvent(
@@ -402,7 +401,7 @@ class RelationshipRepository {
           await _crashlytics.recordError(
             error,
             null,
-            reason: 'Failed to stream friends list',
+            reason: 'Failed to stream friends',
             fatal: false,
           );
           
@@ -426,57 +425,26 @@ class RelationshipRepository {
   /// Get real-time stream of pending friend requests (received by current user)
   /// Returns stream of user data for users who sent requests with real-time updates
   /// Limited to 15 items per page for optimal performance
-  /// Implements local caching for better performance
   Stream<List<Map<String, dynamic>>> getPendingRequestsStream() {
     try {
-      final currentUserId = _getCurrentUserId();
-      _logger.d(_tag, 'Getting pending requests stream with caching for current user');
+      _logger.d(_tag, 'Getting pending requests stream for current user');
       
       return _relationshipService.getPendingRequestsStream()
         .asyncMap((requests) async {
-          try {
-            // Cache the pending requests data to local database
-            await _localDb.cachePendingRequests(currentUserId, requests);
-            
-            // Track stream updates for analytics
-            await _analytics.logEvent(
-              name: 'pending_requests_stream_updated',
-              parameters: {
-                'count': requests.length,
-                'success': true,
-                'cached': true,
-              },
-            );
-            
-            _logger.d(_tag, 'Pending requests stream updated and cached: ${requests.length} requests');
-            return requests;
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to cache pending requests data: $cacheError');
-            // Continue with original data even if caching fails
-            await _analytics.logEvent(
-              name: 'pending_requests_stream_updated',
-              parameters: {
-                'count': requests.length,
-                'success': true,
-                'cached': false,
-              },
-            );
-            return requests;
-          }
+          // Track stream updates for analytics
+          await _analytics.logEvent(
+            name: 'pending_requests_stream_updated',
+            parameters: {
+              'count': requests.length,
+              'success': true,
+            },
+          );
+          
+          _logger.d(_tag, 'Pending requests stream updated: ${requests.length} requests');
+          return requests;
         })
         .handleError((error) async {
           _logger.e(_tag, 'Error in pending requests stream: $error');
-          
-          try {
-            // Fallback to cached data if stream fails
-            final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
-            if (cachedRequests.isNotEmpty) {
-              _logger.i(_tag, 'Falling back to cached pending requests data: ${cachedRequests.length} requests');
-              return cachedRequests;
-            }
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to get cached pending requests: $cacheError');
-          }
           
           // Track stream errors
           await _analytics.logEvent(
@@ -515,57 +483,26 @@ class RelationshipRepository {
   /// Get real-time stream of blocked users
   /// Returns stream of user data for blocked users with real-time updates
   /// Limited to 15 items per page for optimal performance
-  /// Implements local caching for better performance
   Stream<List<Map<String, dynamic>>> getBlockedUsersStream() {
     try {
-      final currentUserId = _getCurrentUserId();
-      _logger.d(_tag, 'Getting blocked users stream with caching for current user');
+      _logger.d(_tag, 'Getting blocked users stream for current user');
       
       return _relationshipService.getBlockedUsersStream()
         .asyncMap((blockedUsers) async {
-          try {
-            // Cache the blocked users data to local database
-            await _localDb.cacheBlockedUsers(currentUserId, blockedUsers);
-            
-            // Track stream updates for analytics
-            await _analytics.logEvent(
-              name: 'blocked_users_stream_updated',
-              parameters: {
-                'count': blockedUsers.length,
-                'success': true,
-                'cached': true,
-              },
-            );
-            
-            _logger.d(_tag, 'Blocked users stream updated and cached: ${blockedUsers.length} blocked');
-            return blockedUsers;
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to cache blocked users data: $cacheError');
-            // Continue with original data even if caching fails
-            await _analytics.logEvent(
-              name: 'blocked_users_stream_updated',
-              parameters: {
-                'count': blockedUsers.length,
-                'success': true,
-                'cached': false,
-              },
-            );
-            return blockedUsers;
-          }
+          // Track stream updates for analytics
+          await _analytics.logEvent(
+            name: 'blocked_users_stream_updated',
+            parameters: {
+              'count': blockedUsers.length,
+              'success': true,
+            },
+          );
+          
+          _logger.d(_tag, 'Blocked users stream updated: ${blockedUsers.length} blocked');
+          return blockedUsers;
         })
         .handleError((error) async {
           _logger.e(_tag, 'Error in blocked users stream: $error');
-          
-          try {
-            // Fallback to cached data if stream fails
-            final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(currentUserId);
-            if (cachedBlockedUsers.isNotEmpty) {
-              _logger.i(_tag, 'Falling back to cached blocked users data: ${cachedBlockedUsers.length} blocked');
-              return cachedBlockedUsers;
-            }
-          } catch (cacheError) {
-            _logger.w(_tag, 'Failed to get cached blocked users: $cacheError');
-          }
           
           // Track stream errors
           await _analytics.logEvent(
@@ -599,217 +536,63 @@ class RelationshipRepository {
       
       return Stream.error(e);
     }
-  }
-
-  // ========== UTILITY METHODS ==========
-
-
-
-  /// Get the current user ID
-  /// Throws RelationshipException if not authenticated
-  String _getCurrentUserId() {
-    final user = _authService.currentUser;
-    if (user == null) {
-      throw RelationshipException(
-        RelationshipErrorCodes.notLoggedIn,
-        'User must be authenticated to perform relationship operations',
-      );
-    }
-    return user.uid;
-  }
-
-  /// Clear relationship cache for current user
-  /// Useful when user signs out or wants to refresh data
-  Future<void> clearCurrentUserRelationshipCache() async {
+  }  /// Setup real-time stream subscription for user data based on provided UIDs
+  /// Returns a stream of user data maps that updates when user information changes
+  /// This method allows separate management of user data streams from relationship streams
+  Stream<Map<String, Map<String, dynamic>>> setupUserStreamSubscription(List<String> userIds) {
     try {
-      final currentUserId = _getCurrentUserId();
-      await _localDb.clearRelationshipCache(currentUserId);
-      _logger.i(_tag, 'Cleared relationship cache for current user: $currentUserId');
-    } catch (e) {
-      _logger.e(_tag, 'Failed to clear relationship cache: ${e.toString()}');
-      rethrow;
-    }
-  }
-
-  /// Get cached friends without stream (for offline access)
-  Future<List<Map<String, dynamic>>> getCachedFriends() async {
-    try {
-      final currentUserId = _getCurrentUserId();
-      final cachedFriends = await _localDb.getCachedFriends(currentUserId);
-      _logger.d(_tag, 'Retrieved ${cachedFriends.length} cached friends');
-      return cachedFriends;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get cached friends: ${e.toString()}');
-      return [];
-    }
-  }
-
-  /// Get cached pending requests without stream (for offline access)
-  Future<List<Map<String, dynamic>>> getCachedPendingRequests() async {
-    try {
-      final currentUserId = _getCurrentUserId();
-      final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
-      _logger.d(_tag, 'Retrieved ${cachedRequests.length} cached pending requests');
-      return cachedRequests;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get cached pending requests: ${e.toString()}');
-      return [];
-    }
-  }
-
-  /// Get cached blocked users without stream (for offline access)
-  Future<List<Map<String, dynamic>>> getCachedBlockedUsers() async {
-    try {
-      final currentUserId = _getCurrentUserId();
-      final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(currentUserId);
-      _logger.d(_tag, 'Retrieved ${cachedBlockedUsers.length} cached blocked users');
-      return cachedBlockedUsers;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get cached blocked users: ${e.toString()}');
-      return [];
-    }
-  }
-
-  /// Force refresh all relationship caches by fetching fresh data from Firebase
-  /// This is useful when app resumes or user manually refreshes
-  /// Returns true if refresh was successful
-  Future<bool> forceRefreshAllCaches() async {
-    try {
-      final currentUserId = _getCurrentUserId();
-      _logger.i(_tag, 'Force refreshing all relationship caches for user: $currentUserId');
-
-      // Get fresh data from each stream (this will automatically update caches)
-      final futures = <Future>[];
-
-      // Refresh friends cache
-      futures.add(
-        _relationshipService.getFriendsStream().first.then((friends) {
-          _localDb.cacheFriends(currentUserId, friends);
-          _logger.d(_tag, 'Force refreshed friends cache: ${friends.length} friends');
-        }).catchError((e) {
-          _logger.w(_tag, 'Failed to force refresh friends cache: $e');
+      _logger.d(_tag, 'Setting up user stream subscription for ${userIds.length} users');
+      
+      return _relationshipService.setupUserStreamSubscription(userIds)
+        .asyncMap((usersMap) async {
+          // Track stream updates for analytics
+          await _analytics.logEvent(
+            name: 'user_stream_subscription_updated',
+            parameters: {
+              'user_count': userIds.length,
+              'returned_count': usersMap.length,
+              'success': true,
+            },
+          );
+          
+          _logger.d(_tag, 'User stream subscription updated: ${usersMap.length} users');
+          return usersMap;
         })
-      );
-
-      // Refresh pending requests cache
-      futures.add(
-        _relationshipService.getPendingRequestsStream().first.then((requests) {
-          _localDb.cachePendingRequests(currentUserId, requests);
-          _logger.d(_tag, 'Force refreshed pending requests cache: ${requests.length} requests');
-        }).catchError((e) {
-          _logger.w(_tag, 'Failed to force refresh pending requests cache: $e');
-        })
-      );
-
-      // Refresh blocked users cache
-      futures.add(
-        _relationshipService.getBlockedUsersStream().first.then((blockedUsers) {
-          _localDb.cacheBlockedUsers(currentUserId, blockedUsers);
-          _logger.d(_tag, 'Force refreshed blocked users cache: ${blockedUsers.length} blocked');
-        }).catchError((e) {
-          _logger.w(_tag, 'Failed to force refresh blocked users cache: $e');
-        })
-      );
-
-      // Wait for all refreshes to complete (with timeout)
-      await Future.wait(futures).timeout(
-        Duration(seconds: 10),
-        onTimeout: () {
-          _logger.w(_tag, 'Cache refresh timed out after 10 seconds');
-          throw TimeoutException('Cache refresh timeout', Duration(seconds: 10));
-        },
-      );
-
-      // Update cache refresh timestamp
-      await _updateCacheRefreshTimestamp();
-
-      // Track successful refresh
-      await _analytics.logEvent(
-        name: 'relationship_cache_force_refresh',
+        .handleError((error) async {
+          _logger.e(_tag, 'Error in user stream subscription: $error');
+          
+          // Track stream errors
+          await _analytics.logEvent(
+        name: 'user_stream_subscription_error',
         parameters: {
-          'success': true,
-          'user_id_hash': currentUserId.hashCode.toString(),
-        },
-      );
-
-      _logger.i(_tag, 'Successfully force refreshed all relationship caches');
-      return true;
-
-    } catch (e) {
-      _logger.e(_tag, 'Failed to force refresh relationship caches: ${e.toString()}');
-
-      // Track failed refresh
-      await _analytics.logEvent(
-        name: 'relationship_cache_force_refresh',
-        parameters: {
+          'user_count': userIds.length,
           'success': false,
-          'error': e.toString(),
+          'error_code': error is RelationshipException ? error.code : 'unknown',
         },
-      );
-
-      // Log to crashlytics for debugging
-      await _crashlytics.recordError(
+          );
+          
+          // Log to crashlytics for debugging
+          await _crashlytics.recordError(
+        error,
+        null,
+        reason: 'Failed to setup user stream subscription',
+        fatal: false,
+          );
+          
+          throw error;
+        });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to initialize user stream subscription: ${e.toString()}');
+      
+      // Log initialization errors
+      _crashlytics.recordError(
         e,
         null,
-        reason: 'Failed to force refresh relationship caches',
+        reason: 'Failed to initialize user stream subscription',
         fatal: false,
       );
-
-      return false;
-    }
-  }
-
-  /// Check if relationship cache is stale and needs refresh
-  /// Returns true if cache is older than the specified duration
-  Future<bool> isCacheStale({Duration maxAge = const Duration(minutes: 5)}) async {
-    try {
-      final currentUserId = _getCurrentUserId();
       
-      // Check if we have any cached data
-      final cachedFriends = await _localDb.getCachedFriends(currentUserId);
-      final cachedRequests = await _localDb.getCachedPendingRequests(currentUserId);
-      final cachedBlocked = await _localDb.getCachedBlockedUsers(currentUserId);
-
-      // If no cached data exists, consider it stale
-      if (cachedFriends.isEmpty && cachedRequests.isEmpty && cachedBlocked.isEmpty) {
-        _logger.d(_tag, 'No cached relationship data found - cache is stale');
-        return true;
-      }
-
-      // For simplicity, we'll use a timestamp stored in app settings
-      // This could be enhanced to check individual cache timestamps
-      final lastRefreshKey = 'relationship_cache_last_refresh_$currentUserId';
-      final lastRefreshString = await _localDb.getSetting(lastRefreshKey);
-      
-      if (lastRefreshString == null) {
-        _logger.d(_tag, 'No cache timestamp found - cache is stale');
-        return true;
-      }
-
-      final lastRefresh = DateTime.fromMillisecondsSinceEpoch(int.parse(lastRefreshString));
-      final age = DateTime.now().difference(lastRefresh);
-      final isStale = age > maxAge;
-
-      _logger.d(_tag, 'Cache age: ${age.inMinutes} minutes, max age: ${maxAge.inMinutes} minutes, is stale: $isStale');
-      return isStale;
-
-    } catch (e) {
-      _logger.e(_tag, 'Error checking cache staleness: ${e.toString()}');
-      return true; // Consider stale on error to be safe
-    }
-  }
-
-  /// Update the cache refresh timestamp
-  Future<void> _updateCacheRefreshTimestamp() async {
-    try {
-      final currentUserId = _getCurrentUserId();
-      final timestampKey = 'relationship_cache_last_refresh_$currentUserId';
-      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      
-      await _localDb.setSetting(timestampKey, timestamp);
-      _logger.d(_tag, 'Updated cache refresh timestamp');
-    } catch (e) {
-      _logger.w(_tag, 'Failed to update cache refresh timestamp: ${e.toString()}');
+      return Stream.error(e);
     }
   }
 
@@ -865,5 +648,4 @@ class RelationshipRepository {
       rethrow;
     }
   }
-
 }

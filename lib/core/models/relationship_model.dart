@@ -9,8 +9,7 @@ class RelationshipModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? initiatorId;
-  final DateTime? acceptedAt;
-  final String? blockerId; // Added to track who initiated the block
+  final DateTime? acceptedAt; 
 
   const RelationshipModel({
     required this.id,
@@ -20,8 +19,7 @@ class RelationshipModel {
     required this.createdAt,
     required this.updatedAt,
     this.initiatorId,
-    this.acceptedAt,
-    this.blockerId,
+    this.acceptedAt, 
   });
 
   factory RelationshipModel.fromMap(Map<String, dynamic> map, String id) {
@@ -38,8 +36,7 @@ class RelationshipModel {
       ),
       createdAt: _parseDateTime(map['createdAt']) ?? DateTime.now(),
       updatedAt: _parseDateTime(map['updatedAt']) ?? DateTime.now(),
-      initiatorId: map['initiatorId'],
-      blockerId: map['blockerId'], // Added this line to capture blockerId
+      initiatorId: map['initiatorId'], 
       acceptedAt: _parseDateTime(map['acceptedAt']),
     );
   }
@@ -69,8 +66,7 @@ class RelationshipModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'initiatorId': initiatorId,
-      'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null,
-      'blockerId': blockerId, // Added this line to include blockerId
+      'acceptedAt': acceptedAt != null ? Timestamp.fromDate(acceptedAt!) : null, 
     };
   }
 
@@ -82,8 +78,7 @@ class RelationshipModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? initiatorId,
-    DateTime? acceptedAt,
-    String? blockerId,
+    DateTime? acceptedAt, 
   }) {
     return RelationshipModel(
       id: id ?? this.id,
@@ -93,8 +88,7 @@ class RelationshipModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       initiatorId: initiatorId ?? this.initiatorId,
-      acceptedAt: acceptedAt ?? this.acceptedAt,
-      blockerId: blockerId ?? this.blockerId,
+      acceptedAt: acceptedAt ?? this.acceptedAt, 
     );
   }
 

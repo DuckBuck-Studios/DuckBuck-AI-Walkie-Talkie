@@ -44,6 +44,7 @@ dependencies:
   google_nav_bar: ^5.0.7
   cached_network_image: ^3.4.1
   rive: ^0.13.15
+  async: ^2.11.0
 
 dev_dependencies:
   flutter_test:

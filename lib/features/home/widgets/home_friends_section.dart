@@ -1,46 +1,45 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
+import 'home_avatar.dart';
 import 'dart:io' show Platform;
-import '../providers/home_provider.dart';
-import '../../friends/widgets/friend_tile.dart' show FriendTileSkeleton;
-import '../../friends/widgets/profile_avatar.dart';
 
 class HomeFriendsSection extends StatelessWidget {
-  final HomeProvider provider;
-  final Function(BuildContext, Map<String, dynamic>)? onFriendTap;
+  final List<Map<String, dynamic>> friends;
+  final bool isLoading;
 
   const HomeFriendsSection({
     super.key,
-    required this.provider,
-    this.onFriendTap,
+    required this.friends,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Debug print to see what's happening
-    print('HomeFriendsSection build: isLoading=${provider.isLoadingFriends}, friendsCount=${provider.friends.length}');
     return Platform.isIOS ? _buildCupertinoContent(context) : _buildMaterialContent(context);
   }
 
   Widget _buildCupertinoContent(BuildContext context) {
-    if (provider.isLoadingFriends) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
+    if (isLoading) {
+      return Skeletonizer(
+        enabled: true,
+        child: CupertinoListSection.insetGrouped(
+          backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
           children: List.generate(
             3, // Show 3 skeleton tiles for home
-            (index) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: FriendTileSkeleton(isIOS: true),
+            (index) => CupertinoListTile(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: const CircleAvatar(radius: 20),
+              title: const Text('Friend Name Loading'),
             ),
           ),
         ),
       );
     }
 
-    if (provider.friends.isEmpty) {
+    if (friends.isEmpty) {
       return Container(
-        height: MediaQuery.of(context).size.height * 0.6, // Take up more vertical space
+        height: MediaQuery.of(context).size.height * 0.6,
         width: double.infinity,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -72,39 +71,47 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     // Show only first 5 friends on home screen
-    final displayFriends = provider.friends.take(5).toList();
-    print('Display friends count: ${displayFriends.length}');
+    final displayFriends = friends.take(5).toList();
 
-    return CupertinoListSection.insetGrouped(
-      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      children: displayFriends.map((friendProfile) =>
-        _buildFriendTile(context, friendProfile, true)
-      ).toList(),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: CupertinoListSection.insetGrouped(
+        backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+        children: displayFriends.map((friendProfile) =>
+          _buildFriendTile(context, friendProfile, true)
+        ).toList(),
+      ),
     );
   }
 
   Widget _buildMaterialContent(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (provider.isLoadingFriends) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          children: List.generate(
-            3, // Show 3 skeleton tiles for home
-            (index) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: FriendTileSkeleton(isIOS: false),
+    if (isLoading) {
+      return Skeletonizer(
+        enabled: true,
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: theme.colorScheme.surfaceContainerHighest,
+          margin: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Column(
+            children: List.generate(
+              3, // Show 3 skeleton tiles for home
+              (index) => ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: const CircleAvatar(radius: 20),
+                title: const Text('Friend Name Loading'),
+              ),
             ),
           ),
         ),
       );
     }
 
-    if (provider.friends.isEmpty) {
+    if (friends.isEmpty) {
       return Container(
-        height: MediaQuery.of(context).size.height * 0.6, // Take up more vertical space
+        height: MediaQuery.of(context).size.height * 0.6,
         width: double.infinity,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -136,57 +143,114 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     // Show only first 5 friends on home screen
-    final displayFriends = provider.friends.take(5).toList();
+    final displayFriends = friends.take(5).toList();
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: theme.colorScheme.surfaceContainerHighest,
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        children: displayFriends.map((friendProfile) =>
-          _buildFriendTile(context, friendProfile, false)
-        ).toList(),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: displayFriends.map((friendProfile) =>
+            _buildFriendTile(context, friendProfile, false)
+          ).toList(),
+        ),
       ),
     );
   }
 
   Widget _buildFriendTile(BuildContext context, Map<String, dynamic> friendProfile, bool isIOS) {
-    // Debug output
-    print('Building friend tile: ${friendProfile['uid']}, displayName: ${friendProfile['displayName']}, isIOS: $isIOS');
-
     if (isIOS) {
       return CupertinoListTile(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: ProfileAvatar(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: HomeAvatar(
           photoURL: friendProfile['photoURL'],
           displayName: friendProfile['displayName'] ?? 'Unknown User',
-          radius: 20, // Smaller for home screen
+          radius: 18,
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
           style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
             fontWeight: FontWeight.w500,
+            fontSize: 16,
           ),
         ),
-        onTap: onFriendTap != null ? () => onFriendTap!(context, friendProfile) : null,
       );
     } else {
       return ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: ProfileAvatar(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        leading: HomeAvatar(
           photoURL: friendProfile['photoURL'],
           displayName: friendProfile['displayName'] ?? 'Unknown User',
-          radius: 20, // Smaller for home screen
+          radius: 18,
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
           style: const TextStyle(
             fontWeight: FontWeight.w500,
+            fontSize: 16,
           ),
         ),
-        onTap: onFriendTap != null ? () => onFriendTap!(context, friendProfile) : null,
       );
     }
+  }
+}
+
+/// Simple CupertinoListTile implementation for consistent design
+class CupertinoListTile extends StatelessWidget {
+  final Widget? leading;
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final EdgeInsetsGeometry? padding;
+
+  const CupertinoListTile({
+    super.key,
+    this.leading,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      color: CupertinoColors.systemBackground.resolveFrom(context),
+      child: Row(
+        children: <Widget>[
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 12.0),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                DefaultTextStyle(
+                  style: CupertinoTheme.of(context).textTheme.textStyle,
+                  child: title
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2.0),
+                  DefaultTextStyle(
+                    style: CupertinoTheme.of(context).textTheme.tabLabelTextStyle,
+                    child: subtitle!
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 16.0),
+            trailing!,
+          ],
+        ],
+      ),
+    );
   }
 }

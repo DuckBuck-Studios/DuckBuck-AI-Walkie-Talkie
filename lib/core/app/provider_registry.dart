@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
 import '../../features/settings/providers/crashlytics_consent_provider.dart';
-import '../../features/auth/providers/auth_state_provider.dart';
-import '../../features/friends/providers/relationship_provider.dart';
+import '../../features/auth/providers/auth_state_provider.dart'; 
 import '../../features/call/providers/call_provider.dart';
 import '../../features/settings/providers/settings_provider.dart';
+import '../../features/friends/providers/relationship_provider.dart';
+import '../../features/home/providers/home_provider.dart';
 
 /// Manages the app's providers in a centralized location
 ///
@@ -36,11 +37,6 @@ class ProviderRegistry {
         },
       ),
       
-      // Relationship provider (friends and relationships management)
-      ChangeNotifierProvider<RelationshipProvider>(
-        create: (_) => RelationshipProvider(),
-      ),
-      
       // Call provider for handling call UI state
       ChangeNotifierProvider<CallProvider>(
         create: (_) => CallProvider(),
@@ -49,6 +45,31 @@ class ProviderRegistry {
       // Settings provider for real-time user updates in settings screen
       ChangeNotifierProvider<SettingsProvider>(
         create: (_) => SettingsProvider(),
+      ),
+      
+      // Relationship provider for friends, blocking, and friend requests
+      ChangeNotifierProvider<RelationshipProvider>(
+        create: (_) {
+          final provider = RelationshipProvider();
+          // Initialize provider with real-time streams
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await provider.initialize();
+          });
+          return provider;
+        },
+      ),
+      
+      // Home provider for managing home screen state
+      // Uses RelationshipProvider through service locator and listener pattern
+      ChangeNotifierProvider<HomeProvider>(
+        create: (_) {
+          final provider = HomeProvider();
+          // Initialize provider which will ensure RelationshipProvider is ready
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await provider.initialize();
+          });
+          return provider;
+        },
       ),
       
       // Add more app-wide providers here as needed

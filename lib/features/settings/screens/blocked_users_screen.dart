@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
 import 'dart:io' show Platform;
-import '../../../core/models/relationship_model.dart';
-import '../../../core/services/auth/auth_service_interface.dart';
-import '../../../core/services/service_locator.dart';
-import '../../friends/providers/relationship_provider.dart';
-import '../../friends/widgets/profile_avatar.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
   const BlockedUsersScreen({super.key});
@@ -16,161 +10,230 @@ class BlockedUsersScreen extends StatefulWidget {
 }
 
 class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<RelationshipProvider>(context, listen: false).loadBlockedUsers();
-    });
-  }
+  // Demo blocked users data
+  final List<Map<String, dynamic>> _demoBlockedUsers = [
+    {
+      'id': '1',
+      'name': 'John Doe',
+      'email': 'john.doe@example.com',
+      'photoURL': null,
+      'blockedDate': '2024-01-15',
+    },
+    {
+      'id': '2', 
+      'name': 'Jane Smith',
+      'email': 'jane.smith@example.com',
+      'photoURL': null,
+      'blockedDate': '2024-02-20',
+    },
+    {
+      'id': '3',
+      'name': 'Mike Johnson', 
+      'email': 'mike.johnson@example.com',
+      'photoURL': null,
+      'blockedDate': '2024-03-10',
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
     final bool isIOS = Platform.isIOS;
 
     return Scaffold(
+      backgroundColor: isIOS 
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Blocked Users'),
+        backgroundColor: isIOS 
+          ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+          : Theme.of(context).colorScheme.surface,
+        foregroundColor: isIOS 
+          ? CupertinoColors.label.resolveFrom(context)
+          : Theme.of(context).colorScheme.onSurface,
         leading: IconButton(
           icon: Icon(isIOS ? CupertinoIcons.back : Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Consumer<RelationshipProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoadingBlocked) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          if (provider.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48.0,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error: ${provider.error}',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => provider.loadBlockedUsers(),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (provider.blockedUsers.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isIOS ? CupertinoIcons.shield : Icons.shield,
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No blocked users',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Text(
-                      'When you block someone, they will appear here and won\'t be able to send you friend requests',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: provider.blockedUsers.length,
-            itemBuilder: (context, index) {
-              final relationship = provider.blockedUsers[index];
-              return _BlockedUserTile(
-                relationship: relationship,
-                provider: provider,
-              );
-            },
-          );
-        },
-      ),
+      body: _demoBlockedUsers.isEmpty ? _buildEmptyState() : _buildBlockedUsersList(),
     );
   }
-}
 
-class _BlockedUserTile extends StatelessWidget {
-  final RelationshipModel relationship;
-  final RelationshipProvider provider;
-
-  const _BlockedUserTile({
-    required this.relationship,
-    required this.provider,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final authService = serviceLocator<AuthServiceInterface>();
-    final currentUserId = authService.currentUser?.uid ?? '';
-    final profile = provider.getProfileForRelationship(relationship, currentUserId);
-    final isProcessing = provider.isBlockingUser(relationship.id);
+  Widget _buildEmptyState() {
     final bool isIOS = Platform.isIOS;
-
-    return ListTile(
-      leading: ProfileAvatar(
-        photoURL: profile?['photoURL'],
-        displayName: profile?['displayName'] ?? 'Unknown User',
-      ),
-      title: Text(profile?['displayName'] ?? 'Unknown User'),
-      subtitle: const Text('Blocked'),
-      trailing: isProcessing
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : TextButton(
-              onPressed: () => _showUnblockDialog(context, relationship),
-              child: Text(
-                'Unblock',
-                style: TextStyle(
-                  color: isIOS ? CupertinoColors.activeBlue : Colors.blue,
-                ),
+    
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isIOS ? CupertinoIcons.shield : Icons.shield,
+            size: 64,
+            color: isIOS 
+              ? CupertinoColors.secondaryLabel.resolveFrom(context)
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No blocked users',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isIOS 
+                ? CupertinoColors.label.resolveFrom(context)
+                : Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Text(
+              'When you block someone, they will appear here and won\'t be able to send you friend requests',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isIOS 
+                  ? CupertinoColors.secondaryLabel.resolveFrom(context)
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showUnblockDialog(BuildContext context, RelationshipModel relationship) {
-    final profile = provider.getProfileForRelationship(relationship, relationship.blockerId ?? '');
-    final userName = profile?['displayName'] ?? 'this user';
+  Widget _buildBlockedUsersList() {
     final bool isIOS = Platform.isIOS;
+    
+    if (isIOS) {
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _demoBlockedUsers.length,
+        itemBuilder: (context, index) {
+          final user = _demoBlockedUsers[index];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBackground.resolveFrom(context),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: CupertinoListTile(
+              padding: const EdgeInsets.all(16),
+              leading: _buildAvatar(user['name']),
+              title: Text(
+                user['name'],
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
+              ),
+              subtitle: Text(
+                'Blocked on ${user['blockedDate']}',
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+              ),
+              trailing: CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minSize: 0,
+                color: CupertinoColors.activeBlue,
+                borderRadius: BorderRadius.circular(16),
+                child: const Text(
+                  'Unblock',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: CupertinoColors.white,
+                  ),
+                ),
+                onPressed: () => _showUnblockDialog(user),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _demoBlockedUsers.length,
+        itemBuilder: (context, index) {
+          final user = _demoBlockedUsers[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: _buildAvatar(user['name']),
+              title: Text(
+                user['name'],
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text('Blocked on ${user['blockedDate']}'),
+              trailing: TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text(
+                  'Unblock',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                onPressed: () => _showUnblockDialog(user),
+              ),
+            ),
+          );
+        },
+      );
+    }
+  }
 
+  Widget _buildAvatar(String name) {
+    final initials = name.split(' ').map((n) => n[0]).take(2).join();
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+    ];
+    final color = colors[name.hashCode % colors.length];
+
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: color,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  void _showUnblockDialog(Map<String, dynamic> user) {
+    final bool isIOS = Platform.isIOS;
+    
     if (isIOS) {
       showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: Text('Unblock $userName?'),
+          title: Text('Unblock ${user['name']}?'),
           content: Text(
-            'Unblocking $userName will allow them to send you friend requests again.',
+            'Unblocking ${user['name']} will allow them to send you friend requests again.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -180,10 +243,9 @@ class _BlockedUserTile extends StatelessWidget {
             ),
             CupertinoDialogAction(
               child: const Text('Unblock'),
-              onPressed: () async {
+              onPressed: () {
                 Navigator.pop(context);
-                await provider.unblockUser(relationship.id);
-                await provider.loadBlockedUsers();
+                _unblockUser(user);
               },
             ),
           ],
@@ -193,9 +255,9 @@ class _BlockedUserTile extends StatelessWidget {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Unblock $userName?'),
+          title: Text('Unblock ${user['name']}?'),
           content: Text(
-            'Unblocking $userName will allow them to send you friend requests again.',
+            'Unblocking ${user['name']} will allow them to send you friend requests again.',
           ),
           actions: [
             TextButton(
@@ -204,15 +266,28 @@ class _BlockedUserTile extends StatelessWidget {
             ),
             TextButton(
               child: const Text('Unblock'),
-              onPressed: () async {
+              onPressed: () {
                 Navigator.pop(context);
-                await provider.unblockUser(relationship.id);
-                await provider.loadBlockedUsers();
+                _unblockUser(user);
               },
             ),
           ],
         ),
       );
     }
+  }
+
+  void _unblockUser(Map<String, dynamic> user) {
+    setState(() {
+      _demoBlockedUsers.removeWhere((u) => u['id'] == user['id']);
+    });
+
+    final snackBar = SnackBar(
+      content: Text('${user['name']} has been unblocked'),
+      duration: const Duration(seconds: 2),
+      behavior: SnackBarBehavior.floating,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 }

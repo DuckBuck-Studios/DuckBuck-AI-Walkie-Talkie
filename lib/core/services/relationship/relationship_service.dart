@@ -322,6 +322,72 @@ class RelationshipService implements RelationshipServiceInterface {
   }
 
   @override
+  Future<bool> cancelFriendRequest(String relationshipId) async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      
+      return await _databaseService.runTransaction<bool>((transaction) async {
+        // Get the relationship
+        final relationship = await _getRelationshipById(relationshipId);
+        if (relationship == null) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notFound,
+            'Friend request not found',
+            null,
+            RelationshipOperation.cancelRequest,
+          );
+        }
+
+        // Validate user is participant
+        if (!relationship.participants.contains(currentUserId)) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notParticipant,
+            'You are not a participant in this relationship',
+            null,
+            RelationshipOperation.cancelRequest,
+          );
+        }
+
+        // Validate request is pending
+        if (relationship.status != RelationshipStatus.pending) {
+          throw RelationshipException(
+            RelationshipErrorCodes.notPending,
+            'Friend request is not pending',
+            null,
+            RelationshipOperation.cancelRequest,
+          );
+        }
+
+        // Validate user is the initiator (can only cancel own requests)
+        if (relationship.initiatorId != currentUserId) {
+          throw RelationshipException(
+            RelationshipErrorCodes.cannotCancelOthersRequest,
+            'You can only cancel your own friend requests',
+            null,
+            RelationshipOperation.cancelRequest,
+          );
+        }
+
+        // Delete the relationship document
+        _logger.d(_tag, 'Deleting relationship document: ${relationship.id}');
+        await _deleteRelationshipInTransaction(transaction, relationship.id);
+
+        _logger.i(_tag, 'Friend request cancelled: $relationshipId');
+        return true;
+      });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cancel friend request: ${e.toString()}');
+      if (e is RelationshipException) rethrow;
+      throw RelationshipException(
+        RelationshipErrorCodes.databaseError,
+        'Failed to cancel friend request',
+        e,
+        RelationshipOperation.cancelRequest,
+      );
+    }
+  }
+
+  @override
   Future<bool> removeFriend(String targetUserId) async {
     try {
       final currentUserId = _getCurrentUserId();
@@ -359,9 +425,11 @@ class RelationshipService implements RelationshipServiceInterface {
         }
 
         // Delete the relationship
+        _logger.d(_tag, 'Deleting relationship document: ${relationship.id}');
         await _deleteRelationshipInTransaction(transaction, relationship.id);
 
         _logger.i(_tag, 'Friend removed: ${relationship.id}');
+        _logger.d(_tag, 'Document deleted successfully, transaction should now commit and trigger stream update');
         return true;
       });
     } catch (e) {
@@ -527,18 +595,17 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      // Create stream for accepted relationships where current user is a participant
       return _databaseService.collectionStream(
         collection: _relationshipCollection,
         queryBuilder: (query) => query
             .where('participants', arrayContains: currentUserId)
             .where('status', isEqualTo: RelationshipStatus.accepted.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
-            .orderBy('acceptedAt', descending: true) // Order by acceptance date (most recent first)
             .limit(_defaultPageSize), // Limit to 15 friends
-      ).asyncExpand((querySnapshot) {
-        // Extract friend relationships data
-        final friendRelationships = <Map<String, String>>[];
+      ).map((querySnapshot) {
+        _logger.d(_tag, 'Friends stream: Received ${querySnapshot.docs.length} relationship documents');
+        
+        final friendsData = <Map<String, dynamic>>[];
         
         for (final doc in querySnapshot.docs) {
           try {
@@ -547,24 +614,19 @@ class RelationshipService implements RelationshipServiceInterface {
             final otherUserId = participants.firstWhere((id) => id != currentUserId, orElse: () => '');
             
             if (otherUserId.isNotEmpty) {
-              friendRelationships.add({
-                'userId': otherUserId,
+              friendsData.add({
+                'uid': otherUserId,
                 'relationshipId': doc.id,
               });
+              _logger.d(_tag, 'Friends stream: Found friend relationship - userId: $otherUserId, relationshipId: ${doc.id}');
             }
           } catch (e) {
             _logger.w(_tag, 'Failed to process friend relationship for doc ${doc.id}: ${e.toString()}');
           }
         }
         
-        // If no friends, return empty stream
-        if (friendRelationships.isEmpty) {
-          _logger.i(_tag, 'Friends stream updated: 0 friends');
-          return Stream.value(<Map<String, dynamic>>[]);
-        }
-        
-        // Create combined user streams for all friends
-        return _combineUserStreams(friendRelationships);
+        _logger.i(_tag, 'Friends stream updated: ${friendsData.length} friends');
+        return friendsData;
       }).handleError((error) {
         _logger.e(_tag, 'Friends stream error: ${error.toString()}');
         throw RelationshipException(
@@ -590,54 +652,43 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      // Create stream for ALL pending relationships where current user is a participant
       return _databaseService.collectionStream(
         collection: _relationshipCollection,
         queryBuilder: (query) => query
             .where('participants', arrayContains: currentUserId)
             .where('status', isEqualTo: RelationshipStatus.pending.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
-            .orderBy('createdAt', descending: true) // Order by creation date (most recent first)
             .limit(_defaultPageSize), // Limit to 15 pending requests
-      ).asyncExpand((querySnapshot) {
-        // Extract ALL pending request relationships data (both incoming and outgoing)
-        final pendingRelationships = <Map<String, String>>[];
+      ).map((querySnapshot) {
+        _logger.d(_tag, 'Pending requests stream: Received ${querySnapshot.docs.length} relationship documents');
+        
+        final pendingRequestsData = <Map<String, dynamic>>[];
         
         for (final doc in querySnapshot.docs) {
           try {
             final data = doc.data();
-            final initiatorId = data['initiatorId'] as String?;
-            final participants = data['participants'] as List<dynamic>?;
+            final participants = List<String>.from(data['participants'] ?? []);
+            final initiatorId = data['initiatorId'] as String? ?? '';
+            final otherUserId = participants.firstWhere((id) => id != currentUserId, orElse: () => '');
             
-            if (initiatorId != null && participants != null) {
-              // Find the other user (not current user)
-              final otherUserId = participants.firstWhere(
-                (id) => id != currentUserId,
-                orElse: () => null,
-              );
+            if (otherUserId.isNotEmpty && initiatorId.isNotEmpty) {
+              final isIncoming = initiatorId != currentUserId;
               
-              if (otherUserId != null) {
-                pendingRelationships.add({
-                  'userId': otherUserId,
-                  'relationshipId': doc.id,
-                  'isIncoming': (initiatorId != currentUserId).toString(), // Add direction flag
-                  'initiatorId': initiatorId, // Add initiator info for client-side filtering
-                });
-              }
+              pendingRequestsData.add({
+                'uid': otherUserId,
+                'relationshipId': doc.id,
+                'isIncoming': isIncoming,
+                'initiatorId': initiatorId,
+              });
+              _logger.d(_tag, 'Pending requests stream: Found pending request - userId: $otherUserId, relationshipId: ${doc.id}, isIncoming: $isIncoming');
             }
           } catch (e) {
             _logger.w(_tag, 'Failed to process pending request for doc ${doc.id}: ${e.toString()}');
           }
         }
         
-        // If no pending requests, return empty stream
-        if (pendingRelationships.isEmpty) {
-          _logger.i(_tag, 'Pending requests stream updated: 0 requests');
-          return Stream.value(<Map<String, dynamic>>[]);
-        }
-        
-        // Create combined user streams for all pending request users
-        return _combineUserStreams(pendingRelationships);
+        _logger.i(_tag, 'Pending requests stream updated: ${pendingRequestsData.length} requests');
+        return pendingRequestsData;
       }).handleError((error) {
         _logger.e(_tag, 'Pending requests stream error: ${error.toString()}');
         throw RelationshipException(
@@ -663,7 +714,6 @@ class RelationshipService implements RelationshipServiceInterface {
     try {
       final currentUserId = _getCurrentUserId();
       
-      // Create stream for blocked relationships where current user is the initiator (blocker)
       return _databaseService.collectionStream(
         collection: _relationshipCollection,
         queryBuilder: (query) => query
@@ -671,11 +721,11 @@ class RelationshipService implements RelationshipServiceInterface {
             .where('status', isEqualTo: RelationshipStatus.blocked.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
             .where('initiatorId', isEqualTo: currentUserId)
-            .orderBy('updatedAt', descending: true) // Order by block date (most recent first)
             .limit(_defaultPageSize), // Limit to 15 blocked users
-      ).asyncExpand((querySnapshot) {
-        // Extract blocked user relationships data
-        final blockedRelationships = <Map<String, String>>[];
+      ).map((querySnapshot) {
+        _logger.d(_tag, 'Blocked users stream: Received ${querySnapshot.docs.length} relationship documents');
+        
+        final blockedUsersData = <Map<String, dynamic>>[];
         
         for (final doc in querySnapshot.docs) {
           try {
@@ -684,24 +734,19 @@ class RelationshipService implements RelationshipServiceInterface {
             final otherUserId = participants.firstWhere((id) => id != currentUserId, orElse: () => '');
             
             if (otherUserId.isNotEmpty) {
-              blockedRelationships.add({
-                'userId': otherUserId,
+              blockedUsersData.add({
+                'uid': otherUserId,
                 'relationshipId': doc.id,
               });
+              _logger.d(_tag, 'Blocked users stream: Found blocked user - userId: $otherUserId, relationshipId: ${doc.id}');
             }
           } catch (e) {
             _logger.w(_tag, 'Failed to process blocked user for doc ${doc.id}: ${e.toString()}');
           }
         }
         
-        // If no blocked users, return empty stream
-        if (blockedRelationships.isEmpty) {
-          _logger.i(_tag, 'Blocked users stream updated: 0 blocked');
-          return Stream.value(<Map<String, dynamic>>[]);
-        }
-        
-        // Create combined user streams for all blocked users
-        return _combineUserStreams(blockedRelationships);
+        _logger.i(_tag, 'Blocked users stream updated: ${blockedUsersData.length} blocked users');
+        return blockedUsersData;
       }).handleError((error) {
         _logger.e(_tag, 'Blocked users stream error: ${error.toString()}');
         throw RelationshipException(
@@ -718,6 +763,74 @@ class RelationshipService implements RelationshipServiceInterface {
         'Failed to create blocked users stream',
         e,
         RelationshipOperation.getBlockedUsersStream,
+      );
+    }
+  }
+
+  /// Setup user stream subscription for a list of user IDs
+  /// This method can be used to get user data streams for UIDs returned from relationship streams
+  @override
+  Stream<Map<String, Map<String, dynamic>>> setupUserStreamSubscription(List<String> userIds) {
+    try {
+      if (userIds.isEmpty) {
+        return Stream.value(<String, Map<String, dynamic>>{});
+      }
+
+      _logger.d(_tag, 'Setting up user stream subscription for ${userIds.length} users');
+
+      // Create a StreamController to manage the combined stream
+      late StreamController<Map<String, Map<String, dynamic>>> controller;
+      late List<StreamSubscription> subscriptions;
+      Map<String, Map<String, dynamic>> currentUserData = {};
+
+      void updateAndEmit() {
+        if (!controller.isClosed) {
+          controller.add(Map.from(currentUserData));
+        }
+      }
+
+      controller = StreamController<Map<String, Map<String, dynamic>>>(
+        onListen: () {
+          subscriptions = userIds.map((userId) {
+            return _userService.getUserDataStream(userId).listen(
+              (userData) {
+                currentUserData[userId] = userData?.toMap() ?? <String, dynamic>{};
+                updateAndEmit();
+              },
+              onError: (error) {
+                _logger.w(_tag, 'Error in user stream for $userId: $error');
+                // Keep existing data for this user and continue
+                if (!currentUserData.containsKey(userId)) {
+                  currentUserData[userId] = <String, dynamic>{};
+                }
+                updateAndEmit();
+              },
+            );
+          }).toList();
+        },
+        onCancel: () {
+          for (final subscription in subscriptions) {
+            subscription.cancel();
+          }
+        },
+      );
+
+      return controller.stream.handleError((error) {
+        _logger.e(_tag, 'User stream subscription error: ${error.toString()}');
+        throw RelationshipException(
+          RelationshipErrorCodes.databaseError,
+          'Failed to stream user data',
+          error,
+          RelationshipOperation.searchUser,
+        );
+      });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to setup user stream subscription: ${e.toString()}');
+      throw RelationshipException(
+        RelationshipErrorCodes.databaseError,
+        'Failed to setup user stream subscription',
+        e,
+        RelationshipOperation.searchUser,
       );
     }
   }
@@ -793,11 +906,14 @@ class RelationshipService implements RelationshipServiceInterface {
     Transaction transaction,
     String relationshipId,
   ) async {
+    _logger.d(_tag, 'Creating delete transaction for relationship: $relationshipId');
     final docRef = _databaseService.firestoreInstance
         .collection(_relationshipCollection)
         .doc(relationshipId);
     
+    _logger.d(_tag, 'Executing delete operation on document: ${docRef.path}');
     transaction.delete(docRef);
+    _logger.d(_tag, 'Delete operation added to transaction');
   }
 
   /// Send friend request notification
@@ -840,98 +956,6 @@ class RelationshipService implements RelationshipServiceInterface {
     } catch (e) {
       _logger.w(_tag, 'Failed to send friend accepted notification: ${e.toString()}');
     }
-  }
-
-  /// Combines multiple user streams to provide real-time updates when user profiles change
-  Stream<List<Map<String, dynamic>>> _combineUserStreams(List<Map<String, String>> userRelationships) {
-    if (userRelationships.isEmpty) {
-      return Stream.value(<Map<String, dynamic>>[]);
-    }
-
-    // Create individual user document streams
-    final userStreams = userRelationships.map((userRel) {
-      final userId = userRel['userId']!;
-      final relationshipId = userRel['relationshipId']!;
-      final isIncoming = userRel['isIncoming'];
-      final initiatorId = userRel['initiatorId'];
-      
-      return _databaseService.documentStream(
-        collection: 'users',
-        documentId: userId,
-      ).map((docSnapshot) {
-        if (docSnapshot.exists && docSnapshot.data() != null) {
-          final userData = docSnapshot.data()!;
-          final result = <String, dynamic>{
-            'uid': userId,
-            'displayName': userData['displayName'] as String?,
-            'photoURL': userData['photoURL'] as String?,
-            'relationshipId': relationshipId,
-          };
-          
-          // Add metadata fields if they exist (for pending requests)
-          if (isIncoming != null) {
-            result['isIncoming'] = isIncoming == 'true';
-          }
-          if (initiatorId != null) {
-            result['initiatorId'] = initiatorId;
-          }
-          
-          return result;
-        }
-        return null;
-      });
-    }).toList();
-
-    // If only one user, return that stream as a list
-    if (userStreams.length == 1) {
-      return userStreams.first.map((userData) {
-        return userData != null ? [userData] : <Map<String, dynamic>>[];
-      });
-    }
-
-    // For multiple users, use Stream.combineLatest to combine all streams
-    return _combineMultipleStreams(userStreams);
-  }
-
-  /// Combines multiple user streams using Stream.combineLatest for real-time updates
-  Stream<List<Map<String, dynamic>>> _combineMultipleStreams(List<Stream<Map<String, dynamic>?>> streams) {
-    // Use a stream controller to manually manage the combination
-    late StreamController<List<Map<String, dynamic>>> controller;
-    final List<Map<String, dynamic>?> currentValues = List.filled(streams.length, null);
-    final List<StreamSubscription> subscriptions = [];
-    
-    controller = StreamController<List<Map<String, dynamic>>>(
-      onListen: () {
-        // Subscribe to each stream
-        for (int i = 0; i < streams.length; i++) {
-          subscriptions.add(
-            streams[i].listen(
-              (value) {
-                currentValues[i] = value;
-                // Emit combined result when any stream updates
-                final validResults = currentValues.where((v) => v != null).cast<Map<String, dynamic>>().toList();
-                if (!controller.isClosed) {
-                  controller.add(validResults);
-                  _logger.i(_tag, 'Combined user streams updated: ${validResults.length} users');
-                }
-              },
-              onError: (error) {
-                if (!controller.isClosed) {
-                  controller.addError(error);
-                }
-              },
-            ),
-          );
-        }
-      },
-      onCancel: () {
-        for (final subscription in subscriptions) {
-          subscription.cancel();
-        }
-      },
-    );
-    
-    return controller.stream;
   }
 
   @override

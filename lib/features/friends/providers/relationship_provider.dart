@@ -1,540 +1,664 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import '../../../core/models/relationship_model.dart';
+
 import '../../../core/repositories/relationship_repository.dart';
+import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
-import '../../../core/exceptions/relationship_exceptions.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
+import '../../../core/exceptions/relationship_exceptions.dart';
 
 /// Provider for managing relationship state throughout the app
 ///
-/// Replaces FriendsProvider with updated architecture that works with
-/// the new RelationshipRepository while maintaining UI compatibility.
+/// This provider wraps the RelationshipRepository and provides reactive state management
+/// for all relationship-related operations following the app's architecture pattern:
+/// UI → Provider → Repository → Service → Database
 ///
-/// Handles:
-/// - Friends list (accepted relationships) 
-/// - Incoming friend requests (pending received)
-/// - Outgoing friend requests (pending sent)
-/// - Blocked users list
-/// - Loading states and error handling
-/// - Data transformation from Map to RelationshipModel
+/// Features:
+/// - Real-time streams for friends, pending requests, and blocked users
+/// - Loading states for all operations
+/// - Error handling with user-friendly messages
+/// - Analytics tracking through repository layer
+/// - Optimistic UI updates where appropriate
 class RelationshipProvider extends ChangeNotifier {
   final RelationshipRepository _relationshipRepository;
   final AuthServiceInterface _authService;
-  final LoggerService _logger = LoggerService();
-  
+  final UserRepository _userRepository;
+  final LoggerService _logger;
+
   static const String _tag = 'RELATIONSHIP_PROVIDER';
 
-  // Stream Subscriptions
+  // Stream subscriptions
   StreamSubscription<List<Map<String, dynamic>>>? _friendsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _pendingRequestsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _blockedUsersSubscription;
+  StreamSubscription<Map<String, Map<String, dynamic>>>? _userDataSubscription;
 
-  // Summary data
-  Map<String, int> _summary = {
-    'friends': 0,
-    'pending_received': 0,
-    'pending_sent': 0,
-    'blocked': 0,
-  };
+  // Raw relationship data (UIDs and relationship IDs only)
+  List<Map<String, dynamic>> _friendsRelationshipData = [];
+  List<Map<String, dynamic>> _pendingRequestsRelationshipData = [];
+  List<Map<String, dynamic>> _blockedUsersRelationshipData = [];
 
-  // Relationship data (as RelationshipModel for UI compatibility)
-  List<RelationshipModel> _friends = [];
-  List<RelationshipModel> _incomingRequests = [];
-  List<RelationshipModel> _outgoingRequests = [];
-  List<RelationshipModel> _blockedUsers = [];
+  // User data cache (UID -> user data)
+  Map<String, Map<String, dynamic>> _userDataCache = {};
 
-  // User profile data cache (for UI display)
-  Map<String, Map<String, dynamic>> _userProfiles = {};
+  // Combined data for UI (relationship data + user data)
+  List<Map<String, dynamic>> _friends = [];
+  List<Map<String, dynamic>> _pendingRequests = [];
+  List<Map<String, dynamic>> _blockedUsers = [];
 
   // Loading states
-  bool _isLoadingSummary = false;
   bool _isLoadingFriends = false;
-  bool _isLoadingIncoming = false;
-  bool _isLoadingOutgoing = false;
-  bool _isLoadingBlocked = false;
-  bool _isSearching = false;
+  bool _isLoadingPendingRequests = false;
+  bool _isLoadingBlockedUsers = false;
+  bool _isLoadingOperation = false;
 
-  // Sets to track processing state for individual requests
-  final Set<String> _processingAcceptRequestIds = {};
-  final Set<String> _processingDeclineRequestIds = {};
-  final Set<String> _processingCancelRequestIds = {};
-  final Set<String> _processingBlockUserIds = {};
-
-  // Error states
+  // Error state
   String? _error;
+
+  // Operation tracking to prevent duplicate requests
+  final Set<String> _processingSendRequests = {};
+  final Set<String> _processingAcceptRequests = {};
+  final Set<String> _processingRejectRequests = {};
+  final Set<String> _processingCancelRequests = {}; // Add cancel tracking
+  final Set<String> _processingBlockUsers = {};
+  final Set<String> _processingUnblockUsers = {};
+  final Set<String> _processingRemoveFriends = {};
 
   /// Creates a new RelationshipProvider
   RelationshipProvider({
     RelationshipRepository? relationshipRepository,
     AuthServiceInterface? authService,
+    UserRepository? userRepository,
+    LoggerService? logger,
   }) : _relationshipRepository = relationshipRepository ?? serviceLocator<RelationshipRepository>(),
-       _authService = authService ?? serviceLocator<AuthServiceInterface>();
+       _authService = authService ?? serviceLocator<AuthServiceInterface>(),
+       _userRepository = userRepository ?? serviceLocator<UserRepository>(),
+       _logger = logger ?? serviceLocator<LoggerService>();
 
-  // Getters (maintaining FriendsProvider compatibility)
-  Map<String, int> get summary => Map.unmodifiable(_summary);
-  List<RelationshipModel> get friends => List.unmodifiable(_friends);
-  List<RelationshipModel> get incomingRequests => List.unmodifiable(_incomingRequests);
-  List<RelationshipModel> get outgoingRequests => List.unmodifiable(_outgoingRequests);
-  List<RelationshipModel> get blockedUsers => List.unmodifiable(_blockedUsers);
+  // ==========================================================================
+  // GETTERS
+  // ==========================================================================
 
-  bool get isLoadingSummary => _isLoadingSummary;
+  /// List of friends (accepted relationships)
+  List<Map<String, dynamic>> get friends => List.unmodifiable(_friends);
+
+  /// List of pending friend requests (received by current user)
+  List<Map<String, dynamic>> get pendingRequests => List.unmodifiable(_pendingRequests);
+
+  /// List of blocked users
+  List<Map<String, dynamic>> get blockedUsers => List.unmodifiable(_blockedUsers);
+
+  /// Loading state for friends list
   bool get isLoadingFriends => _isLoadingFriends;
-  bool get isLoadingIncoming => _isLoadingIncoming;
-  bool get isLoadingOutgoing => _isLoadingOutgoing;
-  bool get isLoadingBlocked => _isLoadingBlocked;
-  bool get isSearching => _isSearching;
 
-  // Getters for processing states
-  bool isAcceptingRequest(String id) => _processingAcceptRequestIds.contains(id);
-  bool isDecliningRequest(String id) => _processingDeclineRequestIds.contains(id);
-  bool isCancellingRequest(String id) => _processingCancelRequestIds.contains(id);
-  bool isBlockingUser(String id) => _processingBlockUserIds.contains(id);
+  /// Loading state for pending requests
+  bool get isLoadingPendingRequests => _isLoadingPendingRequests;
 
+  /// Loading state for blocked users
+  bool get isLoadingBlockedUsers => _isLoadingBlockedUsers;
+
+  /// Loading state for operations (send request, accept, etc.)
+  bool get isLoadingOperation => _isLoadingOperation;
+
+  /// Current error message, null if no error
   String? get error => _error;
 
-  int get friendsCount => _friends.length;
-  int get incomingCount => _incomingRequests.length;
-  int get outgoingCount => _outgoingRequests.length;
+  /// Current user UID from UserRepository
+  String? get currentUserUid => _userRepository.currentUser?.uid;
 
-  /// Initialize the provider - loads summary and sets up streams
+  /// Whether a send request operation is processing for a specific user
+  bool isProcessingSendRequest(String userId) => _processingSendRequests.contains(userId);
+
+  /// Whether an accept request operation is processing for a specific relationship
+  bool isProcessingAcceptRequest(String relationshipId) => _processingAcceptRequests.contains(relationshipId);
+
+  /// Whether a reject request operation is processing for a specific relationship
+  bool isProcessingRejectRequest(String relationshipId) => _processingRejectRequests.contains(relationshipId);
+
+  /// Whether a cancel request operation is processing for a specific relationship
+  bool isProcessingCancelRequest(String relationshipId) => _processingCancelRequests.contains(relationshipId);
+
+  /// Whether a block user operation is processing for a specific user
+  bool isProcessingBlockUser(String userId) => _processingBlockUsers.contains(userId);
+
+  /// Whether an unblock user operation is processing for a specific user
+  bool isProcessingUnblockUser(String userId) => _processingUnblockUsers.contains(userId);
+
+  /// Whether a remove friend operation is processing for a specific user
+  bool isProcessingRemoveFriend(String userId) => _processingRemoveFriends.contains(userId);
+
+  // ==========================================================================
+  // INITIALIZATION & CLEANUP
+  // ==========================================================================
+
+  /// Initialize the provider and set up real-time streams
   Future<void> initialize() async {
-    _logger.d(_tag, 'Initializing RelationshipProvider');
-    
     final currentUser = _authService.currentUser;
     if (currentUser == null) {
       _logger.w(_tag, 'Cannot initialize RelationshipProvider: user not authenticated');
       return;
     }
 
-    // Load initial summary
-    await loadSummary(); 
+    _logger.i(_tag, 'Initializing RelationshipProvider for user: ${currentUser.uid}');
     
-    _setupStreams(currentUser.uid);
-
-    _logger.i(_tag, 'RelationshipProvider initialized with streams');
-  }
-
-  void _setupStreams(String userId) {
-    // Setup friends stream
-    _friendsSubscription?.cancel();
-    _friendsSubscription = _relationshipRepository.getFriendsStream().listen(
-      (friendsData) {
-        _friends = _convertToRelationshipModels(friendsData, streamStatus: RelationshipStatus.accepted);
-        _summary['friends'] = _friends.length;
-        _isLoadingFriends = false;
-        _error = null;
-        notifyListeners();
-        _logger.d(_tag, 'Friends list updated from stream: ${_friends.length} friends');
-      },
-      onError: (e) {
-        _logger.e(_tag, 'Error in friends stream: ${e.toString()}');
-        _error = _getErrorMessage(e);
-        _isLoadingFriends = false;
-        notifyListeners();
-      },
-      onDone: () {
-        _isLoadingFriends = false;
-        notifyListeners();
-      }
-    );
-    _isLoadingFriends = true;
-    notifyListeners();
-
-    // Setup combined pending requests stream (includes both incoming and outgoing)
-    _pendingRequestsSubscription?.cancel();
-    _pendingRequestsSubscription = _relationshipRepository.getPendingRequestsStream().listen(
-      (pendingData) {
-        // Filter into incoming and outgoing based on isIncoming field
-        final incoming = <Map<String, dynamic>>[];
-        final outgoing = <Map<String, dynamic>>[];
-        
-        for (final data in pendingData) {
-          final isIncoming = data['isIncoming'] as bool? ?? false;
-          if (isIncoming) {
-            incoming.add(data);
-          } else {
-            outgoing.add(data);
-          }
-        }
-        
-        _incomingRequests = _convertToRelationshipModels(incoming, streamStatus: RelationshipStatus.pending);
-        _outgoingRequests = _convertToRelationshipModels(outgoing, streamStatus: RelationshipStatus.pending);
-        
-        _summary['pending_received'] = _incomingRequests.length;
-        _summary['pending_sent'] = _outgoingRequests.length;
-        
-        _isLoadingIncoming = false;
-        _isLoadingOutgoing = false;
-        _error = null;
-        notifyListeners();
-        
-        _logger.d(_tag, 'Pending requests updated: ${_incomingRequests.length} incoming, ${_outgoingRequests.length} outgoing');
-      },
-      onError: (e) {
-        _logger.e(_tag, 'Error in pending requests stream: ${e.toString()}');
-        _error = _getErrorMessage(e);
-        _isLoadingIncoming = false;
-        _isLoadingOutgoing = false;
-        notifyListeners();
-      },
-      onDone: () {
-        _isLoadingIncoming = false;
-        _isLoadingOutgoing = false;
-        notifyListeners();
-      }
-    );
-    _isLoadingIncoming = true;
-    _isLoadingOutgoing = true;
-    notifyListeners();
+    await _setupStreams();
     
-    // Setup blocked users stream
-    _blockedUsersSubscription?.cancel();
-    _blockedUsersSubscription = _relationshipRepository.getBlockedUsersStream().listen(
-      (blockedData) {
-        _blockedUsers = _convertToRelationshipModels(blockedData, streamStatus: RelationshipStatus.blocked);
-        _summary['blocked'] = _blockedUsers.length;
-        _isLoadingBlocked = false;
-        _error = null;
-        notifyListeners();
-        _logger.d(_tag, 'Blocked users updated from stream: ${_blockedUsers.length} users');
-      },
-      onError: (e) {
-        _logger.e(_tag, 'Error in blocked users stream: ${e.toString()}');
-        _error = _getErrorMessage(e);
-        _isLoadingBlocked = false;
-        notifyListeners();
-      },
-      onDone: () {
-        _isLoadingBlocked = false;
-        notifyListeners();
-      }
-    );
-    _isLoadingBlocked = true;
-    notifyListeners();
+    _logger.i(_tag, 'RelationshipProvider initialized successfully');
   }
 
-  /// Convert List<Map<String, dynamic>> to List<RelationshipModel>
-  /// Each stream is already filtered by status, so we trust the stream context
-  List<RelationshipModel> _convertToRelationshipModels(List<Map<String, dynamic>> data, {RelationshipStatus? streamStatus}) {
-    final models = <RelationshipModel>[];
-    
-    for (final item in data) {
-      try {
-        // Create a basic RelationshipModel from the user data
-        // Note: The repository returns user data, not relationship data
-        // We need to create synthetic relationship models for UI compatibility
-        final uid = item['uid'] as String?;
-        final relationshipId = item['relationshipId'] as String?;
-        
-        if (uid != null && relationshipId != null) {
-          // Create a synthetic RelationshipModel
-          final currentUserId = _authService.currentUser?.uid ?? '';
-          final participants = RelationshipModel.sortParticipants([currentUserId, uid]);
-          
-          // Use provided stream status or infer from item data
-          RelationshipStatus status = streamStatus ?? RelationshipStatus.pending;
-          
-          // If status is provided in item data, use it (takes precedence)
-          final itemStatus = item['status'] as String?;
-          if (itemStatus != null) {
-            switch (itemStatus) {
-              case 'accepted':
-                status = RelationshipStatus.accepted;
-                break;
-              case 'pending':
-                status = RelationshipStatus.pending;
-                break;
-              case 'blocked':
-                status = RelationshipStatus.blocked;
-                break;  
-            }
-          }
-          
-          final model = RelationshipModel(
-            id: relationshipId,
-            participants: participants,
-            type: RelationshipType.friendship,
-            status: status,
-            createdAt: DateTime.now(), // We don't have this data from user streams
-            updatedAt: DateTime.now(),
-            initiatorId: item['initiatorId'] as String?,
-          );
-          
-          models.add(model);
-          
-          // Cache user profile data for UI display
-          _userProfiles[uid] = {
-            'uid': uid,
-            'displayName': item['displayName'],
-            'photoURL': item['photoURL'], 
-          };
-        }
-      } catch (e) {
-        _logger.w(_tag, 'Failed to convert item to RelationshipModel: ${e.toString()}');
-      }
-    }
-    
-    return models;
-  }
-
-  /// Get user profile data for a specific user
-  /// This method provides the user profile information needed by UI components
-  Map<String, dynamic>? getUserProfile(String userId) {
-    return _userProfiles[userId];
-  }
-
-  /// Get user profile data based on a relationship and current user ID
-  /// This provides compatibility with the old getCachedProfile method
-  Map<String, dynamic>? getProfileForRelationship(RelationshipModel relationship, String currentUserId) {
-    final friendId = relationship.getFriendId(currentUserId);
-    return getUserProfile(friendId);
-  }
-
-  /// Load summary of relationship counts
-  Future<void> loadSummary() async {
-    final currentUser = _authService.currentUser;
-    if (currentUser == null) return;
-
-    _isLoadingSummary = true;
-    _error = null;
-    notifyListeners();
-
+  /// Set up real-time streams for relationship data
+  Future<void> _setupStreams() async {
     try {
-      _logger.d(_tag, 'Loading relationships summary');
-      
-      // Since repository doesn't have getUserRelationshipsSummary, 
-      // we'll build summary from current data
-      _summary = {
-        'friends': _friends.length,
-        'pending_received': _incomingRequests.length,
-        'pending_sent': _outgoingRequests.length,
-        'blocked': _blockedUsers.length,
-      };
-      
-      _logger.i(_tag, 'Summary loaded: $_summary');
-      
+      // Setup friends stream
+      _isLoadingFriends = true;
+      notifyListeners();
+
+      _friendsSubscription?.cancel();
+      _friendsSubscription = _relationshipRepository.getFriendsStream().listen(
+        (friendsRelationshipData) {
+          _logger.d(_tag, 'Friends relationship stream updated: ${friendsRelationshipData.length} friends');
+          _friendsRelationshipData = friendsRelationshipData;
+          _updateUserSubscription();
+          _combineFriendsData();
+          _isLoadingFriends = false;
+          _error = null;
+          notifyListeners();
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in friends stream: ${error.toString()}');
+          _error = _getErrorMessage(error);
+          _isLoadingFriends = false;
+          notifyListeners();
+        },
+      );
+
+      // Setup pending requests stream
+      _isLoadingPendingRequests = true;
+      notifyListeners();
+
+      _pendingRequestsSubscription?.cancel();
+      _pendingRequestsSubscription = _relationshipRepository.getPendingRequestsStream().listen(
+        (pendingRelationshipData) {
+          _logger.d(_tag, 'Pending requests relationship stream updated: ${pendingRelationshipData.length} requests');
+          _pendingRequestsRelationshipData = pendingRelationshipData;
+          _updateUserSubscription();
+          _combinePendingRequestsData();
+          _isLoadingPendingRequests = false;
+          _error = null;
+          notifyListeners();
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in pending requests stream: ${error.toString()}');
+          _error = _getErrorMessage(error);
+          _isLoadingPendingRequests = false;
+          notifyListeners();
+        },
+      );
+
+      // Setup blocked users stream
+      _isLoadingBlockedUsers = true;
+      notifyListeners();
+
+      _blockedUsersSubscription?.cancel();
+      _blockedUsersSubscription = _relationshipRepository.getBlockedUsersStream().listen(
+        (blockedRelationshipData) {
+          _logger.d(_tag, 'Blocked users relationship stream updated: ${blockedRelationshipData.length} blocked users');
+          _blockedUsersRelationshipData = blockedRelationshipData;
+          _updateUserSubscription();
+          _combineBlockedUsersData();
+          _isLoadingBlockedUsers = false;
+          _error = null;
+          notifyListeners();
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in blocked users stream: ${error.toString()}');
+          _error = _getErrorMessage(error);
+          _isLoadingBlockedUsers = false;
+          notifyListeners();
+        },
+      );
+
     } catch (e) {
-      _logger.e(_tag, 'Failed to load summary: ${e.toString()}');
+      _logger.e(_tag, 'Failed to setup streams: ${e.toString()}');
       _error = _getErrorMessage(e);
-    } finally {
-      _isLoadingSummary = false;
-      notifyListeners();
-    }
-  }
-
-  /// Accept a friend request
-  Future<bool> acceptFriendRequest(String relationshipId) async {
-    _processingAcceptRequestIds.add(relationshipId);
-    notifyListeners();
-    try {
-      _logger.d(_tag, 'Accepting friend request: $relationshipId');
-      await _relationshipRepository.acceptFriendRequest(relationshipId);
-      
-      _logger.i(_tag, 'Friend request accepted successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    } finally {
-      _processingAcceptRequestIds.remove(relationshipId);
-      notifyListeners();
-    }
-  }
-
-  /// Decline a friend request (maps to rejectFriendRequest in repository)
-  Future<bool> declineFriendRequest(String relationshipId) async {
-    _processingDeclineRequestIds.add(relationshipId);
-    notifyListeners();
-    try {
-      _logger.d(_tag, 'Declining friend request: $relationshipId');
-      await _relationshipRepository.rejectFriendRequest(relationshipId);
-      
-      _logger.i(_tag, 'Friend request declined successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to decline friend request: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    } finally {
-      _processingDeclineRequestIds.remove(relationshipId);
-      notifyListeners();
-    }
-  }
-
-  /// Cancel an outgoing friend request 
-  /// Note: RelationshipRepository doesn't have cancelFriendRequest, using rejectFriendRequest
-  Future<bool> cancelFriendRequest(String relationshipId) async {
-    _processingCancelRequestIds.add(relationshipId);
-    notifyListeners();
-    try {
-      _logger.d(_tag, 'Cancelling friend request: $relationshipId');
-      // For now, use rejectFriendRequest as cancel functionality
-      await _relationshipRepository.rejectFriendRequest(relationshipId);
-      
-      _logger.i(_tag, 'Friend request cancelled successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to cancel friend request: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    } finally {
-      _processingCancelRequestIds.remove(relationshipId);
-      notifyListeners();
-    }
-  }
-
-  /// Remove a friend (using targetUserId instead of relationshipId)
-  Future<bool> removeFriend(String targetUserId) async {
-    try {
-      _logger.d(_tag, 'Removing friend: $targetUserId');
-      
-      // Repository handles the actual removal and cache refresh
-      // UI will update via stream listeners after successful operation
-      await _relationshipRepository.removeFriend(targetUserId);
-      
-      _logger.i(_tag, 'Friend removed successfully');
-      return true;
-      
-    } catch (e) {
-      _logger.e(_tag, 'Failed to remove friend: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Block a user (using targetUserId instead of relationshipId)
-  Future<bool> blockUser(String targetUserId) async {
-    _processingBlockUserIds.add(targetUserId);
-    notifyListeners();
-    try {
-      _logger.d(_tag, 'Blocking user: $targetUserId');
-      await _relationshipRepository.blockUser(targetUserId);
-      _logger.i(_tag, 'User blocked successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to block user: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    } finally {
-      _processingBlockUserIds.remove(targetUserId);
-      notifyListeners();
-    }
-  }
-
-  /// Unblock a user (using targetUserId instead of relationshipId)
-  Future<bool> unblockUser(String targetUserId) async {
-    _processingBlockUserIds.add(targetUserId);
-    notifyListeners();
-    try {
-      _logger.d(_tag, 'Unblocking user: $targetUserId');
-      await _relationshipRepository.unblockUser(targetUserId);
-      _logger.i(_tag, 'User unblocked successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to unblock user: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    } finally {
-      _processingBlockUserIds.remove(targetUserId);
-      notifyListeners();
-    }
-  }
-
-  /// Search for user by UID
-  Future<Map<String, dynamic>?> searchUserByUid(String uid) async {
-    _isSearching = true;
-    notifyListeners();
-    
-    try {
-      _logger.d(_tag, 'Searching user by UID: $uid');
-      
-      final result = await _relationshipRepository.searchUserByUid(uid);
-      
-      _logger.i(_tag, 'User search completed: ${result != null ? 'found' : 'not found'}');
-      return result;
-      
-    } catch (e) {
-      _logger.e(_tag, 'Failed to search user: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return null;
-    } finally {
-      _isSearching = false;
-      notifyListeners();
-    }
-  }
-
-  /// Send friend request to user
-  Future<bool> sendFriendRequest(String targetUserId) async {
-    try {
-      _logger.d(_tag, 'Sending friend request to: $targetUserId');
-      await _relationshipRepository.sendFriendRequest(targetUserId);
-      _logger.i(_tag, 'Friend request sent successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'Failed to send friend request: ${e.toString()}');
-      _error = _getErrorMessage(e);
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Clear error state
-  void clearError() {
-    _error = null;
-    notifyListeners();
-  }
-
-  /// Get user-friendly error message
-  String _getErrorMessage(dynamic error) {
-    if (error is RelationshipException) {
-      return error.message;
-    }
-    return 'An unexpected error occurred';
-  }
-
-  /// Load blocked users manually (compatibility method)
-  Future<void> loadBlockedUsers() async {
-    final currentUser = _authService.currentUser;
-    if (currentUser == null) return;
-
-    _isLoadingBlocked = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _logger.d(_tag, 'Loading blocked users');
-      
-      final result = await _relationshipRepository.getCachedBlockedUsers();
-      _blockedUsers = _convertToRelationshipModels(result, streamStatus: RelationshipStatus.blocked);
-      
-      _logger.i(_tag, 'Blocked users loaded: ${_blockedUsers.length} users');
-      
-    } catch (e) {
-      _logger.e(_tag, 'Failed to load blocked users: ${e.toString()}');
-      _error = _getErrorMessage(e);
-    } finally {
-      _isLoadingBlocked = false;
+      _isLoadingFriends = false;
+      _isLoadingPendingRequests = false;
+      _isLoadingBlockedUsers = false;
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
-    _logger.d(_tag, 'Disposing RelationshipProvider and cancelling streams');
+    _logger.d(_tag, 'Disposing RelationshipProvider');
     _friendsSubscription?.cancel();
     _pendingRequestsSubscription?.cancel();
     _blockedUsersSubscription?.cancel();
+    _userDataSubscription?.cancel();
     super.dispose();
+  }
+
+  /// Update user data subscription based on all current UIDs
+  void _updateUserSubscription() {
+    // Collect all unique UIDs from all relationship streams
+    final Set<String> allUids = {};
+    
+    // Add UIDs from friends
+    for (final friend in _friendsRelationshipData) {
+      final uid = friend['uid'] as String?;
+      if (uid != null) allUids.add(uid);
+    }
+    
+    // Add UIDs from pending requests
+    for (final request in _pendingRequestsRelationshipData) {
+      final uid = request['uid'] as String?;
+      if (uid != null) allUids.add(uid);
+    }
+    
+    // Add UIDs from blocked users
+    for (final blocked in _blockedUsersRelationshipData) {
+      final uid = blocked['uid'] as String?;
+      if (uid != null) allUids.add(uid);
+    }
+    
+    // Only update subscription if we have UIDs to subscribe to
+    if (allUids.isNotEmpty) {
+      _logger.d(_tag, 'Updating user subscription for ${allUids.length} unique UIDs');
+      
+      _userDataSubscription?.cancel();
+      _userDataSubscription = _relationshipRepository.setupUserStreamSubscription(allUids.toList()).listen(
+        (userData) {
+          _logger.d(_tag, 'User data stream updated: ${userData.length} users');
+          _logger.d(_tag, 'Received user data: $userData');
+          _userDataCache = userData;
+          
+          // Recombine all data whenever user data updates
+          _combineFriendsData();
+          _combinePendingRequestsData();
+          _combineBlockedUsersData();
+          notifyListeners();
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in user data stream: ${error.toString()}');
+          // Don't set _error here as this is a secondary stream
+          // Relationship streams will continue to work without user data
+        },
+      );
+    } else {
+      _logger.d(_tag, 'No UIDs to subscribe to, clearing user data subscription');
+      _userDataSubscription?.cancel();
+      _userDataCache.clear();
+    }
+  }
+
+  /// Combine friends relationship data with user data
+  void _combineFriendsData() {
+    _friends = _friendsRelationshipData.map((relationshipData) {
+      final uid = relationshipData['uid'] as String;
+      final userData = _userDataCache[uid] ?? {};
+      
+      _logger.d(_tag, 'Combining friend data for UID: $uid');
+      _logger.d(_tag, 'Relationship data: $relationshipData');
+      _logger.d(_tag, 'User data from cache: $userData');
+      
+      final combinedData = {
+        ...relationshipData, // uid, relationshipId
+        ...userData, // displayName, photoURL, etc.
+      };
+      
+      _logger.d(_tag, 'Combined data result: $combinedData');
+      
+      return combinedData;
+    }).toList();
+    
+    _logger.d(_tag, 'Combined friends data: ${_friends.length} friends with user data');
+    _logger.d(_tag, 'User data cache contains ${_userDataCache.length} users: ${_userDataCache.keys}');
+  }
+
+  /// Combine pending requests relationship data with user data
+  void _combinePendingRequestsData() {
+    _pendingRequests = _pendingRequestsRelationshipData.map((relationshipData) {
+      final uid = relationshipData['uid'] as String;
+      final userData = _userDataCache[uid] ?? {};
+      
+      return {
+        ...relationshipData, // uid, relationshipId, isIncoming, initiatorId
+        ...userData, // displayName, photoURL, etc.
+      };
+    }).toList();
+    
+    _logger.d(_tag, 'Combined pending requests data: ${_pendingRequests.length} requests with user data');
+  }
+
+  /// Combine blocked users relationship data with user data
+  void _combineBlockedUsersData() {
+    _blockedUsers = _blockedUsersRelationshipData.map((relationshipData) {
+      final uid = relationshipData['uid'] as String;
+      final userData = _userDataCache[uid] ?? {};
+      
+      return {
+        ...relationshipData, // uid, relationshipId
+        ...userData, // displayName, photoURL, etc.
+      };
+    }).toList();
+    
+    _logger.d(_tag, 'Combined blocked users data: ${_blockedUsers.length} blocked users with user data');
+  }
+
+  // ==========================================================================
+  // FRIEND REQUEST OPERATIONS
+  // ==========================================================================
+
+  /// Send a friend request to another user
+  Future<bool> sendFriendRequest(String targetUserId) async {
+    if (_processingSendRequests.contains(targetUserId)) {
+      _logger.w(_tag, 'Send friend request already in progress for user: $targetUserId');
+      return false;
+    }
+
+    _processingSendRequests.add(targetUserId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Sending friend request to user: $targetUserId');
+      
+      final relationshipId = await _relationshipRepository.sendFriendRequest(targetUserId);
+      
+      _logger.i(_tag, 'Friend request sent successfully: $relationshipId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to send friend request: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingSendRequests.remove(targetUserId);
+      notifyListeners();
+    }
+  }
+
+  /// Accept a pending friend request
+  Future<bool> acceptFriendRequest(String relationshipId) async {
+    if (_processingAcceptRequests.contains(relationshipId)) {
+      _logger.w(_tag, 'Accept friend request already in progress: $relationshipId');
+      return false;
+    }
+
+    _processingAcceptRequests.add(relationshipId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Accepting friend request: $relationshipId');
+      
+      await _relationshipRepository.acceptFriendRequest(relationshipId);
+      
+      _logger.i(_tag, 'Friend request accepted successfully: $relationshipId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to accept friend request: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingAcceptRequests.remove(relationshipId);
+      notifyListeners();
+    }
+  }
+
+  /// Reject/decline a pending friend request
+  Future<bool> rejectFriendRequest(String relationshipId) async {
+    if (_processingRejectRequests.contains(relationshipId)) {
+      _logger.w(_tag, 'Reject friend request already in progress: $relationshipId');
+      return false;
+    }
+
+    _processingRejectRequests.add(relationshipId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Rejecting friend request: $relationshipId');
+      
+      await _relationshipRepository.rejectFriendRequest(relationshipId);
+      
+      _logger.i(_tag, 'Friend request rejected successfully: $relationshipId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to reject friend request: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingRejectRequests.remove(relationshipId);
+      notifyListeners();
+    }
+  }
+
+  /// Cancel a sent friend request
+  Future<bool> cancelFriendRequest(String relationshipId) async {
+    if (_processingCancelRequests.contains(relationshipId)) {
+      _logger.w(_tag, 'Cancel friend request already in progress: $relationshipId');
+      return false;
+    }
+
+    _processingCancelRequests.add(relationshipId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Cancelling friend request: $relationshipId');
+      
+      await _relationshipRepository.cancelFriendRequest(relationshipId);
+      
+      _logger.i(_tag, 'Friend request cancelled successfully: $relationshipId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to cancel friend request: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingCancelRequests.remove(relationshipId);
+      notifyListeners();
+    }
+  }
+
+  // ==========================================================================
+  // FRIENDSHIP MANAGEMENT
+  // ==========================================================================
+
+  /// Remove an existing friend
+  Future<bool> removeFriend(String targetUserId) async {
+    if (_processingRemoveFriends.contains(targetUserId)) {
+      _logger.w(_tag, 'Remove friend already in progress for user: $targetUserId');
+      return false;
+    }
+
+    _processingRemoveFriends.add(targetUserId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Removing friend: $targetUserId');
+      _logger.d(_tag, 'Current friends count BEFORE removal: ${_friends.length}');
+      
+      await _relationshipRepository.removeFriend(targetUserId);
+      
+      _logger.i(_tag, 'Friend removed successfully: $targetUserId');
+      _logger.d(_tag, 'Current friends count AFTER removal call: ${_friends.length}');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to remove friend: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingRemoveFriends.remove(targetUserId);
+      notifyListeners();
+    }
+  }
+
+  // ==========================================================================
+  // BLOCKING OPERATIONS
+  // ==========================================================================
+
+  /// Block a user
+  Future<bool> blockUser(String targetUserId) async {
+    if (_processingBlockUsers.contains(targetUserId)) {
+      _logger.w(_tag, 'Block user already in progress for user: $targetUserId');
+      return false;
+    }
+
+    _processingBlockUsers.add(targetUserId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Blocking user: $targetUserId');
+      
+      await _relationshipRepository.blockUser(targetUserId);
+      
+      _logger.i(_tag, 'User blocked successfully: $targetUserId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to block user: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingBlockUsers.remove(targetUserId);
+      notifyListeners();
+    }
+  }
+
+  /// Unblock a user
+  Future<bool> unblockUser(String targetUserId) async {
+    if (_processingUnblockUsers.contains(targetUserId)) {
+      _logger.w(_tag, 'Unblock user already in progress for user: $targetUserId');
+      return false;
+    }
+
+    _processingUnblockUsers.add(targetUserId);
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Unblocking user: $targetUserId');
+      
+      await _relationshipRepository.unblockUser(targetUserId);
+      
+      _logger.i(_tag, 'User unblocked successfully: $targetUserId');
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to unblock user: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _processingUnblockUsers.remove(targetUserId);
+      notifyListeners();
+    }
+  }
+
+  // ==========================================================================
+  // USER SEARCH OPERATIONS
+  // ==========================================================================
+
+  /// Search for a user by their UID
+  Future<Map<String, dynamic>?> searchUserByUid(String uid) async {
+    _isLoadingOperation = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _logger.d(_tag, 'Searching for user by UID: $uid');
+      
+      final result = await _relationshipRepository.searchUserByUid(uid);
+      
+      if (result != null) {
+        _logger.i(_tag, 'User found: ${result['displayName']}');
+      } else {
+        _logger.i(_tag, 'User not found for UID: $uid');
+      }
+      
+      return result;
+
+    } catch (e) {
+      _logger.e(_tag, 'Failed to search user by UID: ${e.toString()}');
+      _error = _getErrorMessage(e);
+      notifyListeners();
+      return null;
+    } finally {
+      _isLoadingOperation = false;
+      notifyListeners();
+    }
+  }
+
+  // ==========================================================================
+  // UTILITY METHODS
+  // ==========================================================================
+
+  /// Clear the current error state
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  /// Get user-friendly error message from exception
+  String _getErrorMessage(dynamic error) {
+    if (error is RelationshipException) {
+      switch (error.code) {
+        case RelationshipErrorCodes.userNotFound:
+          return 'User not found. Please check the user ID.';
+        case RelationshipErrorCodes.alreadyFriends:
+          return 'You are already friends with this user.';
+        case RelationshipErrorCodes.requestAlreadySent:
+          return 'Friend request already sent to this user.';
+        case RelationshipErrorCodes.requestAlreadyReceived:
+          return 'You already have a pending request from this user.';
+        case RelationshipErrorCodes.blocked:
+          return 'Cannot send friend request. User may be blocked.';
+        case RelationshipErrorCodes.selfRequest:
+          return 'You cannot send a friend request to yourself.';
+        case RelationshipErrorCodes.notLoggedIn:
+          return 'Please sign in to manage friends.';
+        case RelationshipErrorCodes.databaseError:
+          return 'Database error. Please try again later.';
+        case RelationshipErrorCodes.networkError:
+          return 'Network error. Please check your connection.';
+        case RelationshipErrorCodes.unauthorized:
+          return 'You are not authorized to perform this action.';
+        default:
+          return 'An unexpected error occurred. Please try again.';
+      }
+    }
+    
+    return 'An unexpected error occurred. Please try again.';
+  }
+
+  /// Get summary counts for UI display
+  Map<String, int> getSummary() {
+    return {
+      'friends': _friends.length,
+      'pendingRequests': _pendingRequests.length,
+      'blockedUsers': _blockedUsers.length,
+    };
+  }
+
+  /// Refresh all data streams (useful for pull-to-refresh)
+  Future<void> refresh() async {
+    _logger.d(_tag, 'Refreshing relationship data');
+    clearError();
+    await _setupStreams();
   }
 }
