@@ -9,6 +9,7 @@ import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/crashlytics_consent_manager.dart';
 import '../services/logger/logger_service.dart';
 import '../services/fcm/fcm_service.dart';
+import '../services/database/local_database_service.dart';
 
 /// Handles the bootstrapping of the app
 ///
@@ -125,25 +126,31 @@ class AppBootstrapper {
     }
   }
 
-  /// Sync authentication state between Firebase and SharedPreferences
+  /// Sync authentication state between Firebase and Local Database
   Future<void> _syncAuthState() async {
     try {
       // Check if Firebase says we're logged in
       final firebaseUser = FirebaseAuth.instance.currentUser;
-      final isLoggedInPrefs = PreferencesService.instance.isLoggedIn;
+      
+      // Check if local database says we're logged in
+      final localDb = LocalDatabaseService.instance;
+      final isLoggedInLocalDb = await localDb.isAnyUserLoggedIn();
 
-      // If there's a mismatch between Firebase and SharedPreferences
-      if (firebaseUser == null && isLoggedInPrefs) {
-        // Firebase says logged out but SharedPrefs says logged in - fix by clearing all
+      // If there's a mismatch between Firebase and Local Database
+      if (firebaseUser == null && isLoggedInLocalDb) {
+        // Firebase says logged out but local DB says logged in - fix by clearing all
+        await localDb.clearAllUserData();
+        // Also clear preferences as fallback
         await PreferencesService.instance.setLoggedIn(false);
         await PreferencesService.instance.clearAll();
         _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Cleared invalid login state');
-      } else if (firebaseUser != null && !isLoggedInPrefs) {
-        // Firebase says logged in but SharedPrefs says logged out - update preferences
+      } else if (firebaseUser != null && !isLoggedInLocalDb) {
+        // Firebase says logged in but local DB says logged out - update local database
+        // The user data will be saved to local DB during the normal auth flow
         await PreferencesService.instance.setLoggedIn(true);
         _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state');
       } else {
-        // States match, ensure they're both up to date
+        // States match, ensure preferences are consistent (for compatibility)
         await PreferencesService.instance.setLoggedIn(firebaseUser != null);
         _logger!.i('AUTH', 'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}');
       }

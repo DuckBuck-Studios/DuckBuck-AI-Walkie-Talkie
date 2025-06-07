@@ -1,5 +1,3 @@
-import 'package:duckbuck/core/services/preferences_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../../core/models/user_model.dart';
@@ -8,9 +6,7 @@ import '../../../core/services/service_locator.dart';
 import '../../../core/services/notifications/notifications_service.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
 import '../../../core/services/auth/auth_security_manager.dart';
-import '../../../core/services/auth/auth_service_interface.dart';
-import '../../../core/services/firebase/firebase_analytics_service.dart';
-import '../../../core/services/firebase/firebase_crashlytics_service.dart';
+import '../../../core/services/database/local_database_service.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -21,7 +17,6 @@ class AuthStateProvider extends ChangeNotifier {
   final UserRepository _userRepository;
   final NotificationsService _notificationsService;
   final AuthSecurityManager _securityManager;
-  final AuthServiceInterface _authService;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -32,11 +27,9 @@ class AuthStateProvider extends ChangeNotifier {
     UserRepository? userRepository,
     NotificationsService? notificationsService,
     AuthSecurityManager? securityManager,
-    AuthServiceInterface? authService,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
        _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
-       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>(),
-       _authService = authService ?? serviceLocator<AuthServiceInterface>() {
+       _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>() {
     _init();
   }
 
@@ -51,11 +44,34 @@ class AuthStateProvider extends ChangeNotifier {
       final userChanged = _currentUser?.uid != user?.uid;
       _currentUser = user;
 
-      // When user logs in, register FCM token and update login state in preferences
+      // When user logs in, register FCM token, update login state, and start monitoring
       if (user != null) {
         // Register a new token on login
         _notificationsService.registerToken(user.uid);
-        PreferencesService.instance.setLoggedIn(true);
+        
+        // Update login status in local database (async but don't await to avoid blocking UI)
+        Future(() async {
+          try {
+            final localDb = LocalDatabaseService.instance;
+            await localDb.setUserLoggedIn(user.uid, true);
+            
+            // Start Firebase document monitoring for reactive updates
+            await _userRepository.startUserDocumentMonitoring();
+            debugPrint('🔐 AUTH PROVIDER: Started Firebase document monitoring for user: ${user.uid}');
+          } catch (e) {
+            debugPrint('Failed to update login status or start monitoring: $e');
+          }
+        });
+      } else {
+        // User logged out, stop monitoring
+        Future(() async {
+          try {
+            await _userRepository.stopUserDocumentMonitoring();
+            debugPrint('🔐 AUTH PROVIDER: Stopped Firebase document monitoring');
+          } catch (e) {
+            debugPrint('Failed to stop user document monitoring: $e');
+          }
+        });
       }
 
       // Only notify listeners if something meaningful changed
@@ -69,7 +85,20 @@ class AuthStateProvider extends ChangeNotifier {
     if (_currentUser != null) {
       // Register token for immediate loading too
       _notificationsService.registerToken(_currentUser!.uid);
-      PreferencesService.instance.setLoggedIn(true);
+      
+      // Update login status in local database and start monitoring (async but don't await to avoid blocking initialization)
+      Future(() async {
+        try {
+          final localDb = LocalDatabaseService.instance;
+          await localDb.setUserLoggedIn(_currentUser!.uid, true);
+          
+          // Start Firebase document monitoring for reactive updates
+          await _userRepository.startUserDocumentMonitoring();
+          debugPrint('🔐 AUTH PROVIDER: Started Firebase document monitoring for existing user: ${_currentUser!.uid}');
+        } catch (e) {
+          debugPrint('Failed to update login status or start monitoring during init: $e');
+        }
+      });
       
       // Start session tracking for already authenticated users
       _securityManager.startUserSession();
@@ -253,7 +282,7 @@ class AuthStateProvider extends ChangeNotifier {
 
   /// Sign in with PhoneAuthCredential
   Future<(UserModel, bool)> signInWithPhoneAuthCredential(
-    PhoneAuthCredential credential,
+    dynamic credential,
   ) async {
     _isLoading = true;
     _errorMessage = null;
@@ -299,40 +328,17 @@ class AuthStateProvider extends ChangeNotifier {
       _securityManager.endUserSession();
       debugPrint('🔐 AUTH PROVIDER: Ending user session...');
       
-      // Get current user ID before signing out for cleanup purposes
-      final userId = _currentUser?.uid;
+      // Stop Firebase document monitoring before signing out
+      await _userRepository.stopUserDocumentMonitoring();
+      debugPrint('🔐 AUTH PROVIDER: Stopped Firebase document monitoring');
       
-      // Use AuthServiceInterface.signOut() for proper architecture flow: UI → Provider → Interface → Service
+      // Use UserRepository.signOut() for proper architecture flow: UI → Provider → Repository → Service
       // This handles Firebase auth logout and FCM token removal
-      debugPrint('🔐 AUTH PROVIDER: Using AuthServiceInterface.signOut() for proper layering');
-      await _authService.signOut();
+      debugPrint('🔐 AUTH PROVIDER: Using UserRepository.signOut() for proper layering');
+      await _userRepository.signOut();
       
-      // Handle app-level cleanup that the provider is responsible for
-      if (userId != null) {
-        try {
-          // Get analytics and crashlytics services for cleanup
-          final analytics = serviceLocator.get<FirebaseAnalyticsService>();
-          final crashlytics = serviceLocator.get<FirebaseCrashlyticsService>();
-          
-          // Log sign out event in analytics
-          await analytics.logEvent(
-            name: 'sign_out',
-            parameters: {'user_id': userId},
-          );
-          
-          // Clear crashlytics data
-          await crashlytics.clearKeys();
-          await crashlytics.setUserIdentifier('');
-          await crashlytics.log('User signed out');
-        } catch (e) {
-          // Log but continue with sign out
-          debugPrint('🔐 AUTH PROVIDER: Error during app-level cleanup: ${e.toString()}');
-        }
-      }
-      
-      // Clear login state and reset all auth-related preferences
-      await PreferencesService.instance.setLoggedIn(false);
-      await PreferencesService.instance.clearAll();
+      // Note: Local database cleanup is handled by UserRepository.signOut()
+      debugPrint('🔐 AUTH PROVIDER: Local database cleared by UserRepository');
       
       debugPrint('🔐 AUTH PROVIDER: User signed out successfully');
     } catch (e) {
@@ -374,9 +380,10 @@ class AuthStateProvider extends ChangeNotifier {
   }
   
   /// Validate a user credential for security-sensitive operations
-  Future<bool> validateCredential(AuthCredential credential) async {
+  Future<bool> validateCredential(dynamic credential) async {
     try {
-      return await _securityManager.validateCredential(credential);
+      // Use repository layer for proper architecture: UI → Provider → Repository → Service
+      return await _userRepository.validateCredential(credential);
     } catch (e) {
       _errorMessage = e.toString();
       debugPrint('🔐 AUTH PROVIDER: Credential validation failed: ${e.toString()}');
@@ -431,6 +438,10 @@ class AuthStateProvider extends ChangeNotifier {
       // End the user session before deletion
       _securityManager.endUserSession();
       
+      // Stop Firebase document monitoring before deletion
+      await _userRepository.stopUserDocumentMonitoring();
+      debugPrint('🔐 AUTH PROVIDER: Stopped Firebase document monitoring');
+      
       // Cancel auth subscription FIRST to prevent any auth state change notifications during deletion
       await _authSubscription?.cancel();
       _authSubscription = null;
@@ -439,9 +450,8 @@ class AuthStateProvider extends ChangeNotifier {
       // Clear the current user state immediately to prevent any further operations
       _currentUser = null;
       
-      // Clear preferences and logout state immediately
-      await PreferencesService.instance.setLoggedIn(false);
-      await PreferencesService.instance.clearAll();
+      // Note: Local database cleanup will be handled by UserRepository.deleteUserAccount()
+      debugPrint('🔐 AUTH PROVIDER: Local database will be cleared by UserRepository');
       
       // Delegate the actual deletion to the repository
       // This handles: FCM token removal, Firestore deletion, backend cleanup, Firebase Auth deletion
@@ -466,8 +476,17 @@ class AuthStateProvider extends ChangeNotifier {
   }
   
   @override
-  void dispose() {
-    // Cancel auth subscription to prevent memory leaks
+  void dispose() { 
+    // Clean up resources
+    Future(() async {
+      try {
+        await _userRepository.dispose();
+        debugPrint('🔐 AUTH PROVIDER: UserRepository disposed successfully');
+      } catch (e) {
+        debugPrint('🔐 AUTH PROVIDER: Error disposing UserRepository: $e');
+      }
+    });
+    
     _authSubscription?.cancel();
     super.dispose();
   }

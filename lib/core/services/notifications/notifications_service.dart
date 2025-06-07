@@ -235,7 +235,7 @@ class NotificationsService {
       
       // Get current user's name and photo from cached auth data
       final userRepository = serviceLocator<UserRepository>();
-      final currentUser = await userRepository.getCurrentUserWithCache();
+      final currentUser = await userRepository.getCurrentUser();
       
       if (currentUser == null) {
         _logger.e(_tag, 'Cannot send data-only notification: No current user found');

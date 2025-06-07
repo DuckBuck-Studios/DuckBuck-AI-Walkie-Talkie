@@ -262,7 +262,7 @@ class AuthSecurityManager {
   /// This method optimizes user data retrieval by using cached data when possible
   Future<dynamic> getCurrentUserWithCache() async {
     try {
-      _logger.d(_tag, 'Getting current user with cache optimization');
+      _logger.i(_tag, 'Getting current user with cache optimization');
       
       // Check if user is logged in first
       if (_authService.currentUser == null) {
@@ -270,15 +270,17 @@ class AuthSecurityManager {
         return null;
       }
       
-      // Get user from repository which handles cache logic
-      final cachedUser = await _userRepository.getCurrentUserWithCache();
+      // Use UserRepository's getCurrentUser method which handles local database caching
+      final cachedUser = await _userRepository.getCurrentUser();
       if (cachedUser != null) {
-        _logger.d(_tag, 'Successfully retrieved user data with cache optimization');
-      } else {
-        _logger.w(_tag, 'User is authenticated but no user data found');
+        _logger.i(_tag, 'Retrieved user with cached data including local photo');
+        return cachedUser;
       }
       
-      return cachedUser;
+      // Fallback to current user
+      _logger.d(_tag, 'No cached user found, using current user');
+      return _userRepository.currentUser;
+       
     } catch (e) {
       _logger.e(_tag, 'Failed to get cached user data', e);
       

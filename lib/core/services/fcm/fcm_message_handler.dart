@@ -3,7 +3,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../logger/logger_service.dart';
 import '../../navigation/app_routes.dart';
-import '../preferences_service.dart';
 
 /// FCM Message Handler for handling Firebase Cloud Messaging notifications
 ///
@@ -207,16 +206,13 @@ class FCMMessageHandler {
   /// Check if user is properly authenticated
   bool _isUserAuthenticated() {
     try {
-      // Check Firebase Auth state
+      // Check Firebase Auth state (primary source of truth)
       final firebaseUser = FirebaseAuth.instance.currentUser;
       
-      // Check SharedPreferences state
-      final isLoggedInPrefs = PreferencesService.instance.isLoggedIn;
+      // Firebase Auth is the authoritative source for authentication state
+      bool isAuthenticated = firebaseUser != null;
       
-      // Both must agree that user is logged in
-      bool isAuthenticated = firebaseUser != null && isLoggedInPrefs;
-      
-      _logger.d(_tag, 'Authentication check - Firebase: ${firebaseUser != null}, Prefs: $isLoggedInPrefs, Result: $isAuthenticated');
+      _logger.d(_tag, 'Authentication check - Firebase: ${firebaseUser != null}, Result: $isAuthenticated');
       
       return isAuthenticated;
     } catch (e) {

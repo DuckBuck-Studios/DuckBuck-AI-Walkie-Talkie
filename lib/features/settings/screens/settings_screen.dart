@@ -7,6 +7,7 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/models/user_model.dart';
 import '../../auth/providers/auth_state_provider.dart';
+import '../providers/settings_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,14 +21,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _buildNumber = '';
   bool _isLoading = false;
   bool _isDeleting = false;
-  UserModel? _cachedUser;
-  bool _isLoadingCachedData = true;
 
   @override
   void initState() {
     super.initState();
     _loadAppInfo();
-    _loadCachedUserData();
   }
 
   // Load app version information
@@ -45,26 +43,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _appVersion = 'Unknown';
           _buildNumber = '';
-        });
-      }
-    }
-  }
-
-  // Load cached user data for better performance
-  Future<void> _loadCachedUserData() async {
-    try {
-      final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
-      final cachedUser = await authProvider.getCurrentUserWithCache();
-      if (mounted) {
-        setState(() {
-          _cachedUser = cachedUser;
-          _isLoadingCachedData = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingCachedData = false;
         });
       }
     }
@@ -195,8 +173,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildMaterialPage(BuildContext context) {
     final theme = Theme.of(context);
-    final authProvider = Provider.of<AuthStateProvider>(context);
-    final user = _isDeleting ? _cachedUser : (authProvider.currentUser ?? _cachedUser);
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     
@@ -215,46 +191,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: theme.colorScheme.background,
         centerTitle: true,
       ),
-      body: ListView(
-        padding: EdgeInsets.symmetric(
-          horizontal: screenWidth * 0.05,
-          vertical: screenHeight * 0.02,
-        ),
-        children: [
-          // Add space from top
-          SizedBox(height: screenHeight * 0.03),
+      body: Consumer<SettingsProvider>(
+        builder: (context, settingsProvider, child) {
+          final user = settingsProvider.currentUser;
+          final isLoading = settingsProvider.isLoading;
           
-          // User profile section with better spacing
-          Center(
-            child: Column(
-              children: [
-                // Profile image
-                _isLoadingCachedData
-                    ? const CircularProgressIndicator()
-                    : (user != null 
-                        ? _buildProfileImageWidget(context, user) 
-                        : CircleAvatar(
-                            radius: screenWidth * 0.12,
-                            backgroundColor: AppColors.accentBlue,
-                            child: Icon(
-                              Platform.isIOS ? CupertinoIcons.person : Icons.person, 
-                              size: screenWidth * 0.12, 
-                              color: Colors.white,
-                            ),
-                          )),
-                SizedBox(height: screenHeight * 0.02),
-                
-                // User display name
-                Text(
-                  user?.displayName ?? 'Guest User',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+          return ListView(
+            padding: EdgeInsets.symmetric(
+              horizontal: screenWidth * 0.05,
+              vertical: screenHeight * 0.02,
             ),
-          ),
+            children: [
+              // Add space from top
+              SizedBox(height: screenHeight * 0.03),
+              
+              // User profile section with better spacing
+              Center(
+                child: Column(
+                  children: [
+                    // Profile image
+                    isLoading
+                        ? const CircularProgressIndicator()
+                        : (user != null 
+                            ? _buildProfileImageWidget(context, user) 
+                            : CircleAvatar(
+                                radius: screenWidth * 0.12,
+                                backgroundColor: AppColors.accentBlue,
+                                child: Icon(
+                                  Platform.isIOS ? CupertinoIcons.person : Icons.person, 
+                                  size: screenWidth * 0.12, 
+                                  color: Colors.white,
+                                ),
+                              )),
+                    SizedBox(height: screenHeight * 0.02),
+                    
+                    // User display name
+                    Text(
+                      user?.displayName ?? 'Guest User',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           
           SizedBox(height: screenHeight * 0.04),
           const Divider(),
@@ -387,14 +368,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           SizedBox(height: screenHeight * 0.02),
         ],
+      );
+        },
       ),
     );
   }
 
   Widget _buildCupertinoPage(BuildContext context) {
     final cupertinoTheme = CupertinoTheme.of(context);
-    final authProvider = Provider.of<AuthStateProvider>(context);
-    final user = _isDeleting ? _cachedUser : (authProvider.currentUser ?? _cachedUser);
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     
@@ -406,131 +387,141 @@ class _SettingsScreenState extends State<SettingsScreen> {
         border: null, // Remove default border for a cleaner look
       ),
       child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.symmetric(
-            horizontal: screenWidth * 0.05,
-            vertical: screenHeight * 0.02,
-          ),
-          children: [
-            // Add space from top
-            SizedBox(height: screenHeight * 0.02),
+        child: Consumer<SettingsProvider>(
+          builder: (context, settingsProvider, child) {
+            final user = settingsProvider.currentUser;
+            final isLoading = settingsProvider.isLoading;
             
-            // User profile section with better spacing
-            Center(
-              child: Column(
-                children: [
-                  // Profile image
-                  _isLoadingCachedData
-                      ? const CupertinoActivityIndicator()
-                      : (user != null 
-                          ? _buildProfileImageWidget(context, user) 
-                          : CircleAvatar(
-                              radius: screenWidth * 0.12,
-                              backgroundColor: AppColors.accentBlue,
-                              child: Icon(
-                                CupertinoIcons.person, 
-                                size: screenWidth * 0.12, 
-                                color: CupertinoColors.white,
-                              ),
-                            )),
-                  SizedBox(height: screenHeight * 0.02),
-                  
-                  // User display name
-                  Text(
-                    user?.displayName ?? 'Guest User',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
+            print('🔍 [SETTINGS] _buildCupertinoPage: user photoURL: ${user?.photoURL}');
+            print('🔍 [SETTINGS] _buildCupertinoPage: isLoading: $isLoading');
+            
+            return ListView(
+              padding: EdgeInsets.symmetric(
+                horizontal: screenWidth * 0.05,
+                vertical: screenHeight * 0.02,
+              ),
+              children: [
+                // Add space from top
+                SizedBox(height: screenHeight * 0.02),
+                
+                // User profile section with better spacing
+                Center(
+                  child: Column(
+                    children: [
+                      // Profile image
+                      isLoading
+                          ? const CupertinoActivityIndicator()
+                          : (user != null 
+                              ? _buildProfileImageWidget(context, user) 
+                              : CircleAvatar(
+                                  radius: screenWidth * 0.12,
+                                  backgroundColor: AppColors.accentBlue,
+                                  child: Icon(
+                                    CupertinoIcons.person, 
+                                    size: screenWidth * 0.12, 
+                                    color: CupertinoColors.white,
+                                  ),
+                                )),
+                      SizedBox(height: screenHeight * 0.02),
+                      
+                      // User display name
+                      Text(
+                        user?.displayName ?? 'Guest User',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: screenHeight * 0.04),
+                
+                // Account section
+                _buildCupertinoSectionHeader('Account'),
+                _buildCupertinoListSection([
+                  // Privacy Settings
+                  _buildCupertinoListTile(
+                    icon: CupertinoIcons.shield,
+                    iconColor: CupertinoColors.activeBlue,
+                    title: 'Privacy Settings',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/privacy_settings');
+                    },
+                  ),
+                  // Logout option
+                  _buildCupertinoListTile(
+                    icon: CupertinoIcons.square_arrow_right,
+                    iconColor: CupertinoColors.systemOrange,
+                    title: 'Logout',
+                    onTap: _isLoading ? null : _handleLogout,
+                    trailing: _isLoading 
+                      ? const CupertinoActivityIndicator() 
+                      : const Icon(CupertinoIcons.chevron_right, size: 18),
+                  ),
+                ]),
+                
+                SizedBox(height: screenHeight * 0.02),
+                
+                // Legal section
+                _buildCupertinoSectionHeader('Legal'),
+                _buildCupertinoListSection([
+                  // Privacy Policy
+                  _buildCupertinoListTile(
+                    icon: CupertinoIcons.doc_text,
+                    iconColor: CupertinoColors.systemGreen,
+                    title: 'Privacy Policy',
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.privacyPolicy);
+                    },
+                  ),
+                  // Terms of Service
+                  _buildCupertinoListTile(
+                    icon: CupertinoIcons.doc_plaintext,
+                    iconColor: CupertinoColors.systemPurple,
+                    title: 'Terms of Service',
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.termsOfService);
+                    },
+                  ),
+                ]),
+                
+                SizedBox(height: screenHeight * 0.02),
+                
+                // Danger zone
+                _buildCupertinoSectionHeader('Danger Zone'),
+                _buildCupertinoListSection([
+                  // Delete account option
+                  _buildCupertinoListTile(
+                    icon: CupertinoIcons.delete,
+                    iconColor: CupertinoColors.systemRed,
+                    title: 'Delete Account',
+                    titleColor: CupertinoColors.systemRed,
+                    onTap: _isDeleting ? null : _confirmDeleteAccount,
+                    trailing: _isDeleting 
+                      ? const CupertinoActivityIndicator() 
+                      : const Icon(CupertinoIcons.chevron_right, size: 18),
+                  ),
+                ]),
+                
+                SizedBox(height: screenHeight * 0.06),
+                
+                // App version at bottom
+                Center(
+                  child: Text(
+                    'Version $_appVersion ($_buildNumber)',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.035,
+                      color: CupertinoColors.systemGrey.resolveFrom(context),
                     ),
                   ),
-                ],
-              ),
-            ),
-            
-            SizedBox(height: screenHeight * 0.04),
-            
-            // Account section
-            _buildCupertinoSectionHeader('Account'),
-            _buildCupertinoListSection([
-              // Privacy Settings
-              _buildCupertinoListTile(
-                icon: CupertinoIcons.shield,
-                iconColor: CupertinoColors.activeBlue,
-                title: 'Privacy Settings',
-                onTap: () {
-                  Navigator.pushNamed(context, '/privacy_settings');
-                },
-              ),
-              // Logout option
-              _buildCupertinoListTile(
-                icon: CupertinoIcons.square_arrow_right,
-                iconColor: CupertinoColors.systemOrange,
-                title: 'Logout',
-                onTap: _isLoading ? null : _handleLogout,
-                trailing: _isLoading 
-                  ? const CupertinoActivityIndicator() 
-                  : const Icon(CupertinoIcons.chevron_right, size: 18),
-              ),
-            ]),
-            
-            SizedBox(height: screenHeight * 0.02),
-            
-            // Legal section
-            _buildCupertinoSectionHeader('Legal'),
-            _buildCupertinoListSection([
-              // Privacy Policy
-              _buildCupertinoListTile(
-                icon: CupertinoIcons.doc_text,
-                iconColor: CupertinoColors.systemGreen,
-                title: 'Privacy Policy',
-                onTap: () {
-                  Navigator.pushNamed(context, AppRoutes.privacyPolicy);
-                },
-              ),
-              // Terms of Service
-              _buildCupertinoListTile(
-                icon: CupertinoIcons.doc_plaintext,
-                iconColor: CupertinoColors.systemPurple,
-                title: 'Terms of Service',
-                onTap: () {
-                  Navigator.pushNamed(context, AppRoutes.termsOfService);
-                },
-              ),
-            ]),
-            
-            SizedBox(height: screenHeight * 0.02),
-            
-            // Danger zone
-            _buildCupertinoSectionHeader('Danger Zone'),
-            _buildCupertinoListSection([
-              // Delete account option
-              _buildCupertinoListTile(
-                icon: CupertinoIcons.delete,
-                iconColor: CupertinoColors.systemRed,
-                title: 'Delete Account',
-                titleColor: CupertinoColors.systemRed,
-                onTap: _isDeleting ? null : _confirmDeleteAccount,
-                trailing: _isDeleting 
-                  ? const CupertinoActivityIndicator() 
-                  : const Icon(CupertinoIcons.chevron_right, size: 18),
-              ),
-            ]),
-            
-            SizedBox(height: screenHeight * 0.06),
-            
-            // App version at bottom
-            Center(
-              child: Text(
-                'Version $_appVersion ($_buildNumber)',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.035,
-                  color: CupertinoColors.systemGrey.resolveFrom(context),
                 ),
-              ),
-            ),
-            
-            SizedBox(height: screenHeight * 0.02),
-          ],
+                
+                SizedBox(height: screenHeight * 0.02),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -620,7 +611,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isIOS = Platform.isIOS;
     
+    print('🖼️ [SETTINGS] Building profile image for user: ${user.uid}');
+    print('🖼️ [SETTINGS] User photoURL from cached data: ${user.photoURL}');
+    
     if (user.photoURL == null) {
+      print('🖼️ [SETTINGS] No photoURL found, showing default avatar');
       return CircleAvatar(
         radius: screenWidth * 0.12,
         backgroundColor: AppColors.accentBlue,
@@ -632,44 +627,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
     
+    // Check if this is a cached local file path
+    final isLocalFile = user.photoURL!.startsWith('file://') || user.photoURL!.startsWith('/');
+    print('🖼️ [SETTINGS] Is local file: $isLocalFile');
+    
+    if (isLocalFile) {
+      // Use the cached local file
+      final localPath = user.photoURL!.startsWith('file://') 
+          ? user.photoURL!.replaceFirst('file://', '') 
+          : user.photoURL!;
+      
+      print('🖼️ [SETTINGS] Using cached local file: $localPath');
+      
+      return CircleAvatar(
+        radius: screenWidth * 0.12,
+        backgroundColor: Colors.grey[300],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(screenWidth * 0.12),
+          child: Image.file(
+            File(localPath),
+            width: screenWidth * 0.24,
+            height: screenWidth * 0.24,
+            fit: BoxFit.cover,
+            cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
+            cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
+            errorBuilder: (context, error, stackTrace) {
+              print('🖼️ [SETTINGS] Error loading cached image, falling back to network: $error');
+              // Fall back to network image if cached file fails
+              return _buildNetworkImage(context, user.photoURL!, screenWidth, isIOS);
+            },
+          ),
+        ),
+      );
+    }
+    
+    // Use network image for non-cached photos
+    print('🖼️ [SETTINGS] Using network image for URL: ${user.photoURL}');
     return CircleAvatar(
       radius: screenWidth * 0.12,
       backgroundColor: Colors.grey[300],
       child: ClipRRect(
         borderRadius: BorderRadius.circular(screenWidth * 0.12),
-        child: Image.network(
-          user.photoURL!,
-          width: screenWidth * 0.24,
-          height: screenWidth * 0.24,
-          fit: BoxFit.cover,
-          // Enable caching for better performance
-          cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
-          cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(
-              isIOS ? CupertinoIcons.person : Icons.person, 
-              size: screenWidth * 0.12, 
-              color: Colors.white,
-            );
-          },
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) {
-              return child;
-            }
-            return Center(
-              child: Platform.isIOS
-                  ? const CupertinoActivityIndicator()
-                  : CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                      strokeWidth: 2,
-                    ),
-            );
-          },
-        ),
+        child: _buildNetworkImage(context, user.photoURL!, screenWidth, isIOS),
       ),
+    );
+  }
+  // Helper method to build network image
+  Widget _buildNetworkImage(BuildContext context, String imageUrl, double screenWidth, bool isIOS) {
+    return Image.network(
+      imageUrl,
+      width: screenWidth * 0.24,
+      height: screenWidth * 0.24,
+      fit: BoxFit.cover,
+      cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
+      cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
+      errorBuilder: (context, error, stackTrace) {
+        print('🖼️ [SETTINGS] Network image failed to load: $error');
+        return Icon(
+          isIOS ? CupertinoIcons.person : Icons.person, 
+          size: screenWidth * 0.12, 
+          color: Colors.white,
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+        return Center(
+          child: isIOS
+              ? const CupertinoActivityIndicator()
+              : CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                  strokeWidth: 2,
+                ),
+        );
+      },
     );
   }
 }

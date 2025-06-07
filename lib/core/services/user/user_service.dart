@@ -224,4 +224,44 @@ class UserService implements UserServiceInterface {
       );
     }
   }
+  
+  @override
+  Stream<UserModel?> getUserDataStream(String uid) {
+    try {
+      _logger.d(_tag, 'Creating user data stream for uid: $uid');
+      
+      return _databaseService.documentStream(
+        collection: _userCollection,
+        documentId: uid,
+      ).map((snapshot) {
+        if (!snapshot.exists || snapshot.data() == null) {
+          _logger.d(_tag, 'User document does not exist in stream for uid: $uid');
+          return null;
+        }
+        
+        try {
+          final userData = snapshot.data()!;
+          _logger.d(_tag, 'User data received in stream for uid: $uid');
+          return UserModel.fromMap(userData);
+        } catch (e) {
+          _logger.e(_tag, 'Failed to parse user data in stream: ${e.toString()}');
+          return null;
+        }
+      }).handleError((error) {
+        _logger.e(_tag, 'Error in user data stream: ${error.toString()}');
+        throw AuthException(
+          AuthErrorCodes.databaseError,
+          'Failed to get user data stream',
+          error
+        );
+      });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to create user data stream: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to create user data stream',
+        e
+      );
+    }
+  }
 }

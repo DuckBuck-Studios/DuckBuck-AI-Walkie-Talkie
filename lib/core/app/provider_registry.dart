@@ -6,6 +6,7 @@ import '../providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart';
 import '../../features/friends/providers/friends_provider.dart';
 import '../../features/call/providers/call_provider.dart';
+import '../../features/settings/providers/settings_provider.dart';
 
 /// Manages the app's providers in a centralized location
 ///
@@ -43,6 +44,11 @@ class ProviderRegistry {
       // Call provider for handling call UI state
       ChangeNotifierProvider<CallProvider>(
         create: (_) => CallProvider(),
+      ),
+      
+      // Settings provider for real-time user updates in settings screen
+      ChangeNotifierProvider<SettingsProvider>(
+        create: (_) => SettingsProvider(),
       ),
       
       // Add more app-wide providers here as needed

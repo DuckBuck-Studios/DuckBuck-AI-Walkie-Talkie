@@ -23,4 +23,7 @@ abstract class UserServiceInterface {
   
   /// Mark user's onboarding as complete
   Future<void> markUserOnboardingComplete(String uid);
+  
+  /// Get a stream of user document changes
+  Stream<UserModel?> getUserDataStream(String uid);
 }

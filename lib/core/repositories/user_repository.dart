@@ -1,5 +1,5 @@
-import 'package:duckbuck/core/services/preferences_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import '../services/auth/auth_service_interface.dart';
 import '../models/user_model.dart';
 import '../services/firebase/firebase_analytics_service.dart';
@@ -9,6 +9,7 @@ import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
 import '../services/notifications/email_notification_service.dart';
 import '../services/user/user_service_interface.dart';
+import '../services/database/local_database_service.dart';
 
 /// Repository to handle user data operations
 class UserRepository {
@@ -18,6 +19,9 @@ class UserRepository {
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final EmailNotificationService _emailService;
+  
+  // Stream subscriptions for cleanup
+  StreamSubscription<UserModel?>? _userDocumentSubscription;
   
   static const String _tag = 'USER_REPO'; // Tag for logs
 
@@ -34,56 +38,52 @@ class UserRepository {
        _emailService = emailService ?? serviceLocator<EmailNotificationService>();
 
   /// Get the current authenticated user
+  /// First tries to get from local database, then falls back to Firebase
   UserModel? get currentUser {
     final firebaseUser = authService.currentUser;
     if (firebaseUser == null) return null;
     return UserModel.fromFirebaseUser(firebaseUser);
   }
   
-  /// Get the current user with enhanced caching for better performance
-  Future<UserModel?> getCurrentUserWithCache() async {
-    final firebaseUser = authService.currentUser;
-    if (firebaseUser == null) return null;
-    
-    // Track cache hit/miss for analytics
-    bool cacheHit = false;
-    
-    // Check if we have valid cached user data
-    final prefService = PreferencesService.instance;
-    if (prefService.isCachedUserDataValid()) {
-      final cachedData = prefService.getCachedUserData();
-      if (cachedData != null && cachedData['uid'] == firebaseUser.uid) {
-        // Check if cache is too old (more than 1 hour)
-        final lastUpdated = cachedData['_last_updated'] as int?;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (lastUpdated != null && now - lastUpdated < 3600000) { // 1 hour in ms
-          _logger.d(_tag, 'Using cached user data from preferences');
-          cacheHit = true;
-          return UserModel.fromMap(cachedData);
-        }
-      }
-    }
-    
-    // If no valid cached data, create from Firebase user
-    final user = UserModel.fromFirebaseUser(firebaseUser);
-    
-    // Cache the user data with timestamp
+  /// Get the current user with caching (async version)
+  /// This method tries local DB first, then refreshes from Firebase on app open
+  Future<UserModel?> getCurrentUser() async {
     try {
-      final userMap = user.toMap();
-      userMap['_last_updated'] = DateTime.now().millisecondsSinceEpoch;
-      await prefService.cacheUserData(userMap);
-      _logger.d(_tag, 'User data refreshed and cached');
+      final localDb = LocalDatabaseService.instance;
       
-      // Log cache performance for analytics
-      _analytics.logEvent(
-        name: 'user_cache_performance',
-        parameters: {'cache_hit': cacheHit},
-      );
+      _logger.i(_tag, 'Getting current user with cache priority');
+      
+      // First try to get current user from local database
+      final cachedUser = await localDb.getCurrentUser();
+      if (cachedUser != null) {
+        _logger.i(_tag, 'Retrieved current user from local database cache');
+        return cachedUser;
+      }
+      
+      // Fallback to Firebase if no local data
+      final firebaseUser = authService.currentUser;
+      if (firebaseUser == null) {
+        _logger.d(_tag, 'No user found in local DB or Firebase');
+        return null;
+      }
+      
+      // Create user from Firebase and cache it
+      final user = UserModel.fromFirebaseUser(firebaseUser);
+      _logger.i(_tag, 'Created user from Firebase, caching to local database');
+      
+      // Save to local database and return cached version
+      await localDb.saveUser(user);
+      await localDb.setUserLoggedIn(user.uid, true);
+      final updatedUser = await localDb.getCurrentUser();
+      _logger.i(_tag, 'User data refreshed from Firebase and cached in local database');
+      
+      return updatedUser ?? user;
     } catch (e) {
-      _logger.w(_tag, 'Failed to cache user data: ${e.toString()}');
+      _logger.w(_tag, 'Failed to get current user: ${e.toString()}');
+      // Ultimate fallback to Firebase sync method
+      final firebaseUser = authService.currentUser;
+      return firebaseUser != null ? UserModel.fromFirebaseUser(firebaseUser) : null;
     }
-    
-    return user;
   }
 
   /// Stream of auth state changes converted to UserModel
@@ -125,6 +125,12 @@ class UserRepository {
         _logger.i(_tag, 'Creating new user document for Google user as reported by Firebase');
         await _createUserData(user);
         
+        // Save user to local database
+        final localDb = LocalDatabaseService.instance;
+        await localDb.saveUser(user);
+        await localDb.setUserLoggedIn(user.uid, true);
+        await localDb.startUserSession(user.uid, 'google');
+        
         // Log successful sign up
         await _analytics.logSignUp(signUpMethod: 'google');
         await _analytics.logAuthSuccess(
@@ -143,6 +149,12 @@ class UserRepository {
       
       // Otherwise, check if user exists in Firestore and create if needed
       final isNewToFirestore = await _createOrUpdateUserData(user);
+      
+      // Save user to local database for all sign-ins
+      final localDb = LocalDatabaseService.instance;
+      await localDb.saveUser(user);
+      await localDb.setUserLoggedIn(user.uid, true);
+      await localDb.startUserSession(user.uid, 'google');
       
       // Log successful login
       await _analytics.logLogin(loginMethod: 'google');
@@ -221,6 +233,12 @@ class UserRepository {
         _logger.i(_tag, 'Creating new user document for Apple user as reported by Firebase');
         await _createUserData(user);
         
+        // Save user to local database
+        final localDb = LocalDatabaseService.instance;
+        await localDb.saveUser(user);
+        await localDb.setUserLoggedIn(user.uid, true);
+        await localDb.startUserSession(user.uid, 'apple');
+        
         // Log successful sign up with Apple
         await _analytics.logSignUp(signUpMethod: 'apple');
         await _analytics.logAuthSuccess(
@@ -238,6 +256,12 @@ class UserRepository {
       
       // Otherwise, check if user exists in Firestore and create if needed
       final isNewToFirestore = await _createOrUpdateUserData(user);
+      
+      // Save user to local database for all sign-ins
+      final localDb = LocalDatabaseService.instance;
+      await localDb.saveUser(user);
+      await localDb.setUserLoggedIn(user.uid, true);
+      await localDb.startUserSession(user.uid, 'apple');
       
       // Log successful login with Apple
       await _analytics.logLogin(loginMethod: 'apple');
@@ -458,7 +482,7 @@ class UserRepository {
 
   /// Sign in with phone auth credential
   Future<(UserModel, bool)> signInWithPhoneAuthCredential(
-    PhoneAuthCredential credential,
+    dynamic credential,
   ) async {
     try {
       // Additional logging to debug verification issues
@@ -502,6 +526,12 @@ class UserRepository {
 
       // Check if user exists in Firestore and create if needed
       final isNewUser = await _createOrUpdateUserData(user);
+      
+      // Save user to local database
+      final localDb = LocalDatabaseService.instance;
+      await localDb.saveUser(user);
+      await localDb.setUserLoggedIn(user.uid, true);
+      await localDb.startUserSession(user.uid, 'phone');
       
       // Log authentication success
       if (isNewUser) {
@@ -644,41 +674,31 @@ class UserRepository {
 
   // Password reset functionality has been removed
 
-  /// Get user data from Firestore
+  /// Get user data with caching
+  /// First tries local database, then falls back to Firebase/Firestore
   Future<UserModel?> getUserData(String uid) async {
     try {
-      return await _userService.getUserData(uid);
-    } catch (e) {
-      _logger.e(_tag, 'Failed to get user data: ${e.toString()}');
-      rethrow;
-    }
-  }
-  
-  /// Get user data with selective field loading for better performance
-  /// This fetches only the specified fields from Firestore
-  Future<UserModel?> getUserWithSelectiveData(String uid, List<String> fields) async {
-    try {
-      // Check if we have valid cached data first
-      final prefService = PreferencesService.instance;
-      if (prefService.isCachedUserDataValid()) {
-        final cachedData = prefService.getCachedUserData();
-        if (cachedData != null && cachedData['uid'] == uid) {
-          _logger.d(_tag, 'Using cached user data');
-          return UserModel.fromMap(cachedData);
-        }
+      final localDb = LocalDatabaseService.instance;
+      
+      // First try to get user from local database
+      final cachedUser = await localDb.getUser(uid);
+      if (cachedUser != null) {
+        _logger.d(_tag, 'Retrieved user data from local database cache: $uid');
+        return cachedUser;
       }
       
-      // If no valid cached data, fetch from service
-      final user = await _userService.getUserWithSelectiveData(uid, fields);
+      // Fallback to Firebase/Firestore
+      final user = await _userService.getUserData(uid);
       
       if (user != null) {
-        // Cache this data for future use
-        prefService.cacheUserData(user.toMap());
+        // Cache the fresh data in local database
+        await localDb.saveUser(user);
+        _logger.d(_tag, 'User data fetched from Firebase and cached: $uid');
       }
       
       return user;
     } catch (e) {
-      _logger.e(_tag, 'Failed to get selective user data', e);
+      _logger.e(_tag, 'Failed to get user data: ${e.toString()}');
       rethrow;
     }
   }
@@ -716,8 +736,7 @@ class UserRepository {
       rethrow;
     }
   }
-  
-  // Removed _updateUserDataWithoutOverridingFCM method as its logic is now in _updateUserData
+   
 
   /// Create or update user data in Firestore
   /// Returns true if this is a new user (first time in Firestore)
@@ -807,9 +826,12 @@ class UserRepository {
       // Call auth service signOut (this handles FCM token removal and Firebase signOut)
       await authService.signOut();
 
-      // Clear login state and reset all auth-related preferences
-      await PreferencesService.instance.setLoggedIn(false);
-      await PreferencesService.instance.clearAll();
+      // End user session and clear login state from local database
+      final localDb = LocalDatabaseService.instance;
+      if (userId != null) {
+        await localDb.endUserSession(userId);
+      }
+      await localDb.clearAllUserData();
       
       _logger.i(_tag, 'User signed out successfully');
     } catch (e) {
@@ -840,6 +862,10 @@ class UserRepository {
       
       // Call auth service deleteUserAccount (this handles API call and Firebase user deletion)
       await authService.deleteUserAccount();
+      
+      // Clean up local database data for this user
+      final localDb = LocalDatabaseService.instance;
+      await localDb.deleteUser(uid);
       
       _logger.i(_tag, 'User account deletion completed successfully');
     } catch (e) {
@@ -972,5 +998,178 @@ class UserRepository {
     // Record this attempt
     _otpVerificationAttempts[normalizedNumber]!.add(now);
     return (false, 0); // Not rate limited
+  }
+
+  /// Validate a user credential for security-sensitive operations
+  /// This method delegates to the auth service to perform credential validation
+  Future<bool> validateCredential(dynamic credential) async {
+    try {
+      _logger.d(_tag, 'Validating user credential for security operation');
+      
+      // Delegate credential validation to the auth service
+      final isValid = await authService.validateCredential(credential);
+      
+      _logger.i(_tag, 'Credential validation result: ${isValid ? 'valid' : 'invalid'}');
+      
+      // Log validation attempt in analytics
+      await _analytics.logEvent(
+        name: 'credential_validation_attempt',
+        parameters: {
+          'validation_result': isValid ? 'success' : 'failure',
+        },
+      );
+      
+      return isValid;
+    } catch (e) {
+      _logger.e(_tag, 'Credential validation failed: ${e.toString()}');
+      
+      // Log validation failure in analytics
+      await _analytics.logEvent(
+        name: 'credential_validation_error',
+        parameters: {
+          'error_type': e.runtimeType.toString(),
+          'error_message': e.toString(),
+        },
+      );
+      
+      // Report to crashlytics for monitoring
+      await _crashlytics.recordError(
+        e,
+        StackTrace.current,
+        reason: 'Credential validation failed',
+      );
+      
+      return false;
+    }
+  }
+
+
+
+  /// Start monitoring Firebase user document changes for the current user
+  /// This creates a real-time stream that updates local database when Firebase changes occur
+  Future<void> startUserDocumentMonitoring() async {
+    try {
+      final user = currentUser;
+      if (user == null) {
+        _logger.w(_tag, 'Cannot start user document monitoring: No current user');
+        return;
+      }
+
+      // Cancel any existing subscription
+      await stopUserDocumentMonitoring();
+
+      _logger.i(_tag, 'Starting Firebase user document monitoring for user: ${user.uid}');
+
+      // Set up the stream subscription using UserService interface
+      _userDocumentSubscription = _userService.getUserDataStream(user.uid).listen(
+        (updatedUser) async {
+          if (updatedUser != null) {
+            _logger.d(_tag, 'Firebase user document changed, updating local database');
+            
+            // Update local database with the fresh data from Firebase
+            final localDb = LocalDatabaseService.instance;
+            await localDb.saveUser(updatedUser);
+            
+            _logger.i(_tag, 'Local database updated with Firebase changes for user: ${user.uid}');
+          } else {
+            _logger.w(_tag, 'Received null user data from Firebase stream - user may have been deleted');
+          }
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in Firebase user document stream: ${error.toString()}');
+          
+          // Log the error for analytics
+          _analytics.logEvent(
+            name: 'user_stream_error',
+            parameters: {
+              'user_id': user.uid,
+              'error': error.toString(),
+            },
+          );
+        },
+      );
+
+      _logger.i(_tag, 'Firebase user document monitoring started successfully');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to start user document monitoring: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// Stop monitoring Firebase user document changes
+  Future<void> stopUserDocumentMonitoring() async {
+    try {
+      if (_userDocumentSubscription != null) {
+        _logger.i(_tag, 'Stopping Firebase user document monitoring');
+        await _userDocumentSubscription!.cancel();
+        _userDocumentSubscription = null;
+        _logger.i(_tag, 'Firebase user document monitoring stopped');
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error stopping user document monitoring: ${e.toString()}');
+    }
+  }
+
+  /// Get a reactive stream of user changes that combines Firebase and local database
+  /// This stream automatically updates local database when Firebase changes occur
+  Stream<UserModel?> getUserReactiveStream() {
+    try {
+      final user = currentUser;
+      if (user == null) {
+        _logger.w(_tag, 'Cannot create reactive stream: No current user');
+        return Stream.value(null);
+      }
+
+      _logger.d(_tag, 'Creating reactive user stream for user: ${user.uid}');
+
+      // Create a stream that monitors Firebase changes and updates local DB
+      return _userService.getUserDataStream(user.uid).asyncMap((firebaseUser) async {
+        if (firebaseUser != null) {
+          // Update local database with fresh Firebase data
+          final localDb = LocalDatabaseService.instance;
+          await localDb.saveUser(firebaseUser);
+          
+          _logger.d(_tag, 'Reactive stream: Updated local database with Firebase data');
+          
+          // Retrieve the locally cached user data (with file:// URLs) instead of returning Firebase data
+          final cachedUser = await localDb.getCurrentUser();
+          if (cachedUser != null) {
+            _logger.d(_tag, 'Reactive stream: Returning cached user with local photo paths');
+            return cachedUser;
+          } else {
+            _logger.w(_tag, 'Reactive stream: Failed to get cached user, falling back to Firebase data');
+            return firebaseUser;
+          }
+        } else {
+          _logger.w(_tag, 'Reactive stream: Received null user from Firebase');
+          return null;
+        }
+      }).handleError((error) {
+        _logger.e(_tag, 'Error in reactive user stream: ${error.toString()}');
+        
+        // Log the error for analytics
+        _analytics.logEvent(
+          name: 'reactive_stream_error',
+          parameters: {
+            'user_id': user.uid,
+            'error': error.toString(),
+          },
+        );
+      });
+    } catch (e) {
+      _logger.e(_tag, 'Failed to create reactive user stream: ${e.toString()}');
+      return Stream.error(e);
+    }
+  }
+
+  /// Dispose of resources and clean up subscriptions
+  Future<void> dispose() async {
+    try {
+      _logger.d(_tag, 'Disposing UserRepository resources');
+      await stopUserDocumentMonitoring();
+      _logger.d(_tag, 'UserRepository disposed successfully');
+    } catch (e) {
+      _logger.e(_tag, 'Error disposing UserRepository: ${e.toString()}');
+    }
   }
 }
