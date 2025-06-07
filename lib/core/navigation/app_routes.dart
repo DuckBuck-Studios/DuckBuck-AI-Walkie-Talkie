@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:duckbuck/features/auth/screens/welcome_screen.dart';
 import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
 import 'package:duckbuck/features/auth/screens/profile_completion_screen.dart';
-import 'package:duckbuck/features/main_navigation.dart'; // Import MainNavigation
-import 'package:duckbuck/core/services/preferences_service.dart';
+import 'package:duckbuck/features/main_navigation.dart';  
+import 'package:duckbuck/core/services/database/local_database_service.dart';
 import 'package:duckbuck/core/legal/legal_document_screen.dart';
 import 'package:duckbuck/core/legal/legal_service.dart';
 import 'package:duckbuck/features/settings/screens/privacy_settings_screen.dart';
@@ -26,7 +26,7 @@ class AppRoutes {
     switch (settings.name) {
       case welcome:
         // Mark that user has seen welcome screen
-        PreferencesService.instance.setWelcomeSeen(true);
+        LocalDatabaseService.instance.setBoolSetting('welcome_seen', true);
         return MaterialPageRoute(builder: (_) => const WelcomeScreen());
 
       case onboarding:

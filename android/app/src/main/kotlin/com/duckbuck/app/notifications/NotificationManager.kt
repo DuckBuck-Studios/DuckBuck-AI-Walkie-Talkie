@@ -1,6 +1,6 @@
 package com.duckbuck.app.notifications
 import com.duckbuck.app.core.AppLogger
-
+import com.duckbuck.app.R
 import android.app.NotificationChannel
 import android.app.NotificationManager as AndroidNotificationManager
 import android.app.PendingIntent
@@ -64,11 +64,11 @@ class CallNotificationManager(private val context: Context) {
      */
     fun showSpeakingNotification(speakerName: String) {
         try {
-            AppLogger.i(TAG, "📢 $speakerName is speaking")
+            AppLogger.i(TAG, "$speakerName is speaking")
             
             val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
-                .setContentTitle("📢 $speakerName is speaking")
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle("$speakerName is speaking")
+                .setSmallIcon(R.drawable.ic_speaker)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setAutoCancel(false)
@@ -93,7 +93,7 @@ class CallNotificationManager(private val context: Context) {
             
             val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
                 .setContentTitle("📻 $userName over")
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(R.drawable.ic_speaker)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setAutoCancel(true)

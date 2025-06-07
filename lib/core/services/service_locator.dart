@@ -1,5 +1,4 @@
 import 'package:get_it/get_it.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth/auth_service_interface.dart';
 import 'auth/auth_service.dart';
@@ -61,15 +60,9 @@ Future<void> setupServiceLocator() async {
     () => FirebaseAppCheckService(),
   );
   
-  // Register Crashlytics consent manager as async factory
-  serviceLocator.registerSingletonAsync<CrashlyticsConsentManager>(
-    () async {
-      final prefs = await SharedPreferences.getInstance();
-      return CrashlyticsConsentManager(
-        prefs: prefs,
-        crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
-      );
-    },
+  // Register Crashlytics consent manager
+  serviceLocator.registerLazySingleton<CrashlyticsConsentManager>(
+    () => CrashlyticsConsentManager.create(),
   );
 
   // Register notifications service

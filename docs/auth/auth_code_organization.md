@@ -28,6 +28,8 @@ lib/
 │   │   │   ├── auth_service_interface.dart # Auth service contract
 │   │   │   ├── firebase_auth_service.dart  # Firebase auth implementation
 │   │   │   └── session_manager.dart        # Session management
+│   │   ├── database/
+│   │   │   └── local_database_service.dart # Local database & auth state
 │   │   ├── firebase/
 │   │   │   ├── firebase_analytics_service.dart  # Analytics tracking
 │   │   │   ├── firebase_crashlytics_service.dart # Error reporting
@@ -36,7 +38,7 @@ lib/
 │   │   │   └── logger_service.dart         # Logging system
 │   │   ├── notifications/
 │   │   │   └── notifications_service.dart   # Push notifications
-│   │   ├── preferences_service.dart        # Local storage
+│   │   ├── preferences_service.dart        # Local storage (non-auth)
 │   │   ├── service_locator.dart            # Dependency injection
 │   │   └── user/
 │   │       ├── firebase_user_service.dart  # User data operations
@@ -53,7 +55,7 @@ lib/
 │   └── home/
 │       └── screens/
 │           └── home_screen.dart            # Post-auth main screen
-└── main.dart                               # App initialization
+└── main.dart                               # App initialization (simplified auth routing)
 ```
 
 ## Key Classes and Responsibilities
@@ -198,16 +200,33 @@ lib/
   - `updateUserData()`: Update user in Firestore
   - `markUserOnboardingComplete()`: Complete onboarding
 
-#### `PreferencesService` (preferences_service.dart)
-- **Purpose**: Handle local data storage
+#### `LocalDatabaseService` (local_database_service.dart)
+- **Purpose**: Handle local database operations and authentication state persistence
 - **Responsibilities**:
-  - Store authentication state
-  - Cache user data for performance
-  - Manage authentication timestamps
+  - Store authentication state in local database with `is_logged_in` flag
+  - Cache user data for performance in local database
+  - Provide centralized auth state checking via `isAnyUserLoggedIn()`
+  - Manage authentication state consistency
+  - **REPLACES SharedPreferences for authentication state management**
 - **Key Methods**:
-  - `setLoggedIn()`: Update login state
-  - `cacheUserData()`: Store user data locally
-  - `clearAll()`: Remove authentication data
+  - `isAnyUserLoggedIn()`: Check if any user is logged in via database query
+  - `setUserLoggedIn(userId, isLoggedIn)`: Update login state for specific user
+  - `cacheUserData(userModel)`: Store user data in local database
+  - `clearSensitiveUserData(userId)`: Remove sensitive cached data for user
+  - `getCachedUserData(userId)`: Retrieve cached user data from database
+
+#### `PreferencesService` (preferences_service.dart) **[DEPRECATED for Auth State]**
+- **Purpose**: Handle non-authentication local data storage
+- **Responsibilities**:
+  - **NO LONGER USED** for authentication state management
+  - Store user preferences and app settings (non-auth related)
+  - Manage app configuration data
+- **Migration Note**: Authentication state management has been moved to LocalDatabaseService
+- **Key Methods**:
+  - `setAppPreference()`: Store app-level preferences
+  - `getAppPreference()`: Retrieve app-level preferences
+  - ~~`setLoggedIn()`~~: **REMOVED** - Use LocalDatabaseService instead
+  - ~~`cacheUserData()`~~: **REMOVED** - Use LocalDatabaseService instead
 
 #### `AuthSecurityManager` (auth_security_manager.dart)
 - **Purpose**: Manage authentication security
@@ -240,14 +259,18 @@ lib/
   - Coordinate between services
   - Handle analytics for authentication
   - Manage user data consistency
+  - **Coordinate between Firebase Auth and LocalDatabaseService for state management**
+  - **Eliminate dual-state management complexity**
 - **Key Methods**:
-  - `signInWithGoogle()`: Complete Google auth flow
-  - `signInWithApple()`: Complete Apple auth flow
+  - `signInWithGoogle()`: Complete Google auth flow with database persistence
+  - `signInWithApple()`: Complete Apple auth flow with database persistence
   - `verifyPhoneNumber()`: Start phone auth flow
-  - `verifyOtpAndSignIn()`: Complete phone auth flow
-  - `signOut()`: Complete sign-out process
+  - `verifyOtpAndSignIn()`: Complete phone auth flow with database persistence
+  - `signOut()`: Complete sign-out process clearing database state
   - `updateProfile()`: Update user profile
-  - `getCurrentUserWithCache()`: Get cached user data
+  - `getCurrentUserWithCache()`: Get cached user data from LocalDatabaseService
+  - ~~`getCurrentUserFromLocalDB()`~~: **REMOVED** - Use LocalDatabaseService directly
+  - ~~`isUserLoggedInLocally()`~~: **REMOVED** - Use LocalDatabaseService.isAnyUserLoggedIn()
 
 ### Provider Layer
 
@@ -301,22 +324,29 @@ lib/
 graph TD
     SL[ServiceLocator] --> FA[FirebaseAuthService]
     SL --> FU[FirebaseUserService]
+    SL --> LDB[LocalDatabaseService]
     SL --> UR[UserRepository]
     SL --> ASM[AuthSecurityManager]
     UR --> FA
     UR --> FU
+    UR --> LDB
     ASM --> FA
     ASM --> UR
     ASP[AuthStateProvider] --> UR
     UI[UI Components] --> ASP
+    Main[main.dart] --> FA
+    Main --> LDB
+    AppBootstrapper[AppBootstrapper] --> LDB
 ```
 
 The application uses a service locator pattern to inject dependencies:
 
-1. `ServiceLocator` holds singleton instances of all services
+1. `ServiceLocator` holds singleton instances of all services including LocalDatabaseService
 2. Components request dependencies through `serviceLocator<T>()`
-3. Alternate implementations can be provided for testing
-4. Circular dependencies are avoided through careful injection
+3. LocalDatabaseService replaces SharedPreferences for auth state management
+4. main.dart and AppBootstrapper directly use Firebase Auth and LocalDatabaseService for route determination
+5. Alternate implementations can be provided for testing
+6. Circular dependencies are avoided through careful injection
 
 ### Authentication Data Flow
 
@@ -326,9 +356,13 @@ graph LR
     AuthService --> UserRepository
     UserRepository --> UserService
     UserService --> Firestore
-    UserRepository --> PreferencesService
+    UserRepository --> LocalDatabaseService
+    LocalDatabaseService --> LocalDB[(Local Database)]
     UserRepository --> AuthStateProvider
     AuthStateProvider --> UI
+    Main[main.dart] --> Firebase
+    Main --> LocalDatabaseService
+    AppBootstrapper --> LocalDatabaseService
 ```
 
 Authentication data flows from external providers through the system:
@@ -336,9 +370,12 @@ Authentication data flows from external providers through the system:
 1. External providers (Firebase, Google, Apple) supply authentication
 2. AuthService converts provider-specific data to standardized format
 3. UserRepository coordinates data handling between services
-4. UserService persists data to the database
-5. PreferencesService caches data locally
-6. AuthStateProvider broadcasts state changes to UI
+4. UserService persists data to Firestore
+5. LocalDatabaseService persists authentication state to local database
+6. **main.dart uses Firebase Auth as primary source for route determination**
+7. **AppBootstrapper syncs Firebase Auth state with LocalDatabaseService**
+8. AuthStateProvider broadcasts state changes to UI
+9. **SharedPreferences no longer used for authentication state**
 
 ### Error Handling Flow
 
@@ -362,6 +399,21 @@ Errors are standardized and propagated through the system:
 
 ## Authentication State Management
 
+### Authentication State Architecture Changes
+
+**IMPORTANT**: The authentication state management has been significantly refactored to eliminate dual-state management complexity:
+
+#### Previous Architecture Issues:
+- Dual state management between SharedPreferences and Firebase Auth
+- Potential for auth state mismatches causing login issues
+- Complex synchronization logic across multiple state sources
+
+#### New Architecture Benefits:
+- **Single Source of Truth**: Firebase Auth is the authoritative source for authentication status
+- **Consistent Persistence**: LocalDatabaseService handles authentication state persistence
+- **Simplified Route Determination**: main.dart uses only Firebase Auth for initial route decisions
+- **Reliable State Sync**: AppBootstrapper ensures consistency between Firebase Auth and local database
+
 ### State Variables
 
 The `AuthStateProvider` maintains these key state variables:
@@ -376,9 +428,10 @@ When authentication state changes:
 
 1. Firebase Auth broadcasts changes through `authStateChanges` stream
 2. UserRepository transforms Firebase User to UserModel
-3. AuthStateProvider listens to this stream and updates state
-4. UI components listen to AuthStateProvider through Provider pattern
-5. UI updates to reflect authentication state
+3. UserRepository updates LocalDatabaseService with login state
+4. AuthStateProvider listens to this stream and updates state
+5. UI components listen to AuthStateProvider through Provider pattern
+6. UI updates to reflect authentication state
 
 ### Session Management
 
@@ -386,27 +439,52 @@ When authentication state changes:
 2. Activity updates are sent to SessionManager on user interaction
 3. SessionManager maintains a timer for inactivity
 4. On timeout, SessionManager triggers onSessionExpired callback
-5. App signs out user and navigates to welcome screen
+5. App signs out user, clears LocalDatabaseService state, and navigates to welcome screen
 
 ## Authentication Persistence
 
-### Local Storage Strategy
+### Local Storage Strategy **[UPDATED ARCHITECTURE]**
+
+#### **New Authentication State Management (Current Implementation)**:
 
 1. **During Authentication**:
-   - Authentication state stored in SharedPreferences
-   - User data cached in EncryptedSharedPreferences
+   - Authentication state stored in LocalDatabaseService with `is_logged_in` flag
+   - User data cached in LocalDatabaseService local database
+   - Firebase Auth maintains authentication tokens and session
    - Timestamp recorded for cache validation
 
-2. **On Application Launch**:
-   - Check Firebase.currentUser for auth status
-   - Validate against SharedPreferences isLoggedIn flag
-   - Load cached user data if available and recent
-   - Sync auth state if discrepancies found
+2. **On Application Launch** (main.dart):
+   - **Primary Source**: Check Firebase.currentUser for authoritative auth status
+   - **Route Determination**: Use Firebase Auth state directly for initial navigation
+   - **Background Sync**: AppBootstrapper syncs Firebase Auth with LocalDatabaseService
+   - **No SharedPreferences**: Eliminated SharedPreferences dependency for auth state
 
-3. **Cache Invalidation**:
-   - Time-based expiration (1 hour)
-   - Forced invalidation on sign-out
+3. **Authentication State Synchronization** (AppBootstrapper):
+   - Check LocalDatabaseService.isAnyUserLoggedIn() for local state
+   - Compare with Firebase Auth current user state
+   - Sync states if discrepancies found (prioritize Firebase Auth)
+   - Handle edge cases where local and remote states differ
+
+4. **Cache Management**:
+   - User data cached in LocalDatabaseService for performance
+   - Time-based expiration and validation
+   - Forced invalidation on sign-out via LocalDatabaseService
    - Automatic refresh after user updates
+
+#### **Legacy Architecture (Deprecated)**:
+- ~~SharedPreferences for authentication state~~ **REMOVED**
+- ~~Dual state management between SharedPreferences and Firebase~~ **ELIMINATED**
+- ~~Complex auth state validation logic~~ **SIMPLIFIED**
+
+### Migration Benefits
+
+The migration from SharedPreferences to LocalDatabaseService provides:
+
+1. **Consistency**: Single database source for all user-related data
+2. **Reliability**: Eliminates auth state mismatch issues
+3. **Performance**: Better caching and query capabilities
+4. **Maintainability**: Simplified authentication state logic
+5. **Scalability**: Database-based approach scales better than preferences
 
 ## Security Considerations
 
@@ -425,15 +503,45 @@ When authentication state changes:
 2. Different handling for debug vs. release builds
 3. Root and emulator detection for added security
 
-## Migration Path
+## Migration Path and Architecture Evolution
 
-The codebase shows evidence of evolution:
-1. Removal of email/password authentication in favor of social and phone auth
-2. Enhanced security through AuthSecurityManager and SessionManager
-3. Improved caching for better performance
+### Recent Authentication System Evolution
 
-For future authentication methods:
-1. Implement new method in FirebaseAuthService
-2. Add corresponding methods in UserRepository
-3. Expose method through AuthStateProvider
-4. Create UI components for the new auth method
+The codebase has undergone significant authentication architecture improvements:
+
+1. **SharedPreferences → LocalDatabaseService Migration**:
+   - Removed SharedPreferences dependency for authentication state
+   - Migrated to LocalDatabaseService for centralized auth state management
+   - Added `isAnyUserLoggedIn()` method for reliable auth state checking
+
+2. **Route Determination Simplification**:
+   - main.dart now uses Firebase Auth as single source of truth for initial routing
+   - Eliminated complex dual-state validation logic
+   - AppBootstrapper handles background state synchronization
+
+3. **FCM Integration Cleanup**:
+   - FCM message handler now uses only Firebase Auth for authentication checks
+   - Removed SharedPreferences dependency from FCM authentication validation
+
+4. **Code Cleanup and Optimization**:
+   - Removed unused methods from LocalDatabaseService and UserRepository
+   - Cleaned up excessive logging throughout authentication components
+   - Streamlined authentication flows for better performance
+
+### Future Authentication Methods
+
+For implementing new authentication methods:
+
+1. **Service Layer**: Implement new method in FirebaseAuthService
+2. **Repository Layer**: Add corresponding methods in UserRepository with LocalDatabaseService integration
+3. **Provider Layer**: Expose method through AuthStateProvider
+4. **UI Layer**: Create UI components for the new auth method
+5. **State Management**: Ensure proper LocalDatabaseService state updates
+
+### Best Practices Established
+
+1. **Consistent State Management**: Always update LocalDatabaseService when auth state changes
+2. **Firebase Auth Primacy**: Use Firebase Auth as authoritative source for authentication decisions
+3. **Centralized Logging**: Repository-level logging prevents analytics redundancy
+4. **Error Handling**: Standardized error handling across all authentication methods
+5. **Security First**: Multiple security layers protect user authentication with proper session management

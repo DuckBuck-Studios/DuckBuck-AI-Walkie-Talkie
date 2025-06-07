@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'dart:io';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/user_model.dart';
 import '../logger/logger_service.dart';
@@ -14,19 +14,29 @@ class LocalDatabaseService {
   final LoggerService _logger = LoggerService();
   static const String _tag = 'LOCAL_DB';
   
+  // Dio instance for HTTP requests
+  late final Dio _dio;
+  
   // Counter for periodic cleanup
   static int _saveCounter = 0;
 
   // Database configuration
   static const String _databaseName = 'duckbuck_local.db';
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 4; // Incremented for new tables
 
   // Table names
   static const String _usersTable = 'users';
   static const String _userSessionsTable = 'user_sessions';
+  static const String _appSettingsTable = 'app_settings'; // New table for app-wide settings
 
   // Singleton pattern
-  LocalDatabaseService._internal();
+  LocalDatabaseService._internal() {
+    // Initialize Dio with configuration
+    _dio = Dio();
+    _dio.options.connectTimeout = const Duration(seconds: 10);
+    _dio.options.receiveTimeout = const Duration(seconds: 10);
+    _dio.options.headers = {'User-Agent': 'DuckBuck-App/1.0'};
+  }
   
   static LocalDatabaseService get instance {
     _instance ??= LocalDatabaseService._internal();
@@ -94,12 +104,23 @@ class LocalDatabaseService {
         )
       ''');
 
+      // App settings table - for storing application-wide preferences
+      await db.execute('''
+        CREATE TABLE $_appSettingsTable (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      ''');
+
       // Create indexes for better performance
       await db.execute('CREATE INDEX idx_users_uid ON $_usersTable (uid)');
       await db.execute('CREATE INDEX idx_users_email ON $_usersTable (email)');
       await db.execute('CREATE INDEX idx_users_phone ON $_usersTable (phone_number)');
       await db.execute('CREATE INDEX idx_users_logged_in ON $_usersTable (is_logged_in)');
       await db.execute('CREATE INDEX idx_sessions_uid ON $_userSessionsTable (uid)');
+      await db.execute('CREATE INDEX idx_settings_key ON $_appSettingsTable (key)');
       
       _logger.i(_tag, 'Database tables created successfully');
     } catch (e) {
@@ -120,6 +141,24 @@ class LocalDatabaseService {
         _logger.i(_tag, 'Added photo_data column for version 3');
       } catch (e) {
         _logger.w(_tag, 'Failed to add photo_data column, might already exist: ${e.toString()}');
+      }
+    }
+
+    if (oldVersion < 4) {
+      // Add app_settings table for version 4
+      try {
+        await db.execute('''
+          CREATE TABLE $_appSettingsTable (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_settings_key ON $_appSettingsTable (key)');
+        _logger.i(_tag, 'Added app_settings table for version 4');
+      } catch (e) {
+        _logger.w(_tag, 'Failed to add app_settings table, might already exist: ${e.toString()}');
       }
     }
   }
@@ -339,6 +378,7 @@ class LocalDatabaseService {
       // Delete all data from both tables (complete wipe)
       await db.delete(_usersTable);
       await db.delete(_userSessionsTable);
+      await db.delete(_appSettingsTable); // Clear app settings table
 
       _logger.i(_tag, 'Entire local database and cached photos cleared');
     } catch (e) {
@@ -358,6 +398,7 @@ class LocalDatabaseService {
       // Delete entire database content (all users and sessions)
       await db.delete(_usersTable);
       await db.delete(_userSessionsTable);
+      await db.delete(_appSettingsTable); // Clear app settings table
 
       _logger.i(_tag, 'Entire database and cached photos cleared for user deletion: $uid');
     } catch (e) {
@@ -439,11 +480,16 @@ class LocalDatabaseService {
       final sessionCount = Sqflite.firstIntValue(
         await db.rawQuery('SELECT COUNT(*) FROM $_userSessionsTable')
       ) ?? 0;
+      
+      final settingsCount = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM $_appSettingsTable')
+      ) ?? 0;
 
       return {
         'total_users': userCount,
         'logged_in_users': loggedInCount,
         'total_sessions': sessionCount,
+        'app_settings': settingsCount,
         'database_version': _databaseVersion,
       };
     } catch (e) {
@@ -551,14 +597,14 @@ class LocalDatabaseService {
       
       // Download the photo
       _logger.i(_tag, 'Downloading photo for user: $uid');
-      final response = await http.get(
-        Uri.parse(photoURL),
-        headers: {'User-Agent': 'DuckBuck-App/1.0'},
-      ).timeout(const Duration(seconds: 10));
+      final response = await _dio.get(
+        photoURL,
+        options: Options(responseType: ResponseType.bytes),
+      );
       
       if (response.statusCode == 200) {
         // Save photo to local file
-        await localFile.writeAsBytes(response.bodyBytes);
+        await localFile.writeAsBytes(response.data);
         _logger.i(_tag, 'Photo successfully cached for user: $uid');
         return localPath;
       } else {
@@ -651,6 +697,125 @@ class LocalDatabaseService {
       _logger.i(_tag, 'Cleanup completed: deleted $deletedCount orphaned photo files');
     } catch (e) {
       _logger.e(_tag, 'Failed to cleanup orphaned photos: ${e.toString()}');
+    }
+  }
+
+  // --- App Settings Management ---
+
+  /// Set an app-wide setting value
+  Future<void> setSetting(String key, String value) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      
+      await db.insert(
+        _appSettingsTable,
+        {
+          'key': key,
+          'value': value,
+          'created_at': now,
+          'updated_at': now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      
+      _logger.d(_tag, 'Setting saved: $key = $value');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to save setting $key: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// Get an app-wide setting value
+  Future<String?> getSetting(String key) async {
+    try {
+      final db = await database;
+      
+      final results = await db.query(
+        _appSettingsTable,
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: [key],
+        limit: 1,
+      );
+
+      if (results.isEmpty) {
+        _logger.d(_tag, 'Setting not found: $key');
+        return null;
+      }
+
+      final value = results.first['value'] as String;
+      _logger.d(_tag, 'Setting retrieved: $key = $value');
+      return value;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get setting $key: ${e.toString()}');
+      return null;
+    }
+  }
+
+  /// Get a boolean setting value with default
+  Future<bool> getBoolSetting(String key, {bool defaultValue = false}) async {
+    try {
+      final value = await getSetting(key);
+      if (value == null) return defaultValue;
+      return value.toLowerCase() == 'true';
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get boolean setting $key: ${e.toString()}');
+      return defaultValue;
+    }
+  }
+
+  /// Set a boolean setting value
+  Future<void> setBoolSetting(String key, bool value) async {
+    await setSetting(key, value.toString());
+  }
+
+  /// Remove a setting
+  Future<void> removeSetting(String key) async {
+    try {
+      final db = await database;
+      
+      await db.delete(
+        _appSettingsTable,
+        where: 'key = ?',
+        whereArgs: [key],
+      );
+      
+      _logger.d(_tag, 'Setting removed: $key');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to remove setting $key: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// Clear all app settings
+  Future<void> clearAllSettings() async {
+    try {
+      final db = await database;
+      await db.delete(_appSettingsTable);
+      _logger.i(_tag, 'All app settings cleared');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to clear all settings: ${e.toString()}');
+      rethrow;
+    }
+  }
+
+  /// Get all settings as a map
+  Future<Map<String, String>> getAllSettings() async {
+    try {
+      final db = await database;
+      
+      final results = await db.query(_appSettingsTable);
+      
+      final settingsMap = <String, String>{};
+      for (final row in results) {
+        settingsMap[row['key'] as String] = row['value'] as String;
+      }
+      
+      return settingsMap;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to get all settings: ${e.toString()}');
+      return {};
     }
   }
 }

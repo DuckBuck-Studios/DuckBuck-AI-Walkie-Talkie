@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/crashlytics_consent_manager.dart';
-import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/service_locator.dart';
 
 /// Provider to manage crashlytics consent state in the app
@@ -23,15 +21,10 @@ class CrashlyticsConsentProvider with ChangeNotifier {
   Future<void> initialize() async {
     if (!_isInitialized) {
       try {
-        // Wait for the singleton to be ready
-        await serviceLocator.isReady<CrashlyticsConsentManager>();
         _manager = serviceLocator<CrashlyticsConsentManager>();
         
         // Get current consent status
-        final prefs = await SharedPreferences.getInstance();
-        _isEnabled = prefs.getBool(
-          'crashlytics_enabled'
-        ) ?? kReleaseMode;
+        _isEnabled = await _manager!.getUserConsent();
         
         _isInitialized = true;
         notifyListeners();
@@ -49,15 +42,35 @@ class CrashlyticsConsentProvider with ChangeNotifier {
     if (_manager != null) {
       await _manager!.setUserConsent(enabled: enabled);
     } else {
-      // Direct implementation if manager isn't available
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('crashlytics_enabled', enabled);
-      
-      final crashlytics = serviceLocator<FirebaseCrashlyticsService>();
-      await crashlytics.setCrashlyticsCollectionEnabled(enabled);
+      // Fallback to direct manager creation if not available
+      final manager = CrashlyticsConsentManager.create();
+      await manager.setUserConsent(enabled: enabled);
     }
     
     _isEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Check if user has made a consent choice
+  Future<bool> hasUserMadeChoice() async {
+    if (_manager != null) {
+      return await _manager!.hasUserMadeChoice();
+    } else {
+      final manager = CrashlyticsConsentManager.create();
+      return await manager.hasUserMadeChoice();
+    }
+  }
+
+  /// Clear consent data (useful for testing or reset)
+  Future<void> clearConsent() async {
+    if (_manager != null) {
+      await _manager!.clearConsent();
+    } else {
+      final manager = CrashlyticsConsentManager.create();
+      await manager.clearConsent();
+    }
+    
+    _isEnabled = kReleaseMode; // Reset to default
     notifyListeners();
   }
 }

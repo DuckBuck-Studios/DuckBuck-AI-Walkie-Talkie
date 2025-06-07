@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:duckbuck/core/services/preferences_service.dart';
+import 'package:duckbuck/core/services/database/local_database_service.dart';
 import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
@@ -64,7 +64,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Future<void> _markWelcomeScreenAsSeen() async {
     try {
-      await PreferencesService.instance.setWelcomeSeen(true);
+      await LocalDatabaseService.instance.setBoolSetting('welcome_seen', true);
     } catch (e) {
       debugPrint('Failed to save welcome screen state: $e');
     }

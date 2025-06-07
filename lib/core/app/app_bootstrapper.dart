@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../firebase_options.dart';
-import '../services/preferences_service.dart';
 import '../services/service_locator.dart'; 
 import '../services/firebase/firebase_app_check_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
@@ -82,11 +81,12 @@ class AppBootstrapper {
 
   Future<void> _initializePreferences() async {
     try {
-      await PreferencesService.instance.init();
-      print('[Preferences] Preferences service initialized successfully');
+      // LocalDatabaseService is automatically initialized when accessed
+      // No separate initialization needed like SharedPreferences
+      print('[Database] LocalDatabaseService ready for app settings storage');
     } catch (e) {
-      print('[Preferences] Failed to initialize Preferences: $e');
-      // Critical error - app depends on preferences
+      print('[Database] Failed to initialize database service: $e');
+      // Critical error - app depends on local storage
       rethrow;
     }
   }
@@ -104,8 +104,7 @@ class AppBootstrapper {
 
   Future<void> _initializeCrashlyticsConsent() async {
     try {
-      // Wait for the async singleton to be ready
-      await serviceLocator.isReady<CrashlyticsConsentManager>();
+      // Get the lazy singleton (immediately available)
       final crashlyticsConsentManager = serviceLocator<CrashlyticsConsentManager>();
       await crashlyticsConsentManager.initialize();
       _logger!.i('CRASHLYTICS', 'Crashlytics consent manager initialized');
@@ -140,18 +139,13 @@ class AppBootstrapper {
       if (firebaseUser == null && isLoggedInLocalDb) {
         // Firebase says logged out but local DB says logged in - fix by clearing all
         await localDb.clearAllUserData();
-        // Also clear preferences as fallback
-        await PreferencesService.instance.setLoggedIn(false);
-        await PreferencesService.instance.clearAll();
         _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Cleared invalid login state');
       } else if (firebaseUser != null && !isLoggedInLocalDb) {
-        // Firebase says logged in but local DB says logged out - update local database
+        // Firebase says logged in but local DB says logged out
         // The user data will be saved to local DB during the normal auth flow
-        await PreferencesService.instance.setLoggedIn(true);
-        _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Updated preferences to match Firebase auth state');
+        _logger!.w('AUTH', 'Auth state mismatch detected and fixed: Local DB will be updated during auth flow');
       } else {
-        // States match, ensure preferences are consistent (for compatibility)
-        await PreferencesService.instance.setLoggedIn(firebaseUser != null);
+        // States match - no action needed
         _logger!.i('AUTH', 'Auth state synced: User is ${firebaseUser != null ? "logged in" : "logged out"}');
       }
     } catch (e) {

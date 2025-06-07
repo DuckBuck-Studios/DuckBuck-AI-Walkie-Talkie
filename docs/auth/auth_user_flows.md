@@ -1,11 +1,93 @@
-# Authentication User Flows
+# Authentication User Flows - Enhanced with LocalDatabaseService Integration
 
-This document describes the comprehensive user flows for authentication in the DuckBuck application. These flows illustrate the interactions between all components in the authentication system, including rate limiting, email notifications, security enhancements, and all service integrations.
+This document describes the comprehensive user flows for authentication in the DuckBuck application. These flows illustrate the interactions between all components in the authentication system, including the **new LocalDatabaseService integration** that replaces SharedPreferences for authentication state management.
+
+## **🔄 IMPORTANT ARCHITECTURAL UPDATE**
+
+The authentication system has been **significantly enhanced** to eliminate dual-state management complexity:
+
+- **✅ NEW**: LocalDatabaseService manages authentication state persistence
+- **✅ NEW**: Firebase Auth serves as the single source of truth for authentication decisions  
+- **✅ NEW**: Simplified route determination in main.dart using only Firebase Auth
+- **✅ NEW**: AppBootstrapper handles background state synchronization
+- **❌ DEPRECATED**: SharedPreferences no longer used for authentication state
+- **❌ REMOVED**: Dual-state validation complexity eliminated
+
+## Enhanced Authentication State Flow
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4285f4', 'primaryTextColor': '#fff', 'primaryBorderColor': '#357ae8', 'lineColor': '#357ae8', 'secondaryColor': '#34a853', 'tertiaryColor': '#ea4335'}}}%%
+flowchart TD
+    %% App Launch Decision Flow
+    subgraph AppLaunch ["🚀 App Launch Authentication Flow"]
+        Start([App Starts]) --> FirebaseCheck{Firebase Auth\nCurrent User?}
+        FirebaseCheck -->|User Exists| HomeRoute[Navigate to Home]
+        FirebaseCheck -->|No User| WelcomeRoute[Navigate to Welcome]
+        
+        %% Background Sync Process
+        Start --> BackgroundSync[AppBootstrapper\nBackground Sync]
+        BackgroundSync --> LocalCheck{LocalDatabaseService\nisAnyUserLoggedIn?}
+        LocalCheck -->|true| SyncCheck{States Match?}
+        LocalCheck -->|false| SyncComplete[Sync Complete]
+        SyncCheck -->|Yes| SyncComplete
+        SyncCheck -->|No| FixSync[Update LocalDB\nto match Firebase]
+        FixSync --> SyncComplete
+    end
+    
+    %% Authentication Process
+    subgraph AuthProcess ["🔐 Authentication Process"]
+        AuthStart([User Initiates Auth]) --> AuthMethod{Auth Method}
+        AuthMethod -->|Google| GoogleFlow[Google Sign-In]
+        AuthMethod -->|Apple| AppleFlow[Apple Sign-In]  
+        AuthMethod -->|Phone| PhoneFlow[Phone Verification]
+        
+        GoogleFlow --> AuthSuccess[Firebase Auth Success]
+        AppleFlow --> AuthSuccess
+        PhoneFlow --> AuthSuccess
+        
+        AuthSuccess --> UpdateLocalDB[LocalDatabaseService\nsetUserLoggedIn = true]
+        UpdateLocalDB --> CacheUser[Cache User Data\nin LocalDB]
+        CacheUser --> AuthComplete[Authentication Complete]
+    end
+    
+    %% Sign Out Process
+    subgraph SignOutProcess ["🔓 Sign Out Process"]
+        SignOutStart([User Signs Out]) --> ClearFirebase[Firebase Sign Out]
+        ClearFirebase --> ClearLocalDB[LocalDatabaseService\nsetUserLoggedIn = false]
+        ClearLocalDB --> ClearCache[Clear Cached\nSensitive Data]
+        ClearCache --> SignOutComplete[Sign Out Complete]
+    end
+    
+    %% Enhanced State Management
+    subgraph StateManagement ["📊 Enhanced State Management"]
+        StateSource[Firebase Auth\n💡 Single Source of Truth]
+        StatePersist[LocalDatabaseService\n💾 Persistent State Storage]
+        StateSync[AppBootstrapper\n🔄 Background Sync]
+        
+        StateSource -.->|Authoritative| StatePersist
+        StateSync -.->|Monitors & Syncs| StateSource
+        StateSync -.->|Updates| StatePersist
+    end
+    
+    %% Styling
+    classDef firebase fill:#4285f4,stroke:#357ae8,stroke-width:3px,color:#fff,font-weight:bold
+    classDef localdb fill:#34a853,stroke:#2d7d32,stroke-width:3px,color:#fff,font-weight:bold
+    classDef process fill:#ff9800,stroke:#f57c00,stroke-width:3px,color:#fff,font-weight:bold
+    classDef deprecated fill:#ea4335,stroke:#d32f2f,stroke-width:2px,color:#fff,font-weight:bold,stroke-dasharray: 5 5
+    
+    class FirebaseCheck,AuthSuccess,ClearFirebase,StateSource firebase
+    class LocalCheck,UpdateLocalDB,ClearLocalDB,StatePersist localdb
+    class AuthMethod,AuthStart,SignOutStart process
+```
 
 ## Architecture Flow
 
-The user flows incorporate all the features from the DuckBuck authentication architecture:
+The user flows incorporate all the enhanced features from the DuckBuck authentication architecture:
 
+- **LocalDatabaseService Integration**: Authentication state persistence in local database
+- **Firebase Auth Primacy**: Firebase Auth as single source of truth for auth decisions
+- **Simplified Route Logic**: main.dart uses only Firebase Auth for route determination
+- **Background State Sync**: AppBootstrapper ensures state consistency
 - **Rate Limiting System**: Phone and OTP rate limiting with graduated timeouts
 - **Email Notification Service**: Welcome emails and login notifications
 - **Enhanced API Service**: Circuit breaker pattern and production-ready features
@@ -25,8 +107,8 @@ sequenceDiagram
     participant Security as Auth Security Manager
     participant Repository as User Repository
     participant Auth as Auth Service
-    participant DB as User Service
-    participant Storage as Preferences Service
+    participant LocalDB as LocalDatabaseService
+    participant UserDB as User Service
     participant Analytics as Analytics Service
     participant Email as Email Notification Service
     participant API as API Service
@@ -39,8 +121,8 @@ sequenceDiagram
     User->>UI: Opens App
     UI->>Provider: checkAuthState()
     Provider->>Repository: getCurrentUser()
-    Repository->>Storage: getStoredUser()
-    Storage-->>Repository: null (no stored user)
+    Repository->>LocalDB: isAnyUserLoggedIn()
+    LocalDB-->>Repository: false (no logged in user)
     Repository-->>Provider: null (not authenticated)
     Provider-->>UI: Not authenticated
     UI->>UI: Show Welcome Screen
@@ -107,16 +189,20 @@ sequenceDiagram
         Auth-->>Repository: UserCredential
     end
     
-    Repository->>Repository: Check if user exists in Firestore
+    Repository->>Repository: Create UserModel from credentials
     Repository->>Security: generateAppSignature()
     Security->>Security: Generate secure app signature
     Security-->>Repository: App signature
     
     Repository->>Repository: Create UserModel from credentials
-    Repository->>DB: createUserData(userModel)
-    DB->>Firestore: Create document in users collection
-    Firestore-->>DB: Document created successfully
-    DB-->>Repository: User creation complete
+    Repository->>UserDB: createUserData(userModel)
+    UserDB->>Firestore: Create document in users collection
+    Firestore-->>UserDB: Document created successfully
+    UserDB-->>Repository: User creation complete
+    
+    Repository->>LocalDB: setUserLoggedIn(userId, true)
+    LocalDB->>LocalDB: Update is_logged_in = 1 for user
+    LocalDB-->>Repository: Login state persisted
     
     Repository->>Analytics: logEvent("new_user_signup", {method, timestamp})
     Analytics->>Analytics: Record user conversion metrics
@@ -130,9 +216,9 @@ sequenceDiagram
     FCM->>External: Register token for push notifications
     FCM-->>Repository: Token registered successfully
     
-    Repository->>Storage: cacheUserData(userModel)
-    Storage->>Storage: Encrypt and store user data locally
-    Storage-->>Repository: Data cached securely
+    Repository->>LocalDB: cacheUserData(userModel)
+    LocalDB->>LocalDB: Store user data in local database
+    LocalDB-->>Repository: Data cached securely in database
     
     Repository->>Security: initializeSession(userModel)
     Security->>Security: Start session timer and security monitoring
@@ -157,18 +243,18 @@ sequenceDiagram
     External-->>Auth: Profile updated
     Auth-->>Repository: Profile update complete
     
-    Repository->>DB: updateUserProfile(userId, name, photoUrl)
-    DB->>Firestore: Update user document
-    Firestore-->>DB: Document updated
-    DB-->>Repository: Profile data updated
+    Repository->>UserDB: updateUserProfile(userId, name, photoUrl)
+    UserDB->>Firestore: Update user document
+    Firestore-->>UserDB: Document updated
+    UserDB-->>Repository: Profile data updated
     
     Repository->>Analytics: logEvent("profile_completion_success", {timeToComplete})
     
     UI->>Provider: markUserOnboardingComplete()
     Provider->>Repository: markUserOnboardingComplete()
-    Repository->>DB: markUserOnboardingComplete(userId)
-    DB->>Firestore: Update isOnboardingComplete flag
-    Firestore-->>DB: Onboarding marked complete
+    Repository->>UserDB: markUserOnboardingComplete(userId)
+    UserDB->>Firestore: Update isOnboardingComplete flag
+    Firestore-->>UserDB: Onboarding marked complete
     
     UI->>UI: Hide loading indicator
     UI->>Analytics: screenView("home_screen")
@@ -185,8 +271,8 @@ sequenceDiagram
     participant Security as Auth Security Manager
     participant Repository as User Repository
     participant Auth as Auth Service
-    participant DB as User Service
-    participant Storage as Preferences Service
+    participant LocalDB as LocalDatabaseService
+    participant UserDB as User Service
     participant Analytics as Analytics Service
     participant Email as Email Notification Service
     participant API as API Service
@@ -200,9 +286,11 @@ sequenceDiagram
     UI->>Provider: checkAuthState()
     Provider->>Repository: getCurrentUser()
     
-    alt Cached User Found
-        Repository->>Storage: getStoredUser()
-        Storage-->>Repository: Cached user data
+    alt Cached User Found in Local Database
+        Repository->>LocalDB: isAnyUserLoggedIn()
+        LocalDB-->>Repository: true (user logged in)
+        Repository->>LocalDB: getCachedUserData()
+        LocalDB-->>Repository: Cached user data
         Repository->>Security: validateCachedSession()
         Security->>Security: Check session validity and expiration
         alt Session Valid
@@ -213,14 +301,14 @@ sequenceDiagram
             UI->>UI: Navigate to Home Screen (Auto-login)
         else Session Expired
             Security-->>Repository: Session expired
-            Repository->>Storage: clearAuthData()
-            Storage-->>Repository: Cache cleared
+            Repository->>LocalDB: setUserLoggedIn(userId, false)
+            LocalDB-->>Repository: Login state cleared
             Repository-->>Provider: null (session expired)
             Provider-->>UI: Not authenticated
             UI->>UI: Show Welcome Screen
         end
     else No Cached User
-        Storage-->>Repository: null (no stored user)
+        LocalDB-->>Repository: false (no logged in user)
         Repository-->>Provider: null (not authenticated)
         Provider-->>UI: Not authenticated
         UI->>UI: Show Welcome Screen
@@ -289,11 +377,15 @@ sequenceDiagram
     end
     
     Repository->>Repository: Generate UserModel from credentials
-    Repository->>DB: getUserData(userId)
-    DB->>Firestore: Fetch existing user document
-    Firestore-->>DB: User document with profile data
-    DB-->>Repository: Complete user data
+    Repository->>UserDB: getUserData(userId)
+    UserDB->>Firestore: Fetch existing user document
+    Firestore-->>UserDB: User document with profile data
+    UserDB-->>Repository: Complete user data
     Repository->>Repository: Merge cached and fetched user data
+    
+    Repository->>LocalDB: setUserLoggedIn(userId, true)
+    LocalDB->>LocalDB: Update is_logged_in = 1 for returning user
+    LocalDB-->>Repository: Login state persisted
     
     Repository->>Analytics: logEvent("returning_user_signin_success", {method, lastLoginGap})
     
@@ -314,13 +406,13 @@ sequenceDiagram
     Security->>Security: Start session monitoring and timeouts
     Security-->>Repository: Session initialized
     
-    Repository->>Storage: cacheUserData(userModel)
-    Storage->>Storage: Update encrypted local cache
-    Storage-->>Repository: Cache updated
+    Repository->>LocalDB: cacheUserData(userModel)
+    LocalDB->>LocalDB: Update user data in local database
+    LocalDB-->>Repository: Cache updated in database
     
-    Repository->>DB: updateLastLogin(userId)
-    DB->>Firestore: Update lastLoginAt timestamp
-    Firestore-->>DB: Timestamp updated
+    Repository->>UserDB: updateLastLogin(userId)
+    UserDB->>Firestore: Update lastLoginAt timestamp
+    Firestore-->>UserDB: Timestamp updated
     
     Repository->>Logger: logSecurityEvent("returning_user_login", {userId, method, deviceInfo})
     
@@ -345,8 +437,8 @@ sequenceDiagram
     participant Security as Auth Security Manager
     participant Repository as User Repository
     participant Auth as Auth Service
-    participant DB as User Service
-    participant Storage as Preferences Service
+    participant LocalDB as LocalDatabaseService
+    participant UserDB as User Service
     participant Analytics as Analytics Service
     participant Logger as Logger Service
     participant FCM as Push Notifications
@@ -384,15 +476,19 @@ sequenceDiagram
     
     Auth-->>Repository: Authentication cleared
     
-    Repository->>Storage: clearAllAuthData()
-    Storage->>Storage: Securely clear all cached authentication data
-    Storage->>Security: clearSensitiveData()
-    Security->>Security: Overwrite sensitive memory regions
-    Storage-->>Repository: All data cleared
+    Repository->>LocalDB: setUserLoggedIn(userId, false)
+    LocalDB->>LocalDB: Update is_logged_in = 0 for user
+    LocalDB-->>Repository: Login state cleared
     
-    Repository->>DB: updateLastSeen(userId)
-    DB->>Firestore: Update lastSeenAt timestamp
-    Firestore-->>DB: Timestamp updated
+    Repository->>LocalDB: clearSensitiveUserData(userId)
+    LocalDB->>LocalDB: Clear cached sensitive data for user
+    LocalDB->>Security: clearSensitiveData()
+    Security->>Security: Overwrite sensitive memory regions
+    LocalDB-->>Repository: Sensitive data cleared
+    
+    Repository->>UserDB: updateLastSeen(userId)
+    UserDB->>Firestore: Update lastSeenAt timestamp
+    Firestore-->>UserDB: Timestamp updated
     
     Repository->>Logger: logSecurityEvent("user_signout_complete", {userId, timestamp})
     

@@ -43,7 +43,7 @@ class VolumeAcquireManager(private val context: Context) {
      * This is called when FCM triggers channel join in any app state
      * 
      * @param mode The volume acquire mode (default: MEDIA_AND_VOICE_CALL)
-     * @param showUIFeedback Whether to show volume UI feedback to user
+     * @param showUIFeedback Whether to show volume UI feedback to user (always false for silent operation)
      */
     fun acquireMaximumVolume(
         mode: VolumeAcquireMode = VolumeAcquireMode.MEDIA_AND_VOICE_CALL,
@@ -58,17 +58,17 @@ class VolumeAcquireManager(private val context: Context) {
             // Set volumes based on mode
             when (mode) {
                 VolumeAcquireMode.MEDIA_ONLY -> {
-                    setMaximumMediaVolume(showUIFeedback)
+                    setMaximumMediaVolume(false)
                 }
                 VolumeAcquireMode.VOICE_CALL_ONLY -> {
-                    setMaximumVoiceCallVolume(showUIFeedback)
+                    setMaximumVoiceCallVolume(false)
                 }
                 VolumeAcquireMode.MEDIA_AND_VOICE_CALL -> {
-                    setMaximumMediaVolume(showUIFeedback)
-                    setMaximumVoiceCallVolume(false) // Don't show UI twice
+                    setMaximumMediaVolume(false)
+                    setMaximumVoiceCallVolume(false)
                 }
                 VolumeAcquireMode.ALL_STREAMS -> {
-                    setMaximumAllStreams(showUIFeedback)
+                    setMaximumAllStreams(false)
                 }
             }
             
@@ -81,16 +81,17 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set media volume to maximum (for music, videos, game audio)
+     * Volume UI is never shown for silent operation
      */
-    private fun setMaximumMediaVolume(showUIFeedback: Boolean) {
+    private fun setMaximumMediaVolume(showUIFeedback: Boolean = false) {
         try {
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             
             AppLogger.d(TAG, "📻 Media volume before: $currentVolume/$maxVolume (${(currentVolume * 100 / maxVolume)}%)")
             
-            val flags = if (showUIFeedback) AudioManager.FLAG_SHOW_UI else 0
-            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, flags)
+            // Always use silent flags to avoid showing volume UI
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, 0)
             
             // Verify the volume was actually set
             val newVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -109,16 +110,17 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set voice call volume to maximum (for phone calls)
+     * Volume UI is never shown for silent operation
      */
-    private fun setMaximumVoiceCallVolume(showUIFeedback: Boolean) {
+    private fun setMaximumVoiceCallVolume(showUIFeedback: Boolean = false) {
         try {
             val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
             val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
             
             AppLogger.d(TAG, "📞 Voice call volume: $currentVolume -> $maxVolume")
             
-            val flags = if (showUIFeedback) AudioManager.FLAG_SHOW_UI else 0
-            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, maxVolume, flags)
+            // Always use silent flags to avoid showing volume UI
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, maxVolume, 0)
             
             AppLogger.i(TAG, "🗣️ Voice call volume set to maximum: $maxVolume")
             
@@ -129,13 +131,14 @@ class VolumeAcquireManager(private val context: Context) {
     
     /**
      * Set all audio stream volumes to maximum
+     * Volume UI is never shown for silent operation
      */
-    private fun setMaximumAllStreams(showUIFeedback: Boolean) {
+    private fun setMaximumAllStreams(showUIFeedback: Boolean = false) {
         try {
-            // Media stream (music, videos, games)
-            setMaximumMediaVolume(showUIFeedback)
+            // Media stream (music, videos, games) - no UI feedback
+            setMaximumMediaVolume(false)
             
-            // Voice call stream  
+            // Voice call stream - no UI feedback
             setMaximumVoiceCallVolume(false)
             
             // Ring stream (ringtones)

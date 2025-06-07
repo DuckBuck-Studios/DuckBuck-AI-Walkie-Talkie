@@ -399,6 +399,11 @@ The service layer provides specialized functionality for different aspects of au
 - **Auth Security Manager**: Manages security aspects of authentication
 - **Session Manager**: Handles user session timing and expiration
 
+#### Data Persistence and State Management:
+- **LocalDatabaseService**: Manages authentication state persistence in local database
+- **SharedPreferences**: **DEPRECATED** - No longer used for authentication state
+- Authentication state is now consistently managed through LocalDatabaseService and Firebase Auth
+
 #### Auth Service Responsibilities:
 - Implement provider-specific authentication (Google, Apple, Phone)
 - Abstract platform-specific authentication details
@@ -408,11 +413,14 @@ The service layer provides specialized functionality for different aspects of au
 - Provide standardized error handling for auth operations
 - Detect and prevent common authentication attacks
 - Manage secure session handling and timeout logic
+- **Maintain consistency between Firebase Auth and LocalDatabaseService**
+- **Ensure authentication state synchronization across app restarts**
 
 #### User Service Components:
 - **User Service Interface**: Defines user data operations contract
 - **Firebase User Service**: Implements user data operations with Firestore
-- **Preferences Service**: Handles secure local storage of user data
+- **LocalDatabaseService**: Handles local database operations and authentication state persistence
+- **Preferences Service**: **DEPRECATED for auth state** - Now only handles non-auth user preferences
 
 #### User Service Responsibilities:
 - Store and retrieve user profile data securely
@@ -420,7 +428,10 @@ The service layer provides specialized functionality for different aspects of au
 - Handle user account linking across auth methods
 - Implement user data migration strategies
 - Provide data validation for user information
-- Manage user preferences and settings
+- Manage user preferences and settings (non-auth related)
+- **Persist authentication state in local database with is_logged_in flag**
+- **Provide centralized auth state checking via LocalDatabaseService.isAnyUserLoggedIn()**
+- **Eliminate dual-state management complexity between SharedPreferences and database**
 
 #### Support Service Components:
 - **Analytics Service**: Tracks authentication events and metrics
