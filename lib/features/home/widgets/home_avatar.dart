@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class HomeAvatar extends StatelessWidget {
   final String? photoURL;
@@ -17,7 +18,7 @@ class HomeAvatar extends StatelessWidget {
     if (photoURL != null && photoURL!.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
-        backgroundImage: NetworkImage(photoURL!),
+        backgroundImage: CachedNetworkImageProvider(photoURL!),
         onBackgroundImageError: (_, __) {
           // Fallback to initials if image fails to load
         },

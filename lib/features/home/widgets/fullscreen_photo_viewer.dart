@@ -1,54 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io' show Platform;
-
-import '../providers/call_provider.dart';
 import '../../../shared/widgets/call_ui_components.dart';
 
-/// Call screen with consistent UI styling matching the fullscreen photo viewer
-/// Uses shared CallUIComponents for consistent positioning and styling
-class CallScreen extends StatelessWidget {
-  const CallScreen({super.key});
+class FullscreenPhotoViewer extends StatelessWidget {
+  final String? photoURL;
+  final String displayName;
+  final VoidCallback onExit;
+  final VoidCallback? onLongPress;
+  final bool isLoading;
+  final bool showCallControls;
+  final bool isMuted;
+  final bool isSpeakerOn;
+  final VoidCallback? onToggleMute;
+  final VoidCallback? onToggleSpeaker;
+  final VoidCallback? onEndCall;
+
+  const FullscreenPhotoViewer({
+    super.key,
+    required this.photoURL,
+    required this.displayName,
+    required this.onExit,
+    this.onLongPress,
+    this.isLoading = false,
+    this.showCallControls = false,
+    this.isMuted = false,
+    this.isSpeakerOn = false,
+    this.onToggleMute,
+    this.onToggleSpeaker,
+    this.onEndCall,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<CallProvider>(
-      builder: (context, callProvider, child) {
-        if (!callProvider.isInCall || callProvider.currentCall == null) {
-          return const SizedBox.shrink();  
-        }
-
-        return PopScope(
-          canPop: false,
-          child: Platform.isIOS 
-              ? _buildCupertinoCallScreen(context, callProvider)
-              : _buildMaterialCallScreen(context, callProvider),
-        );
-      },
-    );
-  }
-
-  Widget _buildCupertinoCallScreen(BuildContext context, CallProvider callProvider) {
-    return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.black,
-      child: _buildCallContent(context, callProvider),
-    );
-  }
-
-  Widget _buildMaterialCallScreen(BuildContext context, CallProvider callProvider) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: _buildCallContent(context, callProvider),
-    );
-  }
-
-  Widget _buildCallContent(BuildContext context, CallProvider callProvider) {
-    final callerName = callProvider.currentCall!.callerName;
-    final callerPhotoUrl = callProvider.currentCall!.callerPhotoUrl;
-    
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -56,10 +42,10 @@ class CallScreen extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Fullscreen photo with Hero animation
+          // Fullscreen photo with Hero animation and entrance animation
           Hero(
-            tag: 'friend_photo_$callerName',
-            child: _buildPhoto(context, callerPhotoUrl, callerName),
+            tag: 'friend_photo_$displayName',
+            child: _buildPhoto(context),
           )
           .animate()
           .scale(
@@ -73,28 +59,53 @@ class CallScreen extends StatelessWidget {
             curve: Curves.easeOut,
           ),
           
-          // Call controls at bottom - using shared component for consistent styling
-          CallUIComponents.buildCallControls(
-            context,
-            isMuted: callProvider.isMuted,
-            isSpeakerOn: callProvider.isSpeakerOn,
-            onToggleMute: () => callProvider.toggleMute(),
-            onToggleSpeaker: () => callProvider.toggleSpeaker(),
-            onEndCall: () => callProvider.endCall(),
-          )
-          .animate()
-          .slideY(
-            duration: 500.ms,
-            curve: Curves.easeOutCubic,
-            begin: 1.0,
-            end: 0.0,
-          )
-          .fadeIn(duration: 300.ms),
+          // Bottom container with "tap to exit" or call controls - animated
+          showCallControls 
+            ? CallUIComponents.buildCallControls(
+                context,
+                isMuted: isMuted,
+                isSpeakerOn: isSpeakerOn,
+                onToggleMute: onToggleMute,
+                onToggleSpeaker: onToggleSpeaker,
+                onEndCall: onEndCall,
+              )
+              .animate()
+              .slideY(
+                duration: 500.ms,
+                curve: Curves.easeOutCubic,
+                begin: 1.0,
+                end: 0.0,
+              )
+              .fadeIn(duration: 300.ms)
+            : (isLoading 
+                ? CallUIComponents.buildLoadingIndicator(context)
+                  .animate()
+                  .slideY(
+                    duration: 400.ms,
+                    curve: Curves.easeOutCubic,
+                    begin: 1.0,
+                    end: 0.0,
+                  )
+                  .fadeIn(duration: 300.ms)
+                : CallUIComponents.buildTapToExit(
+                    context,
+                    onExit: onExit,
+                    onLongPress: onLongPress,
+                  )
+                  .animate()
+                  .slideY(
+                    duration: 400.ms,
+                    curve: Curves.easeOutCubic,
+                    begin: 1.0,
+                    end: 0.0,
+                  )
+                  .fadeIn(duration: 300.ms)
+              ),
           
-          // Display name at top - using shared component for consistent positioning
+          // Display name at top - animated
           CallUIComponents.buildCallerName(
             context,
-            displayName: callerName,
+            displayName: displayName,
           )
           .animate()
           .slideY(
@@ -114,13 +125,13 @@ class CallScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPhoto(BuildContext context, String? photoUrl, String displayName) {
-    if (photoUrl != null && photoUrl.isNotEmpty) {
+  Widget _buildPhoto(BuildContext context) {
+    if (photoURL != null && photoURL!.isNotEmpty) {
       return SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: CachedNetworkImage(
-          imageUrl: photoUrl,
+          imageUrl: photoURL!,
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
@@ -135,15 +146,15 @@ class CallScreen extends StatelessWidget {
                     strokeWidth: 3,
                   ),
           ),
-          errorWidget: (context, url, error) => _buildFallbackPhoto(context, displayName),
+          errorWidget: (context, url, error) => _buildFallbackPhoto(context),
         ),
       );
     }
 
-    return _buildFallbackPhoto(context, displayName);
+    return _buildFallbackPhoto(context);
   }
 
-  Widget _buildFallbackPhoto(BuildContext context, String displayName) {
+  Widget _buildFallbackPhoto(BuildContext context) {
     final initials = _getInitials(displayName);
     final color = _getColorFromName(displayName);
 

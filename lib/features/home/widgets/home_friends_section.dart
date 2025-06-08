@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'home_avatar.dart';
 import 'dart:io' show Platform;
@@ -7,11 +8,13 @@ import 'dart:io' show Platform;
 class HomeFriendsSection extends StatelessWidget {
   final List<Map<String, dynamic>> friends;
   final bool isLoading;
+  final Function(Map<String, dynamic>)? onFriendTap;
 
   const HomeFriendsSection({
     super.key,
     required this.friends,
     this.isLoading = false,
+    this.onFriendTap,
   });
 
   @override
@@ -77,9 +80,24 @@ class HomeFriendsSection extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: CupertinoListSection.insetGrouped(
         backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-        children: displayFriends.map((friendProfile) =>
-          _buildFriendTile(context, friendProfile, true)
-        ).toList(),
+        children: displayFriends.asMap().entries.map((entry) {
+          final index = entry.key;
+          final friendProfile = entry.value;
+          return _buildFriendTile(context, friendProfile, true)
+            .animate()
+            .fadeIn(
+              duration: 400.ms,
+              delay: Duration(milliseconds: index * 100),
+              curve: Curves.easeOut,
+            )
+            .slideY(
+              duration: 500.ms,
+              delay: Duration(milliseconds: index * 100),
+              begin: 0.3,
+              end: 0.0,
+              curve: Curves.easeOutCubic,
+            );
+        }).toList(),
       ),
     );
   }
@@ -153,22 +171,42 @@ class HomeFriendsSection extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerHighest,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: displayFriends.map((friendProfile) =>
-            _buildFriendTile(context, friendProfile, false)
-          ).toList(),
+          children: displayFriends.asMap().entries.map((entry) {
+            final index = entry.key;
+            final friendProfile = entry.value;
+            return _buildFriendTile(context, friendProfile, false)
+              .animate()
+              .fadeIn(
+                duration: 400.ms,
+                delay: Duration(milliseconds: index * 100),
+                curve: Curves.easeOut,
+              )
+              .slideY(
+                duration: 500.ms,
+                delay: Duration(milliseconds: index * 100),
+                begin: 0.3,
+                end: 0.0,
+                curve: Curves.easeOutCubic,
+              );
+          }).toList(),
         ),
       ),
     );
   }
 
   Widget _buildFriendTile(BuildContext context, Map<String, dynamic> friendProfile, bool isIOS) {
+    final onTap = onFriendTap != null ? () => onFriendTap!(friendProfile) : null;
+    
     if (isIOS) {
       return CupertinoListTile(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: HomeAvatar(
-          photoURL: friendProfile['photoURL'],
-          displayName: friendProfile['displayName'] ?? 'Unknown User',
-          radius: 18,
+        leading: Hero(
+          tag: 'friend_photo_${friendProfile['displayName'] ?? 'Unknown User'}',
+          child: HomeAvatar(
+            photoURL: friendProfile['photoURL'],
+            displayName: friendProfile['displayName'] ?? 'Unknown User',
+            radius: 18,
+          ),
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
@@ -177,80 +215,28 @@ class HomeFriendsSection extends StatelessWidget {
             fontSize: 16,
           ),
         ),
+        onTap: onTap,
       );
     } else {
       return ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-        leading: HomeAvatar(
-          photoURL: friendProfile['photoURL'],
-          displayName: friendProfile['displayName'] ?? 'Unknown User',
-          radius: 18,
+        leading: Hero(
+          tag: 'friend_photo_${friendProfile['displayName'] ?? 'Unknown User'}',
+          child: HomeAvatar(
+            photoURL: friendProfile['photoURL'],
+            displayName: friendProfile['displayName'] ?? 'Unknown User',
+            radius: 18,
+          ),
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
-          style: const TextStyle(
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w500,
-            fontSize: 16,
           ),
         ),
+        onTap: onTap,
       );
     }
-  }
-}
-
-/// Simple CupertinoListTile implementation for consistent design
-class CupertinoListTile extends StatelessWidget {
-  final Widget? leading;
-  final Widget title;
-  final Widget? subtitle;
-  final Widget? trailing;
-  final EdgeInsetsGeometry? padding;
-
-  const CupertinoListTile({
-    super.key,
-    this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.padding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: padding ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-      color: CupertinoColors.systemBackground.resolveFrom(context),
-      child: Row(
-        children: <Widget>[
-          if (leading != null) ...[
-            leading!,
-            const SizedBox(width: 12.0),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                DefaultTextStyle(
-                  style: CupertinoTheme.of(context).textTheme.textStyle,
-                  child: title
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2.0),
-                  DefaultTextStyle(
-                    style: CupertinoTheme.of(context).textTheme.tabLabelTextStyle,
-                    child: subtitle!
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 16.0),
-            trailing!,
-          ],
-        ],
-      ),
-    );
   }
 }
