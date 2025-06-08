@@ -23,9 +23,20 @@ class CallScreen extends StatelessWidget {
 
         return PopScope(
           canPop: false,
-          child: Platform.isIOS 
+          child: (Platform.isIOS 
               ? _buildCupertinoCallScreen(context, callProvider)
-              : _buildMaterialCallScreen(context, callProvider),
+              : _buildMaterialCallScreen(context, callProvider))
+          .animate()
+          .fadeIn(
+            duration: 600.ms,
+            curve: Curves.easeOut,
+          )
+          .slideY(
+            duration: 800.ms,
+            begin: 0.1,
+            end: 0.0,
+            curve: Curves.easeOutCubic,
+          ),
         );
       },
     );
@@ -106,11 +117,6 @@ class CallScreen extends StatelessWidget {
           .fadeIn(duration: 400.ms),
         ],
       ),
-    )
-    .animate()
-    .fadeIn(
-      duration: 300.ms,
-      curve: Curves.easeOut,
     );
   }
 
