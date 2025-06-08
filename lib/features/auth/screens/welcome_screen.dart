@@ -11,6 +11,7 @@ import 'package:duckbuck/core/services/service_locator.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
 import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
+import 'package:duckbuck/core/services/permissions/permissions_service.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -25,6 +26,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // Services
   final _analytics = serviceLocator<FirebaseAnalyticsService>();
   final _logger = serviceLocator<LoggerService>();
+  final _permissionsService = serviceLocator<PermissionsService>();
   final String _tag = 'WelcomeScreen';
 
   @override
@@ -319,6 +321,46 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
     _logger.i(_tag, 'User started onboarding flow');
     
+    // Request permissions before navigating
+    _requestPermissionsAndNavigate(context);
+  }
+
+  /// Request optional permissions and navigate to onboarding
+  Future<void> _requestPermissionsAndNavigate(BuildContext context) async {
+    try {
+      _logger.i(_tag, 'Requesting optional permissions');
+      
+      // Request both permissions (optional - user can deny)
+      final result = await _permissionsService.requestAllPermissions();
+      
+      // Log permission results
+      _analytics.logEvent(
+        name: 'permissions_requested',
+        parameters: {
+          'microphone_granted': result.microphoneGranted,
+          'notification_granted': result.notificationGranted,
+          'source': 'welcome_screen',
+        },
+      );
+      
+      _logger.i(_tag, 'Permission results: $result');
+      
+      // Navigate to onboarding regardless of permission results
+      if (mounted) {
+        _navigateToOnboarding();
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error requesting permissions: $e');
+      
+      // Navigate anyway even if permission request fails
+      if (mounted) {
+        _navigateToOnboarding();
+      }
+    }
+  }
+
+  /// Navigate to onboarding screen with transition
+  void _navigateToOnboarding() {
     // Use pushReplacement with a combined fade and scale transition
     Navigator.pushReplacement(
       context,
@@ -342,11 +384,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
             child: SlideTransition(
               position: offsetAnimation,
-              child: child,
+              child: ScaleTransition(
+                scale: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ).drive(Tween(begin: 0.95, end: 1.0)),
+                child: child,
+              ),
             ),
           );
         },
-        transitionDuration: const Duration(milliseconds: 400),
+        transitionDuration: const Duration(milliseconds: 600),
       ),
     );
   }

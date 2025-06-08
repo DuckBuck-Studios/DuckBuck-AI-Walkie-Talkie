@@ -82,5 +82,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DuckBuck needs access to your microphone for voice calls with your friends.</string>
 </dict>
 </plist>

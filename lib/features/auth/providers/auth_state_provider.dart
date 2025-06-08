@@ -3,7 +3,6 @@ import 'dart:async';
 import '../../../core/models/user_model.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
-import '../../../core/services/notifications/notifications_service.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
 import '../../../core/services/auth/auth_security_manager.dart';
 import '../../../core/services/database/local_database_service.dart';
@@ -15,7 +14,6 @@ import '../../../core/services/database/local_database_service.dart';
 /// the UserRepository that handles the actual authentication logic.
 class AuthStateProvider extends ChangeNotifier {
   final UserRepository _userRepository;
-  final NotificationsService _notificationsService;
   final AuthSecurityManager _securityManager;
   UserModel? _currentUser;
   bool _isLoading = false;
@@ -25,18 +23,16 @@ class AuthStateProvider extends ChangeNotifier {
   /// Creates a new AuthStateProvider
   AuthStateProvider({
     UserRepository? userRepository,
-    NotificationsService? notificationsService,
     AuthSecurityManager? securityManager,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
-       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
        _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>() {
     _init();
   }
 
   /// Initialize the provider and listen for auth state changes
   void _init() {
-    // Initialize notification service
-    _notificationsService.initialize();
+    // Note: Notification service initialization is now handled by Kotlin/Android side
+    // _notificationsService.initialize(); - No longer needed
 
     // Listen for auth changes - properly store subscription for disposal
     _authSubscription = _userRepository.userStream.listen((user) {
@@ -44,10 +40,9 @@ class AuthStateProvider extends ChangeNotifier {
       final userChanged = _currentUser?.uid != user?.uid;
       _currentUser = user;
 
-      // When user logs in, register FCM token, update login state, and start monitoring
+      // When user logs in, update login state and start monitoring
       if (user != null) {
-        // Register a new token on login
-        _notificationsService.registerToken(user.uid);
+        // Note: FCM token registration is now handled by Kotlin/Android side
         
         // Update login status in local database (async but don't await to avoid blocking UI)
         Future(() async {
@@ -83,8 +78,7 @@ class AuthStateProvider extends ChangeNotifier {
     // Load current user immediately if available
     _currentUser = _userRepository.currentUser;
     if (_currentUser != null) {
-      // Register token for immediate loading too
-      _notificationsService.registerToken(_currentUser!.uid);
+      // Note: FCM token registration is now handled by Kotlin/Android side
       
       // Update login status in local database and start monitoring (async but don't await to avoid blocking initialization)
       Future(() async {

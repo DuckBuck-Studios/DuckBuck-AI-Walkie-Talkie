@@ -35,12 +35,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     
-    <!-- Explicitly prevent debugging -->
-    <uses-permission android:name="android.permission.SET_DEBUG_APP" tools:node="remove" />
-    
-    <!-- Prevent automatic backup of app data -->
-    <uses-permission android:name="android.permission.BACKUP" tools:node="remove" />
-    
     <application
         android:label="duckbuck"
         android:icon="@mipmap/ic_launcher"

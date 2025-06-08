@@ -7,7 +7,6 @@ import '../services/firebase/firebase_app_check_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/crashlytics_consent_manager.dart';
 import '../services/logger/logger_service.dart';
-import '../services/fcm/fcm_service.dart';
 import '../services/database/local_database_service.dart';
 import '../services/lifecycle/app_lifecycle_manager.dart';
 
@@ -32,7 +31,6 @@ class AppBootstrapper {
     _logger!.i('BOOTSTRAP', 'Service locator initialized, continuing with remaining services');
      
     await _initializeCrashlyticsConsent();
-    await _initializeFCM();
     await _syncAuthState();
     await _initializeAppLifecycle();
     
@@ -112,17 +110,6 @@ class AppBootstrapper {
     } catch (e) {
       _logger!.e('CRASHLYTICS', 'Error initializing Crashlytics consent manager: $e');
       // Continue execution even if this fails
-    }
-  }
-
-  Future<void> _initializeFCM() async {
-    try {
-      final fcmService = serviceLocator<FCMService>();
-      await fcmService.initialize();
-      _logger!.i('FCM', 'FCM service initialized successfully');
-    } catch (e) {
-      _logger!.e('FCM', 'Failed to initialize FCM service: $e');
-      // Continue execution even if FCM fails - notifications won't work but app will function
     }
   }
 

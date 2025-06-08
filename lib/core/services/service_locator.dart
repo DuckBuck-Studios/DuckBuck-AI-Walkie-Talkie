@@ -11,7 +11,6 @@ import 'firebase/firebase_app_check_service.dart';
 import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart'; 
 import 'notifications/email_notification_service.dart';  // Add import for the new service
-import 'fcm/fcm_service.dart'; 
 import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
@@ -23,6 +22,7 @@ import 'relationship/relationship_service.dart';
 import 'call/agora_token_service.dart';
 import 'cache/cache_sync_service.dart';
 import 'lifecycle/app_lifecycle_manager.dart';
+import 'permissions/permissions_service.dart';
 import '../../features/friends/providers/relationship_provider.dart';
 
 
@@ -71,7 +71,6 @@ Future<void> setupServiceLocator() async {
   // Register notifications service
   serviceLocator.registerLazySingleton<NotificationsService>(
     () => NotificationsService(
-      databaseService: serviceLocator<FirebaseDatabaseService>(),
       apiService: serviceLocator<ApiService>(),
     ),
   );
@@ -141,11 +140,6 @@ Future<void> setupServiceLocator() async {
       logger: serviceLocator<LoggerService>(),
     ),
   );
-  
-  // Register FCM service
-  serviceLocator.registerLazySingleton<FCMService>(
-    () => FCMService(),
-  );
    
   // Register Agora token service
   serviceLocator.registerLazySingleton<AgoraTokenService>(
@@ -174,5 +168,10 @@ Future<void> setupServiceLocator() async {
   // Register RelationshipProvider as a service
   serviceLocator.registerLazySingleton<RelationshipProvider>(
     () => RelationshipProvider(),
+  );
+  
+  // Register Permissions service
+  serviceLocator.registerLazySingleton<PermissionsService>(
+    () => PermissionsService(),
   );
 }
