@@ -15,7 +15,7 @@ class AgoraService(private val context: Context) {
     
     companion object {
         private const val TAG = "AgoraService"
-        private const val APP_ID = "3983e52a08424b7da5e79be4c9dfae0f"  
+        private const val APP_ID = "ccc5933082e7404682ae909f5654f31c"  
     }
     
     private var rtcEngine: RtcEngine? = null
