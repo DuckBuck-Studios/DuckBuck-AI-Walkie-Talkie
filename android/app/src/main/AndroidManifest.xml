@@ -36,8 +36,8 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     
     <application
-        android:label="duckbuck"
-        android:icon="@mipmap/ic_launcher"
+        android:label="DuckBuck"
+        android:icon="@mipmap/launcher_icon"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false"
         android:allowBackup="false"

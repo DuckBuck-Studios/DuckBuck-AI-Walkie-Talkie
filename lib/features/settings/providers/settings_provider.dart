@@ -14,7 +14,7 @@ import '../../friends/providers/relationship_provider.dart';
 class SettingsProvider extends ChangeNotifier {
   final UserRepository _userRepository;
   final RelationshipProvider _relationshipProvider;
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
   static const String _tag = 'SETTINGS_PROVIDER';
   
   UserModel? _currentUser;
@@ -26,8 +26,10 @@ class SettingsProvider extends ChangeNotifier {
   SettingsProvider({
     UserRepository? userRepository,
     RelationshipProvider? relationshipProvider,
+    LoggerService? logger,
   }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
-       _relationshipProvider = relationshipProvider ?? serviceLocator<RelationshipProvider>() {
+       _relationshipProvider = relationshipProvider ?? serviceLocator<RelationshipProvider>(),
+       _logger = logger ?? serviceLocator<LoggerService>() {
     _init();
   }
 

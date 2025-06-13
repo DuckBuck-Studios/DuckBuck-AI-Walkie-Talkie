@@ -29,6 +29,11 @@ final GetIt serviceLocator = GetIt.instance;
 
 /// Initialize all services and repositories
 Future<void> setupServiceLocator() async {
+  // Check if already initialized to prevent double registration
+  if (serviceLocator.isRegistered<LoggerService>()) {
+    return; // Already initialized
+  }
+  
   // Register logger service (singleton)
   serviceLocator.registerLazySingleton<LoggerService>(
     () => LoggerService(),
@@ -36,7 +41,9 @@ Future<void> setupServiceLocator() async {
 
   // Register Firebase services
   serviceLocator.registerLazySingleton<AuthServiceInterface>(
-    () => AuthService(),
+    () => AuthService(
+      logger: serviceLocator<LoggerService>(),
+    ),
   );
 
   serviceLocator.registerLazySingleton<FirebaseDatabaseService>(
@@ -70,6 +77,7 @@ Future<void> setupServiceLocator() async {
   serviceLocator.registerLazySingleton<NotificationsService>(
     () => NotificationsService(
       apiService: serviceLocator<ApiService>(),
+      logger: serviceLocator<LoggerService>(),
     ),
   );
 
@@ -81,6 +89,7 @@ Future<void> setupServiceLocator() async {
       analytics: serviceLocator<FirebaseAnalyticsService>(),
       crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
       notificationsService: serviceLocator<NotificationsService>(),
+      logger: serviceLocator<LoggerService>(),
     ),
   );
 

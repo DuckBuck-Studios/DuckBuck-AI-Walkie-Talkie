@@ -19,19 +19,21 @@ import '../notifications/notifications_service.dart';
 class AuthService implements AuthServiceInterface {
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
   
   static const String _tag = 'AUTH';  
 
   /// Create a new FirebaseAuthService instance
-  AuthService({FirebaseAuth? firebaseAuth, GoogleSignIn? googleSignIn})
-    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-      _googleSignIn =
-          googleSignIn ??
-          GoogleSignIn(
+  AuthService({
+    FirebaseAuth? firebaseAuth, 
+    GoogleSignIn? googleSignIn,
+    LoggerService? logger,
+  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _googleSignIn = googleSignIn ?? GoogleSignIn(
             // Explicitly configure Google Sign-In
             scopes: ['email', 'profile'],
-          );
+          ),
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   @override
   User? get currentUser => _firebaseAuth.currentUser;

@@ -187,8 +187,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TextButton(
-          onPressed: () {
-            Navigator.of(context).pushNamed(AppRoutes.termsOfService);
+          onPressed: () async {
+            try {
+              if (!mounted) return;
+              await Navigator.of(context).pushNamed(AppRoutes.termsOfService);
+            } catch (e) {
+              debugPrint('Navigation error: $e');
+            }
           },
           child: const Text(
             'Terms of Service',
@@ -204,8 +209,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
         TextButton(
-          onPressed: () {
-            Navigator.of(context).pushNamed(AppRoutes.privacyPolicy);
+          onPressed: () async {
+            try {
+              if (!mounted) return;
+              await Navigator.of(context).pushNamed(AppRoutes.privacyPolicy);
+            } catch (e) {
+              debugPrint('Navigation error: $e');
+            }
           },
           child: const Text(
             'Privacy Policy',
@@ -361,7 +371,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   /// Navigate to onboarding screen with premium transition
   void _navigateToOnboarding() {
-    // Create a premium, modern page transition using a custom route
+    // Create an ultra-smooth, premium page transition
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
@@ -370,41 +380,43 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // Modern morph-style transition with depth
-          return Stack(
-            children: [
-              // Background blur effect during transition
-              AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) {
-                  return Container(
-                    color: Colors.black.withValues(alpha: animation.value * 0.3),
-                  );
-                },
+          // Ultra-smooth transition with perfect easing
+          final slideAnimation = Tween<Offset>(
+            begin: const Offset(0.0, 0.08), // Start slightly below
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ));
+          
+          final fadeAnimation = Tween<double>(
+            begin: 0.0,
+            end: 1.0,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+          ));
+          
+          final scaleAnimation = Tween<double>(
+            begin: 0.96,
+            end: 1.0,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ));
+          
+          return SlideTransition(
+            position: slideAnimation,
+            child: ScaleTransition(
+              scale: scaleAnimation,
+              child: FadeTransition(
+                opacity: fadeAnimation,
+                child: child,
               ),
-              // Main content with sophisticated transform
-              Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.001) // Add perspective
-                  ..rotateY((1 - animation.value) * 0.1) // Slight 3D rotation
-                  ..scale(
-                    0.85 + (animation.value * 0.15), // Scale from 85% to 100%
-                  )
-                  ..translate(
-                    0.0,
-                    (1 - animation.value) * 50, // Subtle Y movement
-                    (1 - animation.value) * -100, // Z-depth movement
-                  ),
-                child: Opacity(
-                  opacity: animation.value,
-                  child: child,
-                ),
-              ),
-            ],
+            ),
           );
         },
-        transitionDuration: const Duration(milliseconds: 800),
+        transitionDuration: const Duration(milliseconds: 900),
         reverseTransitionDuration: const Duration(milliseconds: 600),
       ),
     );

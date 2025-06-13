@@ -5,13 +5,14 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/user_model.dart';
 import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Service for managing local SQLite database operations
 /// Handles user data caching and local storage
 class LocalDatabaseService {
   static LocalDatabaseService? _instance;
   static Database? _database;
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
   static const String _tag = 'LOCAL_DB';
   
   // Dio instance for HTTP requests
@@ -33,7 +34,7 @@ class LocalDatabaseService {
   static const String _blockedUsersTable = 'cached_blocked_users'; // Cached blocked users
 
   // Singleton pattern
-  LocalDatabaseService._internal() {
+  LocalDatabaseService._internal() : _logger = serviceLocator<LoggerService>() {
     // Initialize Dio with configuration
     _dio = Dio();
     _dio.options.connectTimeout = const Duration(seconds: 10);

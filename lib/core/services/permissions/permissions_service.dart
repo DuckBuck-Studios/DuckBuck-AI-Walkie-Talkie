@@ -1,5 +1,6 @@
 import 'package:permission_handler/permission_handler.dart';
 import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Service for handling app permissions
 ///
@@ -10,7 +11,7 @@ class PermissionsService {
   factory PermissionsService() => _instance;
   PermissionsService._internal();
 
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger = serviceLocator<LoggerService>();
   
   static const String _tag = 'PERMISSIONS';
 

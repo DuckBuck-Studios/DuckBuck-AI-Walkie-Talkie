@@ -97,13 +97,14 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
   }
   
   /// Handle back button and animate out
-  Future<void> _handleBackPress() async {
-    // Reverse the animation
-    await _animationController.reverse();
-    // Now actually pop if context is mounted
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+  void _handleBackPress() {
+    // Start the reverse animation
+    _animationController.reverse().then((_) {
+      // Pop after animation completes, if context is still mounted
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    });
   }
 
   @override
@@ -136,10 +137,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
           leading: CupertinoButton(
             padding: EdgeInsets.zero,
             child: const Icon(CupertinoIcons.back, color: AppColors.textPrimary),
-            onPressed: () async {
-              await _handleBackPress();
-              if (mounted) Navigator.of(context).pop();
-            },
+            onPressed: _handleBackPress,
           ),
         ),
         child: _buildBody(context, useCupertinoStyle: true),
@@ -161,10 +159,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () async {
-              await _handleBackPress();
-              if (mounted) Navigator.of(context).pop();
-            },
+            onPressed: _handleBackPress,
           ),
         ),
         body: _buildBody(context, useCupertinoStyle: false),

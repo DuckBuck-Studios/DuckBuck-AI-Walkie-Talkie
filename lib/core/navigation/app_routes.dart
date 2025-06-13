@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:duckbuck/features/splash/screens/premium_splash_screen.dart';
 import 'package:duckbuck/features/auth/screens/welcome_screen.dart';
 import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
 import 'package:duckbuck/features/auth/screens/profile_completion_screen.dart';
@@ -11,8 +12,9 @@ import 'package:duckbuck/features/settings/screens/blocked_users_screen.dart';
 
 /// Main app routes and navigation helper
 class AppRoutes {
-  // Make welcome the root route
-  static const String welcome = '/';
+  // Premium splash screen as initial route
+  static const String splash = '/';
+  static const String welcome = '/welcome';
   static const String onboarding = '/onboarding';
   static const String home = '/home'; // This now points to the HomeScreen with GNav
   static const String profileCompletion = '/profile_completion';
@@ -24,6 +26,9 @@ class AppRoutes {
   /// Generate routes for the app
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
+      case splash:
+        return MaterialPageRoute(builder: (_) => const PremiumSplashScreen());
+
       case welcome:
         // Mark that user has seen welcome screen
         LocalDatabaseService.instance.setBoolSetting('welcome_seen', true);

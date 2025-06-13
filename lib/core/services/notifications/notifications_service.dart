@@ -7,7 +7,7 @@ import '../user/user_service_interface.dart';
 
 /// Service for handling push notifications and FCM token management
 class NotificationsService {
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
   final ApiService _apiService;
   final UserServiceInterface _userService;
   
@@ -17,8 +17,10 @@ class NotificationsService {
   NotificationsService({
     required ApiService apiService,
     UserServiceInterface? userService,
+    LoggerService? logger,
   }) : _apiService = apiService,
-       _userService = userService ?? serviceLocator<UserServiceInterface>();
+       _userService = userService ?? serviceLocator<UserServiceInterface>(),
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Initialize the notifications service
   Future<void> initialize() async {

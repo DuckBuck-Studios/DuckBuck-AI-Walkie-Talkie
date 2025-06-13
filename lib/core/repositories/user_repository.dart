@@ -15,7 +15,7 @@ import '../services/database/local_database_service.dart';
 class UserRepository {
   final AuthServiceInterface authService;
   final UserServiceInterface _userService;
-  final LoggerService _logger = LoggerService();
+  final LoggerService _logger;
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final NotificationsService _notificationsService;
@@ -32,10 +32,12 @@ class UserRepository {
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
     NotificationsService? notificationsService,
+    LoggerService? logger,
   }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>();
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Get the current authenticated user
   /// First tries to get from local database, then falls back to Firebase

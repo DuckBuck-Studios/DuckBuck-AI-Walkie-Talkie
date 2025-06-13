@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
 import 'core/app/app_bootstrapper.dart';
 import 'core/app/provider_registry.dart';
 import 'core/navigation/app_routes.dart';
@@ -122,21 +120,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
-  /// Determine the initial route based on authentication state and local database
+  /// Determine the initial route - Always start with premium splash screen
   String _determineInitialRoute() {
     final logger = serviceLocator<LoggerService>();
-    final firebaseUser = FirebaseAuth.instance.currentUser;
-
-    logger.d('MAIN', 'Determining initial route - firebaseUser: ${firebaseUser?.uid}');
-
-    // Use Firebase as the primary auth source (local database will be synced in background)
-    if (firebaseUser != null) {
-      logger.d('MAIN', 'User is logged in - navigating to home');
-      return AppRoutes.home;
-    } else {
-      logger.d('MAIN', 'User not logged in - navigating to welcome screen');
-      // Default to welcome screen for new users
-      return AppRoutes.welcome;
-    }
+    
+    logger.d('MAIN', 'Starting with premium splash screen');
+    
+    // Always start with splash screen - it will handle navigation based on auth state
+    return AppRoutes.splash;
   }
 }
