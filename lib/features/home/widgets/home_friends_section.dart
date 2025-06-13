@@ -61,36 +61,40 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.4,
-        width: double.infinity,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              CupertinoIcons.person_2,
-              size: 64,
-              color: CupertinoColors.systemGrey.resolveFrom(context),
+      return Expanded(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.person_2,
+                  size: 80,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No friends yet',
+                  style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.label.resolveFrom(context),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Go to Friends tab to add some!',
+                  style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                    fontSize: 16,
+                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No friends yet',
-              style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w500,
-                color: CupertinoColors.label.resolveFrom(context),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Go to Friends tab to add some!',
-              style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                fontSize: 16,
-                color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -98,14 +102,16 @@ class HomeFriendsSection extends StatelessWidget {
     // Show only first 5 friends on home screen
     final displayFriends = friends.take(5).toList();
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: CupertinoListSection.insetGrouped(
-        backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-        children: displayFriends.asMap().entries.map((entry) {
-          final friendProfile = entry.value;
-          return _buildFriendTile(context, friendProfile, true);
-        }).toList(),
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: CupertinoListSection.insetGrouped(
+          backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+          children: displayFriends.asMap().entries.map((entry) {
+            final friendProfile = entry.value;
+            return _buildFriendTile(context, friendProfile, true);
+          }).toList(),
+        ),
       ),
     );
   }
@@ -157,34 +163,38 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.4,
-        width: double.infinity,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+      return Expanded(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.people_outline,
+                  size: 80,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No friends yet',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Go to Friends tab to add some!',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No friends yet',
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Go to Friends tab to add some!',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -192,18 +202,20 @@ class HomeFriendsSection extends StatelessWidget {
     // Show only first 5 friends on home screen
     final displayFriends = friends.take(5).toList();
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: displayFriends.asMap().entries.map((entry) {
-            final friendProfile = entry.value;
-            return _buildFriendTile(context, friendProfile, false);
-          }).toList(),
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: ListView.builder(
+            itemCount: displayFriends.length,
+            itemBuilder: (context, index) {
+              final friendProfile = displayFriends[index];
+              return _buildFriendTile(context, friendProfile, false);
+            },
+          ),
         ),
       ),
     );

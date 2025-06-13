@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import '../auth/auth_service_interface.dart';
 import '../service_locator.dart';
 import '../logger/logger_service.dart';
-import '../call/agora_token_service.dart';
+import '../agora/agora_token_service.dart';
 
 /// Exception thrown when API operations fail
 class ApiException implements Exception {
@@ -541,13 +541,13 @@ class ApiService {
       final response = await _dio.post(
         '/api/agora/generate-token',
         data: {
-          'uid': uid,
+          'uid': uid.toString(),  // Send uid as string to match backend expectations
           'channelId': channelId, 
         },
         options: Options(
           headers: {
             'Authorization': 'Bearer $firebaseToken',
-            'X-API-Key': _apiKey,
+            'x-api-key': _apiKey,  // Use lowercase header as expected by backend
           },
         ),
       );
@@ -555,8 +555,22 @@ class ApiService {
       _onRequestSuccess();
 
       if (response.statusCode == 200 && response.data != null) {
-        _logger.i(_tag, 'Successfully generated Agora token for channel: $channelId');
-        return AgoraTokenResponse.fromJson(response.data);
+        final responseData = response.data as Map<String, dynamic>;
+        
+        // Check if the response indicates success
+        if (responseData['success'] == true && responseData.containsKey('data')) {
+          _logger.i(_tag, 'Successfully generated Agora token for channel: $channelId');
+          return AgoraTokenResponse.fromJson(responseData);
+        } else {
+          // Handle API-level errors (success: false)
+          final errorMessage = responseData['message'] ?? 'Unknown error from token service';
+          _logger.e(_tag, 'Token generation failed: $errorMessage');
+          throw ApiException(
+            'Token generation failed: $errorMessage',
+            statusCode: response.statusCode,
+            errorCode: 'API_ERROR',
+          );
+        }
       } else {
         _logger.e(_tag, 'Invalid response from Agora token endpoint: ${response.statusCode}');
         throw ApiException(

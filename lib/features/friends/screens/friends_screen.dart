@@ -60,6 +60,48 @@ class _FriendsScreenState extends State<FriendsScreen>
     super.dispose();
   }
 
+  /// Helper method to build Friends tab with User ID card inside
+  Widget _buildFriendsTabWithUserID() {
+    return Column(
+      key: const ValueKey('friends'),
+      children: [
+        // User UID Card at the top of scrollable content
+        Consumer<RelationshipProvider>(
+          builder: (context, provider, child) {
+            return UserUidCard(
+              uid: provider.currentUserUid,
+            );
+          },
+        ),
+        // Friends list below
+        const Expanded(
+          child: FriendsListWidget(),
+        ),
+      ],
+    );
+  }
+
+  /// Helper method to build Requests tab with User ID card inside
+  Widget _buildRequestsTabWithUserID() {
+    return Column(
+      key: const ValueKey('requests'),
+      children: [
+        // User UID Card at the top of scrollable content
+        Consumer<RelationshipProvider>(
+          builder: (context, provider, child) {
+            return UserUidCard(
+              uid: provider.currentUserUid,
+            );
+          },
+        ),
+        // Friend requests list below
+        const Expanded(
+          child: FriendRequestsWidget(),
+        ),
+      ],
+    );
+  }
+
   /// Shows search user bottom sheet for finding friends
   void _showSearchBottomSheet() {
     SearchUserBottomSheet.show(context);
@@ -195,16 +237,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                   ),
                 ),
                 
-                // User UID Card
-                Consumer<RelationshipProvider>(
-                  builder: (context, provider, child) {
-                    return UserUidCard(
-                      uid: provider.currentUserUid,
-                    );
-                  },
-                ),
-                
-                // Content based on selected segment
+                // Content based on selected segment (User ID card now inside)
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -224,8 +257,8 @@ class _FriendsScreenState extends State<FriendsScreen>
                       );
                     },
                     child: _selectedSegment == 0 
-                        ? const FriendsListWidget(key: ValueKey('friends'))
-                        : const FriendRequestsWidget(key: ValueKey('requests')),
+                        ? _buildFriendsTabWithUserID()
+                        : _buildRequestsTabWithUserID(),
                   ),
                 ),
               ],
@@ -236,7 +269,7 @@ class _FriendsScreenState extends State<FriendsScreen>
           if (_selectedSegment == 0)
             Positioned(
               right: 20,
-              bottom: 30,
+              bottom: 110, // Moved up to avoid floating nav bar (was 30)
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: _showSearchBottomSheet,
@@ -439,16 +472,7 @@ class _FriendsScreenState extends State<FriendsScreen>
             ),
           ),
           
-          // User UID Card
-          Consumer<RelationshipProvider>(
-            builder: (context, provider, child) {
-              return UserUidCard(
-                uid: provider.currentUserUid,
-              );
-            },
-          ),
-          
-          // Content based on selected segment
+          // Content based on selected segment (User ID card now inside)
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
@@ -468,20 +492,23 @@ class _FriendsScreenState extends State<FriendsScreen>
                 );
               },
               child: _selectedSegment == 0
-                  ? const FriendsListWidget(key: ValueKey('friends'))
-                  : const FriendRequestsWidget(key: ValueKey('requests')),
+                  ? _buildFriendsTabWithUserID()
+                  : _buildRequestsTabWithUserID(),
             ),
           ),
         ],
       ),
       // Conditional floating action button - only show in Friends section
       floatingActionButton: _selectedSegment == 0
-          ? FloatingActionButton(
-              onPressed: _showSearchBottomSheet,
-              backgroundColor: theme.colorScheme.primary,
-              child: Icon(
-                Icons.person_add,
-                color: theme.colorScheme.onPrimary,
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 80), // Add padding to avoid floating nav bar
+              child: FloatingActionButton(
+                onPressed: _showSearchBottomSheet,
+                backgroundColor: theme.colorScheme.primary,
+                child: Icon(
+                  Icons.person_add,
+                  color: theme.colorScheme.onPrimary,
+                ),
               ),
             )
           : null,

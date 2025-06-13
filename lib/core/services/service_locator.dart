@@ -1,5 +1,4 @@
 import 'package:get_it/get_it.dart';
-
 import 'auth/auth_service_interface.dart';
 import 'auth/auth_service.dart';
 import 'auth/auth_security_manager.dart';
@@ -18,7 +17,7 @@ import '../repositories/relationship_repository.dart';
 import 'logger/logger_service.dart';
 import 'relationship/relationship_service_interface.dart';
 import 'relationship/relationship_service.dart';
-import 'call/agora_token_service.dart';
+import 'agora/agora_token_service.dart';
 import 'cache/cache_sync_service.dart';
 import 'lifecycle/app_lifecycle_manager.dart';
 import 'permissions/permissions_service.dart';

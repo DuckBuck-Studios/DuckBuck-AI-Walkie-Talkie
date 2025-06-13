@@ -197,9 +197,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final isLoading = settingsProvider.isLoading;
           
           return ListView(
-            padding: EdgeInsets.symmetric(
-              horizontal: screenWidth * 0.05,
-              vertical: screenHeight * 0.02,
+            padding: EdgeInsets.only(
+              left: screenWidth * 0.05,
+              right: screenWidth * 0.05,
+              top: screenHeight * 0.02,
+              bottom: 120, // Add bottom padding to avoid floating nav bar
             ),
             children: [
               // Add space from top
@@ -353,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
           ),
           
-          SizedBox(height: screenHeight * 0.06),
+          SizedBox(height: screenHeight * 0.03), // Reduced from 0.06
           
           // App version at bottom
           Center(
@@ -393,9 +395,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final isLoading = settingsProvider.isLoading;
             
             return ListView(
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth * 0.05,
-                vertical: screenHeight * 0.02,
+              padding: EdgeInsets.only(
+                left: screenWidth * 0.05,
+                right: screenWidth * 0.05,
+                top: screenHeight * 0.02,
+                bottom: 120, // Add bottom padding to avoid floating nav bar
               ),
               children: [
                 // Add space from top
@@ -502,7 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ]),
                 
-                SizedBox(height: screenHeight * 0.06),
+                SizedBox(height: screenHeight * 0.03), // Reduced from 0.06
                 
                 // App version at bottom
                 Center(

@@ -45,44 +45,46 @@ class EmptyStateWidget extends StatelessWidget {
 
   /// Builds iOS-style empty state
   Widget _buildCupertinoEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 80,
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: CupertinoColors.label.resolveFrom(context),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: TextStyle(
-                fontSize: 16,
+    return Expanded(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 80,
                 color: CupertinoColors.secondaryLabel.resolveFrom(context),
               ),
-              textAlign: TextAlign.center,
-            ),
-            if (actionText != null && onAction != null) ...[
               const SizedBox(height: 24),
-              CupertinoButton.filled(
-                onPressed: onAction,
-                child: Text(actionText!),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (actionText != null && onAction != null) ...[
+                const SizedBox(height: 24),
+                CupertinoButton.filled(
+                  onPressed: onAction,
+                  child: Text(actionText!),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -92,42 +94,44 @@ class EmptyStateWidget extends StatelessWidget {
   Widget _buildMaterialEmptyState(BuildContext context) {
     final theme = Theme.of(context);
     
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 80,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: theme.textTheme.bodyLarge?.copyWith(
+    return Expanded(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 80,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-              textAlign: TextAlign.center,
-            ),
-            if (actionText != null && onAction != null) ...[
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: onAction,
-                child: Text(actionText!),
+              Text(
+                title,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (actionText != null && onAction != null) ...[
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: onAction,
+                  child: Text(actionText!),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

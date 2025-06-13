@@ -193,20 +193,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
             child: SafeArea(
-              child: Column(
-                children: [
-                  // DuckBuck AI Card - Always visible
-                  _buildDuckBuckAICard(context, true),
-                  
-                  // Rest of the content
-                  Expanded(
-                    child: HomeFriendsSection(
-                      friends: homeProvider.friends,
-                      isLoading: homeProvider.isLoadingFriends,
-                      onFriendTap: _handleFriendTap,
-                    ),
-                  ),
-                ],
+              child: HomeFriendsSection(
+                friends: homeProvider.friends, // Use real friends from HomeProvider
+                isLoading: homeProvider.isLoadingFriends, // Use real loading state
+                onFriendTap: _handleFriendTap,
               ),
             ),
           );
@@ -221,134 +211,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               elevation: 0,
             ),
             body: SafeArea(
-              child: Column(
-                children: [
-                  // DuckBuck AI Card - Always visible
-                  _buildDuckBuckAICard(context, false),
-                  
-                  // Rest of the content
-                  Expanded(
-                    child: HomeFriendsSection(
-                      friends: homeProvider.friends,
-                      isLoading: homeProvider.isLoadingFriends,
-                      onFriendTap: _handleFriendTap,
-                    ),
-                  ),
-                ],
+              child: HomeFriendsSection(
+                friends: homeProvider.friends, // Use real friends from HomeProvider
+                isLoading: homeProvider.isLoadingFriends, // Use real loading state
+                onFriendTap: _handleFriendTap,
               ),
             ),
           );
         }
       },
     );
-  }
-
-  /// Build DuckBuck AI card that's always shown at the top
-  Widget _buildDuckBuckAICard(BuildContext context, bool isIOS) {
-    if (isIOS) {
-      return Container(
-        margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        child: CupertinoListSection.insetGrouped(
-          backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-          children: [
-            CupertinoListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  color: CupertinoColors.systemBlue.resolveFrom(context),
-                  child: Image.asset(
-                    'assets/logo.png',
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        CupertinoIcons.sparkles,
-                        color: CupertinoColors.white,
-                        size: 20,
-                      );
-                    },
-                  ),
-                ),
-              ),
-              title: const Text(
-                'DuckBuck AI',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 17,
-                ),
-              ),
-              subtitle: const Text('Your AI Assistant'),
-              trailing: const Icon(
-                CupertinoIcons.chevron_right,
-                color: CupertinoColors.systemGrey,
-                size: 16,
-              ),
-              onTap: () {
-                // TODO: Add AI interaction logic here
-              },
-            ),
-          ],
-        ),
-      );
-    } else {
-      final theme = Theme.of(context);
-      return Container(
-        margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 40,
-                height: 40,
-                color: theme.colorScheme.primary,
-                child: Image.asset(
-                  'assets/logo.png',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.auto_awesome,
-                      color: theme.colorScheme.onPrimary,
-                      size: 20,
-                    );
-                  },
-                ),
-              ),
-            ),
-            title: Text(
-              'DuckBuck AI',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 17,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            subtitle: Text(
-              'Your AI Assistant',
-              style: TextStyle(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            trailing: Icon(
-              Icons.chevron_right,
-              color: theme.colorScheme.onSurfaceVariant,
-              size: 16,
-            ),
-            onTap: () {
-              // TODO: Add AI interaction logic here
-            },
-          ),
-        ),
-      );
-    }
   }
 }

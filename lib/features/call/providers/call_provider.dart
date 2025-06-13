@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/call_data.dart';
-import '../../../core/services/call/agora_service.dart';
+import '../../../core/services/agora/agora_service.dart';
 
 class CallProvider with ChangeNotifier {
   static const MethodChannel _methodChannel = MethodChannel('com.duckbuck.app/call');

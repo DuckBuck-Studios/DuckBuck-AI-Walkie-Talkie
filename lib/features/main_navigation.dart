@@ -104,46 +104,52 @@ class _MainNavigationState extends State<MainNavigation> {
               },
               children: _widgetOptions,
             ),
-            bottomNavigationBar: Container(
+          ),
+          // Floating navigation bar overlay
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 40,
+            child: Container(
               decoration: BoxDecoration(
-                color: Colors.grey[900], // Dark color for the Nav Bar background
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(30), // Rounded corners
                 boxShadow: [
                   BoxShadow(
-                    blurRadius: 20,
-                    color: Colors.black.withAlpha((0.25 * 255).round()), // Darker shadow
+                    blurRadius: 30,
+                    color: Colors.black.withValues(alpha: 0.3),
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
-                  child: GNav(
-                    rippleColor: Colors.grey[800]!,
-                    hoverColor: Colors.grey[700]!,
-                    gap: 8,
-                    activeColor: Colors.white, // Active icon/text color
-                    iconSize: 24,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    duration: const Duration(milliseconds: 400),
-                    tabBackgroundColor: Colors.grey[800]!, // Background color for active tab
-                    color: Colors.grey[400]!, // Inactive icon/text color
-                    tabs: const [
-                      GButton(
-                        icon: Icons.home_outlined,
-                        text: 'Home',
-                      ),
-                      GButton(
-                        icon: Icons.people_outline,
-                        text: 'Friends',
-                      ),
-                      GButton(
-                        icon: Icons.settings_outlined,
-                        text: 'Settings',
-                      ),
-                    ],
-                    selectedIndex: _selectedIndex,
-                    onTabChange: _onItemTapped, // Use the consolidated tap handler
-                  ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                child: GNav(
+                  rippleColor: Colors.grey[800]!,
+                  hoverColor: Colors.grey[700]!,
+                  gap: 8,
+                  activeColor: Colors.white, // Active icon/text color
+                  iconSize: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  duration: const Duration(milliseconds: 400),
+                  tabBackgroundColor: Colors.grey[800]!, // Background color for active tab
+                  color: Colors.grey[400]!, // Inactive icon/text color
+                  tabs: const [
+                    GButton(
+                      icon: Icons.home_outlined,
+                      text: 'Home',
+                    ),
+                    GButton(
+                      icon: Icons.people_outline,
+                      text: 'Friends',
+                    ),
+                    GButton(
+                      icon: Icons.settings_outlined,
+                      text: 'Settings',
+                    ),
+                  ],
+                  selectedIndex: _selectedIndex,
+                  onTabChange: _onItemTapped, // Use the consolidated tap handler
                 ),
               ),
             ),
