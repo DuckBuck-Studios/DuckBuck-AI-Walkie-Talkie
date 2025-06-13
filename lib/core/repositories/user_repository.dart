@@ -7,7 +7,7 @@ import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
-import '../services/notifications/email_notification_service.dart';
+import '../services/notifications/notifications_service.dart';
 import '../services/user/user_service_interface.dart';
 import '../services/database/local_database_service.dart';
 
@@ -18,7 +18,7 @@ class UserRepository {
   final LoggerService _logger = LoggerService();
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
-  final EmailNotificationService _emailService;
+  final NotificationsService _notificationsService;
   
   // Stream subscriptions for cleanup
   StreamSubscription<UserModel?>? _userDocumentSubscription;
@@ -31,11 +31,11 @@ class UserRepository {
     UserServiceInterface? userService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
-    EmailNotificationService? emailService,
+    NotificationsService? notificationsService,
   }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _emailService = emailService ?? serviceLocator<EmailNotificationService>();
+       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>();
 
   /// Get the current authenticated user
   /// First tries to get from local database, then falls back to Firebase
@@ -150,6 +150,9 @@ class UserRepository {
       // Otherwise, check if user exists in Firestore and create if needed
       final isNewToFirestore = await _createOrUpdateUserData(user);
       
+      // Generate and save FCM token after user data is saved
+      await _generateAndSaveFCMToken(user.uid);
+      
       // Save user to local database for all sign-ins
       final localDb = LocalDatabaseService.instance;
       await localDb.saveUser(user);
@@ -175,7 +178,7 @@ class UserRepository {
         
         // Fire and forget email sending in the background using the centralized email service
         Future(() {
-          _emailService.sendLoginNotificationEmail(
+          _notificationsService.sendLoginNotificationEmail(
             email: userEmail,
             username: userName,
             loginTime: loginTime,
@@ -257,6 +260,9 @@ class UserRepository {
       // Otherwise, check if user exists in Firestore and create if needed
       final isNewToFirestore = await _createOrUpdateUserData(user);
       
+      // Generate and save FCM token after user data is saved
+      await _generateAndSaveFCMToken(user.uid);
+      
       // Save user to local database for all sign-ins
       final localDb = LocalDatabaseService.instance;
       await localDb.saveUser(user);
@@ -282,7 +288,7 @@ class UserRepository {
         
         // Fire and forget email sending in the background using the centralized email service
         Future(() {
-          _emailService.sendLoginNotificationEmail(
+          _notificationsService.sendLoginNotificationEmail(
             email: userEmail,
             username: userName,
             loginTime: loginTime,
@@ -448,6 +454,9 @@ class UserRepository {
       // Check if user exists in Firestore and create if needed
       final isNewUser = await _createOrUpdateUserData(user);
       
+      // Generate and save FCM token after user data is saved
+      await _generateAndSaveFCMToken(user.uid);
+      
       // Log authentication success
       if (isNewUser) {
         await _analytics.logSignUp(signUpMethod: 'phone');
@@ -526,6 +535,9 @@ class UserRepository {
 
       // Check if user exists in Firestore and create if needed
       final isNewUser = await _createOrUpdateUserData(user);
+      
+      // Generate and save FCM token after user data is saved
+      await _generateAndSaveFCMToken(user.uid);
       
       // Save user to local database
       final localDb = LocalDatabaseService.instance;
@@ -700,6 +712,22 @@ class UserRepository {
     } catch (e) {
       _logger.e(_tag, 'Failed to get user data: ${e.toString()}');
       rethrow;
+    }
+  }
+
+  /// Helper method to generate and save FCM token after successful authentication
+  Future<void> _generateAndSaveFCMToken(String userId) async {
+    try {
+      _logger.i(_tag, 'Generating FCM token for authenticated user: $userId');
+      
+      // Get notifications service to generate and save FCM token
+      final notificationsService = serviceLocator<NotificationsService>();
+      await notificationsService.generateAndSaveToken(userId);
+      
+      _logger.i(_tag, 'FCM token generation completed for user: $userId');
+    } catch (e) {
+      // Log error but don't fail the authentication process
+      _logger.e(_tag, 'Failed to generate FCM token for user $userId: ${e.toString()}');
     }
   }
 

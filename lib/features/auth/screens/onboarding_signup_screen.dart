@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_colors.dart';
 import '../components/auth_bottom_sheet.dart';
 
@@ -23,23 +24,30 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   void initState() {
     super.initState();
     
-    // Initialize animation controller
+    // Initialize animation controller with premium timing
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 800), // Increased for smoother feel
       vsync: this,
     );
     
-    // Create move up animation
+    // Create sophisticated move up animation with better easing
     _moveUpAnimation = Tween<double>(
       begin: 0.0,
-      end: -120.0, // Move up by 120 pixels when bottom sheet opens
+      end: -140.0, // Slightly more movement for dramatic effect
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeInOut,
+      curve: Curves.easeOutExpo, // Premium easing curve
     ));
     
-    // Add haptic feedback when screen appears with platform-specific intensity
+    // Add sophisticated haptic feedback when screen appears
     HapticFeedback.mediumImpact();
+    
+    // Add a subtle delay before showing content for premium feel
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        HapticFeedback.lightImpact();
+      }
+    });
   }
 
   @override
@@ -52,15 +60,18 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     // Don't process if already loading
     if (_isLoading) return;
     
-    // Start animation to move content up
+    // Premium haptic feedback
+    HapticFeedback.mediumImpact();
+    
+    // Start animation to move content up with premium timing
     _animationController.forward();
     
-    // Show auth bottom sheet component
+    // Show auth bottom sheet component with enhanced presentation
     AuthBottomSheet.show(
       context: context,
       onAuthComplete: _completeWithDemo,
     ).then((_) {
-      // Reset animation when bottom sheet is dismissed
+      // Reset animation when bottom sheet is dismissed with smooth timing
       _animationController.reverse();
     });
   }
@@ -80,7 +91,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final bool isIOS = Platform.isIOS;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
@@ -89,7 +99,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
       decoration: const BoxDecoration(color: Colors.black),
       child: Stack(
         children: [
-          // Decorative background elements
+          // Enhanced decorative background elements with animations
           Positioned(
             top: -size.height * 0.1,
             right: -size.width * 0.1,
@@ -100,6 +110,20 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                 shape: BoxShape.circle,
                 color: AppColors.whiteOpacity10,
               ),
+            )
+            .animate(onPlay: (controller) => controller.repeat())
+            .scale(
+              duration: 4000.ms,
+              begin: const Offset(0.8, 0.8),
+              end: const Offset(1.2, 1.2),
+              curve: Curves.easeInOut,
+            )
+            .then()
+            .scale(
+              duration: 4000.ms,
+              begin: const Offset(1.2, 1.2),
+              end: const Offset(0.8, 0.8),
+              curve: Curves.easeInOut,
             ),
           ),
 
@@ -113,12 +137,27 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                 shape: BoxShape.circle,
                 color: AppColors.whiteOpacity15,
               ),
+            )
+            .animate(onPlay: (controller) => controller.repeat())
+            .scale(
+              duration: 3500.ms,
+              begin: const Offset(1.1, 1.1),
+              end: const Offset(0.9, 0.9),
+              curve: Curves.easeInOut,
+            )
+            .then()
+            .scale(
+              duration: 3500.ms,
+              begin: const Offset(0.9, 0.9),
+              end: const Offset(1.1, 1.1),
+              curve: Curves.easeInOut,
             ),
           ),
 
-          // Small decorative circles
+          // Floating particle animations
           ...List.generate(8, (index) {
             final random = index * 37 % 100;
+            final delay = (index * 200 + random * 10).ms;
             return Positioned(
               top: size.height * (random % 80) / 100,
               left: size.width * ((random * 3) % 90) / 100,
@@ -129,11 +168,22 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                   shape: BoxShape.circle,
                   color: AppColors.whiteOpacity30,
                 ),
-              ),
+              )
+              .animate(onPlay: (controller) => controller.repeat())
+              .fadeIn(delay: delay, duration: 1000.ms)
+              .then()
+              .moveY(
+                duration: (3000 + random * 20).ms,
+                begin: 0,
+                end: -50,
+                curve: Curves.easeInOut,
+              )
+              .fadeOut(duration: 500.ms)
+              .then(delay: (500 + random * 100).ms),
             );
           }),
 
-          // Content container
+          // Content container with modern entrance animations
           Padding(
             padding: EdgeInsets.only(
               top: size.height * 0.08,
@@ -148,7 +198,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Animated container for logo and title
+                      // Animated container for logo and title with premium effects
                       AnimatedBuilder(
                         animation: _moveUpAnimation,
                         builder: (context, child) {
@@ -156,7 +206,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                             offset: Offset(0, _moveUpAnimation.value),
                             child: Column(
                               children: [
-                                // Logo container with animation
+                                // Logo container with sophisticated entrance animation
                                 Container(
                                   width: size.width * 0.4,
                                   height: size.width * 0.4,
@@ -181,11 +231,29 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                                     width: size.width * 0.25,
                                     fit: BoxFit.contain,
                                   ),
+                                )
+                                .animate()
+                                .scale(
+                                  delay: 200.ms,
+                                  duration: 800.ms,
+                                  begin: const Offset(0.5, 0.5),
+                                  end: const Offset(1.0, 1.0),
+                                  curve: Curves.elasticOut,
+                                )
+                                .fadeIn(
+                                  delay: 100.ms,
+                                  duration: 600.ms,
+                                  curve: Curves.easeOutExpo,
+                                )
+                                .shimmer(
+                                  delay: 1000.ms,
+                                  duration: 1500.ms,
+                                  color: Colors.white.withValues(alpha: 0.3),
                                 ),
 
                                 SizedBox(height: size.height * 0.05),
 
-                                // Title text with animation
+                                // Title text with staggered character animation
                                 Text(
                                   'Welcome to DuckBuck',
                                   style: const TextStyle(
@@ -196,6 +264,25 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                                     decoration: TextDecoration.none,
                                   ),
                                   textAlign: TextAlign.center,
+                                )
+                                .animate()
+                                .fadeIn(
+                                  delay: 400.ms,
+                                  duration: 800.ms,
+                                  curve: Curves.easeOutExpo,
+                                )
+                                .slideY(
+                                  delay: 400.ms,
+                                  duration: 800.ms,
+                                  begin: 0.3,
+                                  end: 0.0,
+                                  curve: Curves.easeOutExpo,
+                                )
+                                .then()
+                                .shimmer(
+                                  delay: 500.ms,
+                                  duration: 2000.ms,
+                                  color: AppColors.accentBlue.withValues(alpha: 0.2),
                                 ),
                               ],
                             ),
@@ -206,7 +293,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                   ),
                 ),
 
-                // Continue button with animation
+                // Continue button with premium interaction animations
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
@@ -237,14 +324,45 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                               ),
                             ),
                           )
-                        : Text(
-                            'Get Started',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: isIOS ? FontWeight.w600 : FontWeight.bold,
-                              color: AppColors.pureBlack,
-                            ),
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Get Started',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: Platform.isIOS ? FontWeight.w600 : FontWeight.bold,
+                                  color: AppColors.pureBlack,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Platform.isIOS ? Icons.arrow_forward_ios : Icons.arrow_forward,
+                                size: 16,
+                                color: AppColors.pureBlack,
+                              ),
+                            ],
                           ),
+                  )
+                  .animate()
+                  .fadeIn(
+                    delay: 800.ms,
+                    duration: 600.ms,
+                    curve: Curves.easeOutExpo,
+                  )
+                  .slideY(
+                    delay: 800.ms,
+                    duration: 600.ms,
+                    begin: 0.5,
+                    end: 0.0,
+                    curve: Curves.easeOutExpo,
+                  )
+                  .scale(
+                    delay: 800.ms,
+                    duration: 600.ms,
+                    begin: const Offset(0.8, 0.8),
+                    end: const Offset(1.0, 1.0),
+                    curve: Curves.easeOutBack,
                   ),
                 ),
               ],

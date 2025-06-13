@@ -2,7 +2,34 @@
 
 ## Overview
 
-This document provides comprehensive documentation for the FCM (Firebase Cloud Messaging) walkie-talkie receive flow in the DuckBuck app. The system handles incoming **walkie-talkie speaking notifications** - when someone starts speaking in a channel, an FCM message is sent to notify other participants. The system works consistently across all app states: **Foreground**, **Background**, and **Killed**.
+This document provides comprehensive documentation for the FCM (Firebase Cloud Messaging) walkie-talkie receive flow in the DuckBuck app. The system handles incoming **walkie-talkie speaking notifications** - when someone starts speaking in a chann#### **🔥 Service Detection (Killed State Recovery)**
+```kotlin
+// CRITICAL: Detect active service on app resume
+if (isWalkieTalkieServiceRunning() && hasActiveCallData()) {
+    // 🆕 ENHANCEMENT: Check channel occupancy before rejoining
+    checkChannelOccupancyAndDecide(callData)
+}
+```
+
+#### **🛡️ Stale Data Protection (NEW ENHANCEMENT)**
+```kotlin
+// CRITICAL: Verify channel occupancy before recovery
+occupancyManager.checkOccupancyWithQuickJoin(
+    channelName = callData.channelName,
+    onOccupied = { userCount -> /* Proceed with recovery */ },
+    onEmpty = { /* Clear stale data silently */ },
+    onError = { /* Clear data to prevent repeated failures */ }
+)
+```
+
+#### **📡 Event Listener Preservation (NEW ENHANCEMENT)**
+```kotlin
+// CRITICAL: Store and restore original event listeners
+val originalListener = agoraService.getEventListener()
+agoraService.setEventListener(tempListener) // For quick check
+// ... perform occupancy check ...
+agoraService.setEventListener(originalListener) // Always restore
+```FCM message is sent to notify other participants. The system works consistently across all app states: **Foreground**, **Background**, and **Killed**.
 
 ## ⚠️ Important: CallState Enum Optimization
 
@@ -199,6 +226,8 @@ private fun isMessageFresh(messageTimestamp: Long): Boolean {
 2. **Channel Occupancy**: Smart notification display only when users present
 3. **Silent Leave**: No UI/notifications for empty channels
 4. **Retry Logic**: 3 attempts with 1-second intervals for occupancy check
+5. **🆕 Stale Data Protection**: Prevents rejoining empty channels from old SharedPreferences
+6. **🆕 Event Listener Preservation**: Maintains original Agora event listeners during occupancy checks
     
     Service->>Lifecycle: joinCallOptimized(token, uid, channelId)
     Lifecycle-->>Service: onJoinChannelSuccess()
@@ -235,16 +264,35 @@ private fun isMessageFresh(messageTimestamp: Long): Boolean {
     Note over Service,Flutter: User opens app manually or via notification
     
     MainActivity->>MainActivity: onResume() 🔄
-    MainActivity->>MainActivity: checkForActiveCallsOnResume()
-    MainActivity->>Service: isWalkieTalkieServiceRunning()
-    Service-->>MainActivity: true ✅
+    MainActivity->>AppStateManager: checkForActiveCallsOnResume()
+    AppStateManager->>Persistence: getPersistedCallData()
+    Persistence-->>AppStateManager: CallData (may be stale) ⚠️
     
-    MainActivity->>Persistence: hasActiveCall()
-    Persistence-->>MainActivity: true (call data exists) ✅
+    Note over AppStateManager: 🆕 ENHANCEMENT: Smart Stale Data Handling
+    AppStateManager->>ChannelOccupancy: checkOccupancyWithQuickJoin()
+    Note over ChannelOccupancy: Store original event listener
+    ChannelOccupancy->>Agora: getEventListener() 📡
+    Agora-->>ChannelOccupancy: Original listener stored
     
-    MainActivity->>UITrigger: triggerIncomingCall(persistedCallData)
-    UITrigger->>Flutter: methodChannel.invokeMethod("triggerIncomingCall")
-    Flutter->>Flutter: Show call UI immediately 📱
+    ChannelOccupancy->>Agora: Quick join with temp listener
+    Agora-->>ChannelOccupancy: onJoinChannelSuccess()
+    Note over ChannelOccupancy: 800ms discovery delay
+    
+    alt Channel Has Users (Valid Recovery)
+        ChannelOccupancy->>Agora: getChannelUserCount()
+        Agora-->>ChannelOccupancy: userCount > 0 ✅
+        ChannelOccupancy->>Agora: leaveChannel() & restore listener 🔄
+        ChannelOccupancy-->>AppStateManager: onOccupied(userCount)
+        AppStateManager->>UITrigger: triggerIncomingCall()
+        UITrigger->>Flutter: 🎯 Display Call Screen
+    else Channel Empty (Stale Data)
+        ChannelOccupancy->>Agora: getChannelUserCount()
+        Agora-->>ChannelOccupancy: userCount = 0 🏃‍♂️
+        ChannelOccupancy->>Agora: leaveChannel() & restore listener 🔄
+        ChannelOccupancy-->>AppStateManager: onEmpty()
+        AppStateManager->>Persistence: clearPersistedData() 🧹
+        Note over AppStateManager: Silent cleanup - no UI/notifications
+    end
 ```
 
 **Flow Characteristics**:
@@ -611,6 +659,224 @@ private fun isWalkieTalkieServiceRunning(): Boolean {
 - 🔗 Manages service binding for data retrieval
 - 🧹 Cleans up inconsistent state scenarios
 
+### 🛡️ AppStateManager - Enhanced Stale Data Protection
+**Location**: `android/app/src/main/kotlin/com/duckbuck/app/core/AppStateManager.kt`
+
+**Purpose**: Enhanced app state management with smart stale data handling
+
+**🆕 Core Enhancement - Smart Occupancy Checking**:
+```kotlin
+private fun checkForActiveCallsOnResume() {
+    // Get stored call data from SharedPreferences
+    val callData = callStatePersistenceManager.getPersistedCallData()
+    
+    if (callData != null) {
+        Log.d(TAG, "Found stored call data for channel: ${callData.channelName}")
+        
+        // 🆕 ENHANCEMENT: Check channel occupancy before rejoining
+        checkChannelOccupancyAndDecide(callData)
+    } else {
+        Log.d(TAG, "No stored call data found")
+    }
+}
+
+private fun checkChannelOccupancyAndDecide(callData: CallData) {
+    Log.d(TAG, "Checking channel occupancy before rejoining: ${callData.channelName}")
+    
+    occupancyManager.checkOccupancyWithQuickJoin(
+        channelName = callData.channelName,
+        token = callData.token ?: "",
+        uid = callData.uid ?: 0,
+        onOccupied = { userCount ->
+            Log.d(TAG, "✅ Channel ${callData.channelName} has $userCount users - rejoining")
+            // Channel has users, proceed with normal recovery
+            if (isWalkieTalkieServiceRunning()) {
+                callUITrigger.triggerIncomingCall(callData)
+            } else {
+                // Restart service if needed
+                startWalkieTalkieService(callData)
+            }
+        },
+        onEmpty = {
+            Log.d(TAG, "🏃‍♂️ Channel ${callData.channelName} is empty - clearing stale data")
+            // Channel is empty, clear stale data silently
+            callStatePersistenceManager.clearPersistedData()
+        },
+        onError = { error ->
+            Log.e(TAG, "❌ Error checking occupancy for ${callData.channelName}: $error")
+            // On error, clear data to prevent repeated failures
+            callStatePersistenceManager.clearPersistedData()
+        }
+    )
+}
+```
+
+**🛡️ Enhanced Responsibilities**:
+- 🔍 **Smart Recovery**: Checks channel occupancy before rejoining from SharedPreferences
+- 🧹 **Stale Data Cleanup**: Clears stored data for empty channels
+- 🛡️ **Double-Verification**: Prevents reconnecting to inactive channels
+- 🔄 **Service Coordination**: Manages service lifecycle during recovery
+- 📊 **Intelligent Decision Making**: Routes to appropriate recovery path based on channel state
+
+### 🔍 ChannelOccupancyManager - Recovery Occupancy Checks
+**Location**: `android/app/src/main/kotlin/com/duckbuck/app/channel/ChannelOccupancyManager.kt`
+
+**Purpose**: Enhanced occupancy checking for recovery scenarios
+
+**🆕 Recovery Method - Quick Join for Verification**:
+```kotlin
+fun checkOccupancyWithQuickJoin(
+    channelName: String,
+    token: String,
+    uid: Int,
+    onOccupied: (Int) -> Unit,
+    onEmpty: () -> Unit,
+    onError: (String) -> Unit
+) {
+    Log.d(TAG, "🔍 Starting quick occupancy check for recovery: $channelName")
+    
+    // Store original event listener to restore later
+    val originalListener = agoraService.getEventListener()
+    Log.d(TAG, "📡 Stored original event listener: ${originalListener?.javaClass?.simpleName}")
+    
+    // Create temporary event listener for this quick check
+    val tempListener = object : AgoraEventListener {
+        private var hasJoined = false
+        private var timeoutHandler: Handler? = null
+        
+        override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
+            if (!hasJoined) {
+                hasJoined = true
+                Log.d(TAG, "✅ Quick join successful for $channel")
+                
+                // Allow brief time for user discovery
+                timeoutHandler = Handler(Looper.getMainLooper()).apply {
+                    postDelayed({
+                        performOccupancyCheck(channelName, onOccupied, onEmpty, originalListener)
+                    }, 800) // 800ms discovery delay
+                }
+            }
+        }
+        
+        override fun onJoinChannelError(error: String) {
+            Log.e(TAG, "❌ Quick join failed for $channelName: $error")
+            restoreOriginalListener(originalListener)
+            onError("Join failed: $error")
+        }
+        
+        override fun onUserJoined(uid: Int, elapsed: Int) {
+            Log.d(TAG, "👤 User joined during quick check: $uid")
+        }
+        
+        override fun onUserOffline(uid: Int, reason: Int) {
+            Log.d(TAG, "👤 User left during quick check: $uid (reason: $reason)")
+        }
+        
+        override fun onLeaveChannel(stats: Any?) {
+            Log.d(TAG, "🚪 Left channel during quick check")
+            restoreOriginalListener(originalListener)
+        }
+        
+        override fun onError(errorCode: Int, errorMessage: String) {
+            Log.e(TAG, "❌ Agora error during quick check: $errorCode - $errorMessage")
+            restoreOriginalListener(originalListener)
+            onError("Agora error: $errorMessage")
+        }
+    }
+    
+    try {
+        // Set temporary listener and join for quick check
+        agoraService.setEventListener(tempListener)
+        agoraService.joinChannel(token, channelName, uid)
+        
+        // Timeout safety mechanism
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (!hasJoined) {
+                Log.w(TAG, "⏰ Quick join timeout for $channelName")
+                restoreOriginalListener(originalListener)
+                onError("Join timeout")
+            }
+        }, 10000) // 10 second total timeout
+        
+    } catch (e: Exception) {
+        Log.e(TAG, "💥 Exception during quick occupancy check", e)
+        restoreOriginalListener(originalListener)
+        onError("Exception: ${e.message}")
+    }
+}
+
+private fun performOccupancyCheck(
+    channelName: String,
+    onOccupied: (Int) -> Unit,
+    onEmpty: () -> Unit,
+    originalListener: AgoraEventListener?
+) {
+    try {
+        val userCount = agoraService.getChannelUserCount()
+        Log.d(TAG, "👥 Channel $channelName user count: $userCount")
+        
+        // Leave the channel after checking
+        agoraService.leaveChannel()
+        
+        // Restore original listener
+        restoreOriginalListener(originalListener)
+        
+        // Report results
+        if (userCount > 0) {
+            Log.d(TAG, "✅ Channel occupied with $userCount users")
+            onOccupied(userCount)
+        } else {
+            Log.d(TAG, "🏃‍♂️ Channel is empty")
+            onEmpty()
+        }
+        
+    } catch (e: Exception) {
+        Log.e(TAG, "💥 Error during occupancy check", e)
+        agoraService.leaveChannel() // Ensure we leave
+        restoreOriginalListener(originalListener)
+        onError("Check failed: ${e.message}")
+    }
+}
+
+private fun restoreOriginalListener(originalListener: AgoraEventListener?) {
+    try {
+        if (originalListener != null) {
+            agoraService.setEventListener(originalListener)
+            Log.d(TAG, "🔄 Restored original event listener: ${originalListener.javaClass.simpleName}")
+        } else {
+            Log.d(TAG, "📡 No original listener to restore")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "💥 Failed to restore original listener", e)
+    }
+}
+```
+
+**🆕 Enhanced Capabilities**:
+- 🔍 **Recovery Verification**: Quick joins to verify channel occupancy during app recovery
+- 📡 **Event Listener Preservation**: Stores and restores original listeners to prevent disruption
+- ⏰ **Timeout Protection**: 10-second safety timeout for recovery operations
+- 🛡️ **Exception Safety**: Comprehensive error handling with cleanup
+- 🔄 **State Restoration**: Always restores original Agora state regardless of outcome
+
+### 🔊 AgoraService - Enhanced Event Listener Management
+**Location**: `android/app/src/main/kotlin/com/duckbuck/app/agora/AgoraService.kt`
+
+**Purpose**: Enhanced Agora service with event listener retrieval
+
+**🆕 Event Listener Access Method**:
+```kotlin
+fun getEventListener(): AgoraEventListener? {
+    return currentEventListener
+}
+```
+
+**Enhanced Responsibilities**:
+- 📡 **Listener Tracking**: Maintains reference to current event listener
+- 🔄 **State Preservation**: Enables temporary listener switching with restoration
+- 🛡️ **Service Continuity**: Prevents disruption to active walkie-talkie services
+- 🔍 **Recovery Support**: Enables safe occupancy checks during app recovery
+
 ## Complete Message Flow Summary
 
 ### 🚀 **End-to-End Flow Execution**
@@ -683,6 +949,132 @@ graph TD
 - ✅ **Error Handling**: Graceful degradation
 
 This architecture ensures **100% reliable walkie-talkie call delivery** and UI display across all Android app lifecycle states, with robust data persistence and recovery mechanisms.
+
+## 🚀 Recent Architectural Enhancements (2024)
+
+### **🛡️ Problem Solved: Stale SharedPreferences Recovery**
+
+**Issue Identified**: The walkie-talkie system would automatically rejoin channels based on SharedPreferences data without verifying if those channels still had active users. This led to users rejoining empty channels from stale data.
+
+**Solution Implemented**: Enhanced the recovery flow with smart channel occupancy verification before rejoining.
+
+### **🔧 Enhancement 1: Smart Stale Data Protection**
+
+**Components Modified**:
+- **AppStateManager.kt**: Enhanced `checkForActiveCallsOnResume()` with occupancy checking
+- **ChannelOccupancyManager.kt**: Added `checkOccupancyWithQuickJoin()` for recovery scenarios
+
+**Flow Enhancement**:
+```mermaid
+graph TB
+    subgraph "🆕 ENHANCED RECOVERY FLOW"
+        RESUME[App Resume] --> CHECK_DATA[Check SharedPreferences]
+        CHECK_DATA --> HAS_DATA{Has Stored Data?}
+        HAS_DATA -->|Yes| QUICK_JOIN[🔍 Quick Join Check]
+        HAS_DATA -->|No| END_FLOW[End]
+        
+        QUICK_JOIN --> TEMP_LISTENER[📡 Store Original Listener]
+        TEMP_LISTENER --> JOIN_CHANNEL[Join Channel Temporarily]
+        JOIN_CHANNEL --> WAIT_DISCOVERY[⏱️ Wait 800ms for Discovery]
+        WAIT_DISCOVERY --> COUNT_USERS[Count Channel Users]
+        
+        COUNT_USERS --> HAS_USERS{Users Present?}
+        HAS_USERS -->|Yes| RESTORE_JOIN[🔄 Restore & Rejoin]
+        HAS_USERS -->|No| CLEAR_DATA[🧹 Clear Stale Data]
+        
+        RESTORE_JOIN --> SHOW_UI[📱 Show Call UI]
+        CLEAR_DATA --> SILENT_END[Silent Cleanup]
+        
+        style QUICK_JOIN fill:#e8f5e8
+        style TEMP_LISTENER fill:#f0f8ff
+        style CLEAR_DATA fill:#ffe4e1
+        style SHOW_UI fill:#e1f5fe
+    end
+```
+
+**Benefits**:
+- 🛡️ **Prevents Empty Channel Rejoins**: Users no longer auto-join channels with no participants
+- 🧹 **Automatic Cleanup**: Stale SharedPreferences data is cleared when channels are empty
+- 📊 **Smart Decision Making**: System makes intelligent recovery decisions based on actual channel state
+
+### **🔧 Enhancement 2: Event Listener Preservation**
+
+**Problem**: During occupancy checks, temporary event listeners could disrupt active WalkieTalkieService operations or other Agora functionality.
+
+**Solution**: Implemented comprehensive event listener storage and restoration.
+
+**Components Modified**:
+- **AgoraService.kt**: Added `getEventListener()` method for listener retrieval
+- **ChannelOccupancyManager.kt**: Enhanced with listener preservation logic
+
+**Implementation Details**:
+```kotlin
+// Store original listener before occupancy check
+val originalListener = agoraService.getEventListener()
+
+// Use temporary listener for quick check
+val tempListener = object : AgoraEventListener { /* ... */ }
+agoraService.setEventListener(tempListener)
+
+// Always restore original listener in ALL scenarios:
+// - Successful completion
+// - Join failures  
+// - Agora errors
+// - Exception handling
+// - Timeout scenarios
+
+private fun restoreOriginalListener(originalListener: AgoraEventListener?) {
+    if (originalListener != null) {
+        agoraService.setEventListener(originalListener)
+        Log.d(TAG, "🔄 Restored original event listener")
+    }
+}
+```
+
+**Benefits**:
+- 📡 **Service Continuity**: Active WalkieTalkieService listeners are never permanently disrupted
+- 🔄 **Guaranteed Restoration**: Original listeners restored in all completion paths
+- 🛡️ **Exception Safety**: Comprehensive error handling with cleanup
+- 🎯 **Non-Intrusive**: Occupancy checks don't interfere with existing functionality
+
+### **🔧 Enhancement 3: Comprehensive Error Handling**
+
+**Timeout Protection**:
+- ⏰ **10-second join timeout** for recovery operations
+- 🛡️ **Automatic cleanup** if operations hang
+- 📊 **Graceful degradation** on failures
+
+**Exception Safety**:
+- 💥 **Try-catch blocks** around all Agora operations
+- 🧹 **Guaranteed cleanup** in finally blocks
+- 📝 **Detailed error logging** for debugging
+
+**Race Condition Prevention**:
+- 🚫 **Avoided timeout-based solutions** that could create race conditions
+- ✅ **Single verification pattern** with immediate decision making
+- 🎯 **Double-verification approach** for reliable state detection
+
+### **📊 Impact Summary**
+
+**Before Enhancements**:
+- ❌ Users auto-rejoined empty channels from stale data
+- ❌ Event listeners could be permanently disrupted
+- ❌ No verification of channel state during recovery
+
+**After Enhancements**:
+- ✅ Smart occupancy verification before rejoining
+- ✅ Original event listeners always preserved
+- ✅ Stale data automatically cleaned up
+- ✅ Silent operation when channels are empty
+- ✅ Comprehensive error handling and timeouts
+
+**Code Quality Improvements**:
+- 🏗️ **Maintainable**: Clear separation of concerns
+- 🔒 **Robust**: Comprehensive error handling
+- 🧪 **Testable**: Well-defined interfaces and callbacks
+- 📝 **Documented**: Extensive logging and comments
+
+These enhancements significantly improve the user experience by preventing unwanted auto-joins to empty channels while maintaining the reliability and robustness of the existing walkie-talkie system.
 
 ## ✅ FLOW CONFIRMATION: Your Description vs Implementation
 

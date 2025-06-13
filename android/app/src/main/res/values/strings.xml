@@ -4,4 +4,7 @@
     <string name="sign_in_with_apple_callback">com.duckbuck.app://callback</string>
     <string name="sign_in_with_apple_client_id">com.duckbuck.service.id</string>
     <string name="sign_in_with_apple_scope">email name</string>
+    
+    <!-- Agora Configuration -->
+    <string name="agora_app_id">ccc5933082e7404682ae909f5654f31c</string>
 </resources>

@@ -229,13 +229,49 @@ class RelationshipProvider extends ChangeNotifier {
     }
   }
 
+  /// Close all active streams (used during signout)
+  /// This is different from dispose() - it closes streams but keeps the provider usable
+  void closeStreams() {
+    _logger.d(_tag, 'Closing all RelationshipProvider streams (signout cleanup)');
+    
+    // Cancel all stream subscriptions
+    _friendsSubscription?.cancel();
+    _friendsSubscription = null;
+    
+    _pendingRequestsSubscription?.cancel();
+    _pendingRequestsSubscription = null;
+    
+    _blockedUsersSubscription?.cancel();
+    _blockedUsersSubscription = null;
+    
+    _userDataSubscription?.cancel();
+    _userDataSubscription = null;
+    
+    // Clear data but keep the provider functional for potential re-initialization
+    _friendsRelationshipData.clear();
+    _pendingRequestsRelationshipData.clear();
+    _blockedUsersRelationshipData.clear();
+    _userDataCache.clear();
+    _friends.clear();
+    _pendingRequests.clear();
+    _blockedUsers.clear();
+    
+    // Reset loading states
+    _isLoadingFriends = false;
+    _isLoadingPendingRequests = false;
+    _isLoadingBlockedUsers = false;
+    _error = null;
+    
+    _logger.i(_tag, 'All RelationshipProvider streams closed and data cleared');
+    
+    // Notify listeners of the cleared state
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _logger.d(_tag, 'Disposing RelationshipProvider');
-    _friendsSubscription?.cancel();
-    _pendingRequestsSubscription?.cancel();
-    _blockedUsersSubscription?.cancel();
-    _userDataSubscription?.cancel();
+    closeStreams();
     super.dispose();
   }
 

@@ -359,9 +359,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  /// Navigate to onboarding screen with transition
+  /// Navigate to onboarding screen with premium transition
   void _navigateToOnboarding() {
-    // Use pushReplacement with a combined fade and scale transition
+    // Create a premium, modern page transition using a custom route
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
@@ -370,31 +370,42 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(0.0, 0.05);
-          const end = Offset.zero;
-          final tween = Tween(begin: begin, end: end).chain(
-            CurveTween(curve: Curves.easeOutCubic)
-          );
-          final offsetAnimation = animation.drive(tween);
-          
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ),
-            child: SlideTransition(
-              position: offsetAnimation,
-              child: ScaleTransition(
-                scale: CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ).drive(Tween(begin: 0.95, end: 1.0)),
-                child: child,
+          // Modern morph-style transition with depth
+          return Stack(
+            children: [
+              // Background blur effect during transition
+              AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) {
+                  return Container(
+                    color: Colors.black.withValues(alpha: animation.value * 0.3),
+                  );
+                },
               ),
-            ),
+              // Main content with sophisticated transform
+              Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001) // Add perspective
+                  ..rotateY((1 - animation.value) * 0.1) // Slight 3D rotation
+                  ..scale(
+                    0.85 + (animation.value * 0.15), // Scale from 85% to 100%
+                  )
+                  ..translate(
+                    0.0,
+                    (1 - animation.value) * 50, // Subtle Y movement
+                    (1 - animation.value) * -100, // Z-depth movement
+                  ),
+                child: Opacity(
+                  opacity: animation.value,
+                  child: child,
+                ),
+              ),
+            ],
           );
         },
-        transitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: const Duration(milliseconds: 800),
+        reverseTransitionDuration: const Duration(milliseconds: 600),
       ),
     );
   }

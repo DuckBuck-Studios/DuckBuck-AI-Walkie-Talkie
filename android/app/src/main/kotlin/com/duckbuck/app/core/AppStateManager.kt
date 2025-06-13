@@ -7,6 +7,9 @@ import android.os.Looper
 import com.duckbuck.app.callstate.CallStatePersistenceManager
 import com.duckbuck.app.services.WalkieTalkieService
 import com.duckbuck.app.audio.VolumeAcquireManager
+import com.duckbuck.app.channel.ChannelOccupancyManager
+import com.duckbuck.app.core.AgoraServiceManager
+import com.duckbuck.app.fcm.FcmDataHandler
 
 /**
  * App State Manager - Handles app lifecycle state management
@@ -20,6 +23,7 @@ class AppStateManager(private val context: Context) {
     
     private val callStatePersistence = CallStatePersistenceManager(context)
     private val volumeAcquireManager = VolumeAcquireManager(context)
+    private val occupancyManager = ChannelOccupancyManager()
     
     /**
      * Check for active calls when app is resumed and trigger appropriate UI
@@ -57,9 +61,9 @@ class AppStateManager(private val context: Context) {
                         AppLogger.i(TAG, "✅ Call UI triggered for active call: ${callData.callName} (muted: $isMuted)")
                     }, 75) // Reduced from 150ms to 75ms for faster UI response
                 } else {
-                    // Service not running but call data exists - clear stale data
-                    AppLogger.w(TAG, "🧹 Service not running but call data exists - clearing stale data")
-                    callStatePersistence.clearCallData()
+                    // Service not running but call data exists - check channel occupancy before clearing
+                    AppLogger.w(TAG, "🔍 Service not running but call data exists - checking channel occupancy before clearing")
+                    checkChannelOccupancyAndDecide(callData, onCallFound)
                 }
             } else {
                 AppLogger.d(TAG, "📵 No call data found on resume")
@@ -67,6 +71,57 @@ class AppStateManager(private val context: Context) {
             
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error checking for active calls on resume", e)
+        }
+    }
+    
+    /**
+     * Check channel occupancy before deciding whether to rejoin or clear stale data
+     * This prevents rejoining empty channels while preserving active ones
+     */
+    private fun checkChannelOccupancyAndDecide(
+        callData: FcmDataHandler.CallData, 
+        onCallFound: (callName: String, callerPhoto: String?, isMuted: Boolean) -> Unit
+    ) {
+        try {
+            AppLogger.i(TAG, "🔍 Checking occupancy for channel: ${callData.channelId}")
+            
+            // First, we need to briefly join the channel to check occupancy
+            // We'll use a quick join-check-decide approach
+            occupancyManager.checkOccupancyWithQuickJoin(
+                channelId = callData.channelId,
+                token = callData.token,
+                uid = callData.uid,
+                onChannelOccupied = { userCount: Int ->
+                    AppLogger.i(TAG, "✅ Channel has $userCount users - rejoining via service")
+                    
+                    // Channel has users, rejoin via WalkieTalkieService
+                    WalkieTalkieService.joinChannel(
+                        context = context,
+                        channelId = callData.channelId,
+                        channelName = callData.callName,
+                        token = callData.token,
+                        uid = callData.uid,
+                        username = callData.callName,
+                        callerPhoto = callData.callerPhoto
+                    )
+                    
+                    // Show UI after a brief delay to allow service to start
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val agoraService = AgoraServiceManager.getAgoraService()
+                        val isMuted = agoraService?.isMicrophoneMuted() ?: true
+                        onCallFound(callData.callName, callData.callerPhoto, isMuted)
+                        AppLogger.i(TAG, "✅ Rejoined and triggered UI for occupied channel: ${callData.callName}")
+                    }, 200) // Small delay for service initialization
+                },
+                onChannelEmpty = {
+                    AppLogger.i(TAG, "🏃‍♂️ Channel is empty - clearing stale data")
+                    callStatePersistence.clearCallData()
+                }
+            )
+            
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error checking channel occupancy, clearing stale data as fallback", e)
+            callStatePersistence.clearCallData()
         }
     }
     

@@ -10,7 +10,6 @@ import 'firebase/firebase_crashlytics_service.dart';
 import 'firebase/firebase_app_check_service.dart';
 import 'crashlytics_consent_manager.dart';
 import 'notifications/notifications_service.dart'; 
-import 'notifications/email_notification_service.dart';  // Add import for the new service
 import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
@@ -75,14 +74,6 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Register Email notification service
-  serviceLocator.registerLazySingleton<EmailNotificationService>(
-    () => EmailNotificationService(
-      apiService: serviceLocator<ApiService>(),
-      logger: serviceLocator<LoggerService>(),
-    ),
-  );
-
   // Register repositories
   serviceLocator.registerLazySingleton<UserRepository>(
     () => UserRepository(
@@ -90,7 +81,7 @@ Future<void> setupServiceLocator() async {
       userService: serviceLocator<UserServiceInterface>(),
       analytics: serviceLocator<FirebaseAnalyticsService>(),
       crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
-      emailService: serviceLocator<EmailNotificationService>(),
+      notificationsService: serviceLocator<NotificationsService>(),
     ),
   );
 

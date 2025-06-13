@@ -5,15 +5,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:duckbuck/core/navigation/app_routes.dart';
 import 'package:duckbuck/core/services/firebase/firebase_analytics_service.dart';
 import 'package:duckbuck/core/services/firebase/firebase_storage_service.dart';
 import 'package:duckbuck/core/services/service_locator.dart';
-import 'package:duckbuck/core/services/notifications/email_notification_service.dart';
+import 'package:duckbuck/core/services/notifications/notifications_service.dart';
 import 'package:duckbuck/core/services/logger/logger_service.dart';
 import 'package:duckbuck/core/theme/app_colors.dart';
 import 'package:duckbuck/features/auth/providers/auth_state_provider.dart';
 import 'package:duckbuck/core/services/auth/auth_security_manager.dart';
+import 'package:duckbuck/features/main_navigation.dart';
 
 /// Screen for completing user profile after signup
 /// Collects user's display name and profile photo
@@ -25,7 +25,8 @@ class ProfileCompletionScreen extends StatefulWidget {
       _ProfileCompletionScreenState();
 }
 
-class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
+class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> 
+    with TickerProviderStateMixin {
   // Step tracking
   int _currentStep = 0; // 0 = photo, 1 = name
 
@@ -35,6 +36,20 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   File? _selectedImage;
   bool _isLoading = false;
   String? _errorMessage;
+
+  // Premium Animation Controllers
+  late AnimationController _stepTransitionController;
+  late AnimationController _photoAnimationController;
+  late AnimationController _contentAnimationController;
+  late AnimationController _loadingAnimationController;
+  
+  // Sophisticated Animations
+  late Animation<double> _photoScaleAnimation;
+  late Animation<double> _photoSlideAnimation;
+  late Animation<double> _photoFadeAnimation;
+  late Animation<double> _photoShimmerAnimation;
+  late Animation<double> _contentSlideAnimation;
+  late Animation<Offset> _buttonSlideAnimation;
 
   // Services
   late final FirebaseStorageService _storageService;
@@ -50,27 +65,123 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     _analyticsService = serviceLocator<FirebaseAnalyticsService>();
     _logger = serviceLocator<LoggerService>();
 
+    // Initialize premium animation controllers
+    _stepTransitionController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _photoAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    
+    _contentAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    
+    _loadingAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    // Create sophisticated animations
+    _photoScaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _photoAnimationController,
+      curve: Curves.elasticOut,
+    ));
+    
+    _photoSlideAnimation = Tween<double>(
+      begin: 50.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _photoAnimationController,
+      curve: const Interval(0.2, 0.8, curve: Curves.easeOutExpo),
+    ));
+    
+    _photoFadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _photoAnimationController,
+      curve: const Interval(0.1, 0.7, curve: Curves.easeOut),
+    ));
+    
+    _photoShimmerAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _photoAnimationController,
+      curve: const Interval(0.6, 1.0, curve: Curves.easeInOut),
+    ));
+    
+    _contentSlideAnimation = Tween<double>(
+      begin: 30.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _contentAnimationController,
+      curve: Curves.easeOutExpo,
+    ));
+    
+    _buttonSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _contentAnimationController,
+      curve: const Interval(0.4, 1.0, curve: Curves.easeOutBack),
+    ));
+
+    // Start initial animations
+    _startInitialAnimations();
+
     // Log screen view for analytics
     _analyticsService.logScreenView(
       screenName: 'profile_completion_screen',
       screenClass: 'ProfileCompletionScreen',
     );
 
-    // Add haptic feedback when screen appears
+    // Premium haptic feedback sequence
+    _performPremiumHaptics();
+  }
+
+  /// Perform sophisticated haptic feedback sequence
+  void _performPremiumHaptics() async {
     HapticFeedback.mediumImpact();
+    await Future.delayed(const Duration(milliseconds: 100));
+    HapticFeedback.lightImpact();
+    await Future.delayed(const Duration(milliseconds: 200));
+    HapticFeedback.lightImpact();
+  }
+
+  /// Start initial premium animations
+  void _startInitialAnimations() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    _contentAnimationController.forward();
+    await Future.delayed(const Duration(milliseconds: 200));
+    _photoAnimationController.forward();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _stepTransitionController.dispose();
+    _photoAnimationController.dispose();
+    _contentAnimationController.dispose();
+    _loadingAnimationController.dispose();
     super.dispose();
   }
 
-  // Move to the next step with animation
-  void _nextStep() {
+  // Move to the next step with premium animation
+  void _nextStep() async {
     if (_currentStep == 0) {
-      // Add haptic feedback
+      // Add sophisticated haptic feedback sequence
       HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(milliseconds: 50));
+      HapticFeedback.lightImpact();
       
       // Log navigation to name step
       _analyticsService.logEvent(
@@ -86,10 +197,19 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         screenClass: 'ProfileCompletionScreen',
       );
       
+      // Start sophisticated step transition animation
+      _stepTransitionController.forward();
+      
       // Move from photo to name step with animation
       setState(() {
         _currentStep = 1;
       });
+      
+      // Start content animations for the name step
+      await Future.delayed(const Duration(milliseconds: 300));
+      _contentAnimationController.reset();
+      _contentAnimationController.forward();
+      
     } else if (_currentStep == 1) {
       // Complete profile
       _completeProfile();
@@ -255,11 +375,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         // Fire and forget email sending in the background using the centralized email service
         Future(() {
           try {
-            // Get service locator instance to access email notification service
-            final emailService = serviceLocator<EmailNotificationService>();
+            // Get service locator instance to access notifications service
+            final notificationsService = serviceLocator<NotificationsService>();
             
             // Send welcome email with updated user info (fire-and-forget)
-            emailService.sendWelcomeEmail(
+            notificationsService.sendWelcomeEmail(
               email: userEmail,
               username: userName,
               metadata: userMetadata,
@@ -287,9 +407,99 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         _isLoading = false;
       });
 
-      // Navigate to home screen
+      // Navigate to home screen with premium transition
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => 
+              const MainNavigation(),
+            transitionDuration: const Duration(milliseconds: 1200),
+            reverseTransitionDuration: const Duration(milliseconds: 800),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              // Premium "profile completion" to "home" celebration transition
+              return Stack(
+                children: [
+                  // Celebration gradient background
+                  AnimatedBuilder(
+                    animation: animation,
+                    builder: (context, _) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: Alignment.center,
+                            radius: 2.0 * animation.value,
+                            colors: [
+                              Colors.green.shade400.withValues(alpha: animation.value * 0.3),
+                              Colors.blue.shade600.withValues(alpha: animation.value * 0.2),
+                              Colors.purple.shade800.withValues(alpha: animation.value * 0.1),
+                              Colors.black,
+                            ],
+                            stops: [0.0, 0.3, 0.7, 1.0],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  
+                  // Floating particles effect
+                  ...List.generate(12, (index) {
+                    final delay = (index * 0.05);
+                    return AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) {
+                        final animationWithDelay = Curves.easeOutExpo.transform(
+                          (animation.value - delay).clamp(0.0, 1.0),
+                        );
+                        return Positioned(
+                          left: 50.0 + (index * 30) * animationWithDelay,
+                          top: 100.0 + (index % 3 * 150) * animationWithDelay,
+                          child: Opacity(
+                            opacity: animationWithDelay * (1 - animationWithDelay),
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: [
+                                  Colors.amber.shade300,
+                                  Colors.green.shade300,
+                                  Colors.blue.shade300,
+                                ][index % 3],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }),
+                  
+                  // Main content with celebration scale and slide
+                  Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..scale(
+                        0.7 + (animation.value * 0.3), // Scale from 70% to 100%
+                      )
+                      ..translate(
+                        0.0,
+                        (1 - animation.value) * 150, // Slide up from bottom
+                        0.0,
+                      ),
+                    child: FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: animation,
+                        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                      ),
+                      child: child,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
       }
     } catch (e) {
       // Log error
@@ -467,362 +677,859 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     );
   }
 
-  /// Build the fixed bottom button area with continue/complete button
+  /// Build the fixed bottom button area with premium animations and continue/complete button
   Widget _buildBottomButtonArea(bool isIOS) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundBlack,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
+    return AnimatedBuilder(
+      animation: _contentAnimationController,
+      builder: (context, child) {
+        return SlideTransition(
+          position: _buttonSlideAnimation,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.backgroundBlack.withValues(alpha: 0.0),
+                  AppColors.backgroundBlack.withValues(alpha: 0.8),
+                  AppColors.backgroundBlack,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, -10),
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: _currentStep == 0 
+                  ? // Photo step - always show all three buttons with premium styling
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Take photo button with gradient and animations
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.accentBlue,
+                                AppColors.accentBlue.withValues(alpha: 0.8),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accentBlue.withValues(alpha: 0.4),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: isIOS
+                              ? CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(CupertinoIcons.camera_fill, size: 24, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Take Photo',
+                                        style: TextStyle(
+                                          fontSize: 18, 
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.mediumImpact();
+                                    _pickImage(source: ImageSource.camera);
+                                  },
+                                )
+                              : ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    minimumSize: const Size(double.infinity, 56),
+                                  ),
+                                  icon: const Icon(Icons.camera_alt_rounded, size: 24),
+                                  label: const Text(
+                                    'TAKE PHOTO',
+                                    style: TextStyle(
+                                      fontSize: 16, 
+                                      fontWeight: FontWeight.w700, 
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.mediumImpact();
+                                    _pickImage(source: ImageSource.camera);
+                                  },
+                                ),
+                        )
+                        .animate(delay: 100.milliseconds)
+                        .fadeIn(duration: 600.milliseconds)
+                        .slideY(begin: 0.3, end: 0),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Choose from gallery button with premium styling
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.grey.shade800.withValues(alpha: 0.8),
+                                Colors.grey.shade900.withValues(alpha: 0.9),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: AppColors.accentBlue.withValues(alpha: 0.5), 
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: isIOS
+                              ? CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(CupertinoIcons.photo_fill, size: 24, color: AppColors.accentBlue),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Choose from Library',
+                                        style: TextStyle(
+                                          fontSize: 18, 
+                                          fontWeight: FontWeight.w500, 
+                                          color: AppColors.accentBlue,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    _pickImage(source: ImageSource.gallery);
+                                  },
+                                )
+                              : OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    side: BorderSide.none,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    minimumSize: const Size(double.infinity, 56),
+                                  ),
+                                  icon: Icon(Icons.photo_library_rounded, size: 24, color: AppColors.accentBlue),
+                                  label: Text(
+                                    'CHOOSE FROM GALLERY',
+                                    style: TextStyle(
+                                      fontSize: 16, 
+                                      fontWeight: FontWeight.w600, 
+                                      color: AppColors.accentBlue, 
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    _pickImage(source: ImageSource.gallery);
+                                  },
+                                ),
+                        )
+                        .animate(delay: 200.milliseconds)
+                        .fadeIn(duration: 600.milliseconds)
+                        .slideY(begin: 0.3, end: 0),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Continue button with dynamic styling based on photo selection
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeOutBack,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: _selectedImage != null 
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.green.shade600,
+                                    Colors.green.shade500,
+                                  ],
+                                )
+                              : LinearGradient(
+                                  colors: [
+                                    Colors.grey.shade700,
+                                    Colors.grey.shade800,
+                                  ],
+                                ),
+                            boxShadow: _selectedImage != null ? [
+                              BoxShadow(
+                                color: Colors.green.withValues(alpha: 0.3),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ] : null,
+                          ),
+                          child: isIOS
+                              ? CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  color: Colors.transparent,
+                                  disabledColor: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  onPressed: _selectedImage != null ? () {
+                                    HapticFeedback.mediumImpact();
+                                    _nextStep();
+                                  } : null,
+                                  child: Text(
+                                    'Continue',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: _selectedImage != null ? Colors.white : Colors.grey.shade500,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                )
+                              : ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    minimumSize: const Size(double.infinity, 56),
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  onPressed: _selectedImage != null ? () {
+                                    HapticFeedback.mediumImpact();
+                                    _nextStep();
+                                  } : null,
+                                  child: Text(
+                                    'CONTINUE',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: _selectedImage != null ? Colors.white : Colors.grey.shade500,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                ),
+                        )
+                        .animate(delay: 300.milliseconds)
+                        .fadeIn(duration: 600.milliseconds)
+                        .slideY(begin: 0.3, end: 0),
+                      ],
+                    )
+                  : // Name step - show complete profile button with premium styling
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple.shade600,
+                            Colors.blue.shade600,
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.purple.withValues(alpha: 0.4),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: isIOS
+                          ? CupertinoButton(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              onPressed: () {
+                                HapticFeedback.heavyImpact();
+                                _completeProfile();
+                              },
+                              child: const Text(
+                                'Complete Profile',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            )
+                          : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                minimumSize: const Size(double.infinity, 56),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: () {
+                                HapticFeedback.heavyImpact();
+                                _completeProfile();
+                              },
+                              child: const Text(
+                                'COMPLETE PROFILE',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ),
+                    )
+                    .animate(delay: 400.milliseconds)
+                    .fadeIn(duration: 800.milliseconds)
+                    .slideY(begin: 0.5, end: 0)
+                    .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.0, 1.0)),
+            ),
           ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: _currentStep == 0 
-            ? // Continue button for photo step
-              isIOS
-                ? CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    color: _selectedImage != null ? AppColors.accentBlue : Colors.grey.shade700,
-                    disabledColor: Colors.grey.shade700,
-                    onPressed: _nextStep, // Allow continuing even without photo
-                    child: const Text('Continue'),
-                  )
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedImage != null ? AppColors.accentBlue : Colors.grey.shade700,
-                      disabledBackgroundColor: Colors.grey.shade700,
-                      minimumSize: const Size(double.infinity, 50),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _nextStep, // Allow continuing even without photo
-                    child: const Text('CONTINUE'),
-                  )
-            : // Complete profile button for name step
-              isIOS
-                ? CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    color: AppColors.accentBlue,
-                    onPressed: _completeProfile,
-                    child: const Text('Complete Profile'),
-                  )
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accentBlue,
-                      minimumSize: const Size(double.infinity, 50),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _completeProfile,
-                    child: const Text('COMPLETE PROFILE'),
-                  ),
-      ),
+        );
+      },
     );
   }
   
-  /// Build profile photo selection content (without buttons)
+  /// Build profile photo selection content (without buttons) with premium animations
   Widget _buildProfilePhotoContent(bool isIOS) {
-    return Column(
-      children: [
-        Text(
-          'Add a Profile Photo',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: isIOS ? 24 : 26,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Help your friends recognize you by adding a profile photo',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: isIOS ? 16 : 17,
-          ),
-        ),
-        const SizedBox(height: 32),
+    return AnimatedBuilder(
+      animation: _photoAnimationController,
+      builder: (context, child) {
+        final slideValue = _photoSlideAnimation.value;
+        final scaleValue = _photoScaleAnimation.value;
+        final fadeValue = _photoFadeAnimation.value;
+        final shimmerValue = _photoShimmerAnimation.value;
         
-        // Profile image preview or placeholder
-        GestureDetector(
-          onTap: () => _pickImage(),
-          child: Hero(
-            tag: 'profile_image',
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
+        return Transform.translate(
+          offset: Offset(0, slideValue),
+          child: Transform.scale(
+            scale: scaleValue,
+            child: Opacity(
+              opacity: fadeValue,
+              child: Column(
+                children: [
+                  // Title with premium typography
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Colors.white,
+                        Colors.white.withValues(alpha: 0.8),
+                        Colors.blue.shade300,
+                      ],
+                      stops: [0.0, 0.5, 1.0],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      'Add a Profile Photo',
+                      style: TextStyle(
+                        fontSize: isIOS ? 28 : 30,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // Subtitle with shimmer effect
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 400),
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withValues(alpha: fadeValue),
+                      fontSize: isIOS ? 16 : 17,
+                      letterSpacing: 0.3,
+                    ),
+                    child: Text(
+                      _selectedImage == null 
+                          ? 'Help your friends recognize you by adding a profile photo'
+                          : 'Looking great! Use the buttons below to change your photo if needed.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // Profile image with sophisticated animations
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.mediumImpact();
+                      _pickImage();
+                    },
+                    child: Hero(
+                      tag: 'user_profile_photo_hero', // Unique hero tag for cross-screen transitions
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutBack,
+                        width: 180,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: _selectedImage != null 
+                            ? null 
+                            : LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.blue.shade400.withValues(alpha: 0.8),
+                                  Colors.purple.shade400.withValues(alpha: 0.8),
+                                  Colors.pink.shade300.withValues(alpha: 0.6),
+                                ],
+                              ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (_selectedImage != null ? Colors.blue : Colors.purple)
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 25,
+                              offset: const Offset(0, 15),
+                              spreadRadius: 2,
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(-8, -8),
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 15,
+                              offset: const Offset(8, 8),
+                            ),
+                          ],
+                          image: _selectedImage != null
+                              ? DecorationImage(
+                                  image: FileImage(_selectedImage!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: _selectedImage == null
+                            ? Stack(
+                                children: [
+                                  // Background shimmer effect
+                                  if (shimmerValue > 0)
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            begin: Alignment(-1.0 + (shimmerValue * 2), -1.0),
+                                            end: Alignment(1.0 + (shimmerValue * 2), 1.0),
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.white.withValues(alpha: 0.2),
+                                              Colors.transparent,
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  
+                                  // Camera icon with bounce animation
+                                  Center(
+                                    child: Transform.scale(
+                                      scale: 1.0 + (shimmerValue * 0.1),
+                                      child: Icon(
+                                        isIOS ? CupertinoIcons.camera_fill : Icons.add_a_photo_rounded,
+                                        size: 60,
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : // Selected image overlay with subtle effects
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withValues(alpha: 0.1),
+                                    ],
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.edit,
+                                    size: 30,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
                   )
+                  .animate(delay: 200.milliseconds)
+                  .shimmer(
+                    duration: 2000.milliseconds, 
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Floating particles animation around photo
+                  if (_selectedImage == null)
+                    SizedBox(
+                      height: 100,
+                      child: Stack(
+                        children: List.generate(6, (index) {
+                          return Positioned(
+                            left: 50.0 + (index * 40) + (shimmerValue * 20),
+                            top: 20.0 + (index % 2 * 40) + (shimmerValue * 15),
+                            child: Container(
+                              width: 4 + (shimmerValue * 2),
+                              height: 4 + (shimmerValue * 2),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: [
+                                  Colors.blue.shade300,
+                                  Colors.purple.shade300,
+                                  Colors.pink.shade300,
+                                ][index % 3].withValues(alpha: 0.6 * fadeValue),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  
+                  // Add some bottom padding for scrolling
+                  const SizedBox(height: 40),
                 ],
-                image: _selectedImage != null
-                    ? DecorationImage(
-                        image: FileImage(_selectedImage!),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: _selectedImage == null
-                  ? Icon(
-                      isIOS ? CupertinoIcons.camera : Icons.add_a_photo_outlined,
-                      size: 50,
-                      color: Colors.grey.shade400,
-                    )
-                  : null,
             ),
           ),
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // Photo selection options
-        if (_selectedImage != null)
-          Column(
-            children: [
-              // Change photo option
-              isIOS 
-                  ? CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      child: const Text('Change Photo'),
-                      onPressed: () => _pickImage(),
-                    )
-                  : TextButton(
-                      child: const Text('CHANGE PHOTO'),
-                      onPressed: () => _pickImage(),
-                    ),
-            ],
-          )
-        else
-          // Select photo buttons with improved design
-          Column(
-            children: [
-              // Take photo button
-              isIOS 
-                  ? Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: CupertinoButton(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        color: AppColors.accentBlue,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(CupertinoIcons.camera, size: 22, color: Colors.white),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Take Photo',
-                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        onPressed: () => _pickImage(source: ImageSource.camera),
-                      ),
-                    )
-                  : Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accentBlue,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        icon: const Icon(Icons.camera_alt, size: 22),
-                        label: const Text(
-                          'TAKE PHOTO',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
-                        ),
-                        onPressed: () => _pickImage(source: ImageSource.camera),
-                      ),
-                    ),
-              
-              const SizedBox(height: 16),
-              
-              // Choose from gallery button
-              isIOS 
-                  ? Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.5), width: 1),
-                      ),
-                      child: CupertinoButton(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(CupertinoIcons.photo, size: 22, color: AppColors.accentBlue),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Choose from Library',
-                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: AppColors.accentBlue),
-                            ),
-                          ],
-                        ),
-                        onPressed: () => _pickImage(source: ImageSource.gallery),
-                      ),
-                    )
-                  : Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: AppColors.accentBlue, width: 1.5),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: Icon(Icons.photo_library, size: 22, color: AppColors.accentBlue),
-                        label: Text(
-                          'CHOOSE FROM GALLERY',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.accentBlue, letterSpacing: 0.5),
-                        ),
-                        onPressed: () => _pickImage(source: ImageSource.gallery),
-                      ),
-                    ),
-            ],
-          ),
-        
-        // Add some bottom padding for scrolling
-        const SizedBox(height: 40),
-      ],
+        );
+      },
     );
   }
 
-  /// Build display name content (without buttons)
+  /// Build display name content (without buttons) with premium animations
   Widget _buildDisplayNameContent(bool isIOS) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          Text(
-            'What\'s Your Name?',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: isIOS ? 24 : 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Enter the name you'd like to use in the app",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: isIOS ? 16 : 17,
-            ),
-          ),
-          const SizedBox(height: 32),
-          
-          // Name input with platform-specific styling
-          isIOS
-              ? CupertinoTextField(
-                  controller: _nameController,
-                  placeholder: 'Your name',
-                  placeholderStyle: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 16,
+    return AnimatedBuilder(
+      animation: _contentAnimationController,
+      builder: (context, child) {
+        final slideValue = _contentSlideAnimation.value;
+        
+        return Transform.translate(
+          offset: Offset(0, slideValue),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Premium animated title
+                ShaderMask(
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: [
+                      Colors.white,
+                      Colors.blue.shade300,
+                      Colors.purple.shade300,
+                    ],
+                    stops: [0.0, 0.6, 1.0],
+                  ).createShader(bounds),
+                  child: Text(
+                    'What\'s Your Name?',
+                    style: TextStyle(
+                      fontSize: isIOS ? 28 : 30,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: Colors.white,
+                    ),
                   ),
-                  padding: const EdgeInsets.all(16),
-                  clearButtonMode: OverlayVisibilityMode.editing,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade900,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade800),
-                  ),
-                  autocorrect: true,
                 )
-              : TextFormField(
-                  controller: _nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.all(16),
-                    hintText: 'Your name',
-                    hintStyle: TextStyle(color: Colors.grey.shade500),
-                    filled: true,
-                    fillColor: Colors.grey.shade900,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade800),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade800),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.accentBlue),
-                    ),
+                .animate(delay: 100.milliseconds)
+                .fadeIn(duration: 600.milliseconds)
+                .slideY(begin: 0.3, end: 0),
+                
+                const SizedBox(height: 12),
+                
+                // Subtitle with elegant animation
+                Text(
+                  "Enter the name you'd like to use in the app",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: isIOS ? 16 : 17,
+                    letterSpacing: 0.3,
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your name';
-                    }
-                    return null;
-                  },
-                ),
-          
-          // Add some bottom padding for scrolling
-          const SizedBox(height: 40),
-        ],
-      ),
+                )
+                .animate(delay: 200.milliseconds)
+                .fadeIn(duration: 600.milliseconds)
+                .slideY(begin: 0.2, end: 0),
+                
+                const SizedBox(height: 40),
+                
+                // Premium styled name input
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: isIOS
+                      ? CupertinoTextField(
+                          controller: _nameController,
+                          placeholder: 'Your name',
+                          placeholderStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 18,
+                            letterSpacing: 0.3,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                          padding: const EdgeInsets.all(20),
+                          clearButtonMode: OverlayVisibilityMode.editing,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.grey.shade900,
+                                Colors.grey.shade800.withValues(alpha: 0.8),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.grey.shade700,
+                              width: 1,
+                            ),
+                          ),
+                          autocorrect: true,
+                        )
+                      : TextFormField(
+                          controller: _nameController,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.all(20),
+                            hintText: 'Your name',
+                            hintStyle: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 18,
+                              letterSpacing: 0.3,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade900,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: Colors.grey.shade700),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: Colors.grey.shade700),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: AppColors.accentBlue,
+                                width: 2,
+                              ),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: Colors.red.shade400,
+                                width: 2,
+                              ),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: Colors.red.shade400,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your name';
+                            }
+                            if (value.trim().length < 2) {
+                              return 'Name must be at least 2 characters';
+                            }
+                            return null;
+                          },
+                        ),
+                )
+                .animate(delay: 300.milliseconds)
+                .fadeIn(duration: 700.milliseconds)
+                .slideY(begin: 0.3, end: 0)
+                .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.0, 1.0)),
+                
+                // Add some bottom padding for scrolling
+                const SizedBox(height: 60),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
   
-  /// Build step indicator showing progress (photo selection vs. name entry)
+  /// Build step indicator with premium animations showing progress (photo selection vs. name entry)
   Widget _buildStepIndicator() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // First step indicator (Photo)
-        Container(
-          width: 10,
-          height: 10,
+    return AnimatedBuilder(
+      animation: _stepTransitionController,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _currentStep == 0 ? AppColors.accentBlue : Colors.grey.shade600,
+            color: Colors.black.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
           ),
-        ),
-        const SizedBox(width: 4),
-        
-        // Connecting line
-        Container(
-          width: 16,
-          height: 2,
-          color: Colors.grey.shade700,
-        ),
-        const SizedBox(width: 4),
-        
-        // Second step indicator (Name)
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _currentStep == 1 ? AppColors.accentBlue : Colors.grey.shade600,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // First step indicator (Photo) with animation
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutBack,
+                width: _currentStep == 0 ? 12 : 10,
+                height: _currentStep == 0 ? 12 : 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _currentStep == 0 ? AppColors.accentBlue : Colors.grey.shade600,
+                  boxShadow: _currentStep == 0 ? [
+                    BoxShadow(
+                      color: AppColors.accentBlue.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ] : null,
+                ),
+              )
+              .animate()
+              .scale(
+                duration: 300.milliseconds,
+                curve: Curves.elasticOut,
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Step labels
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 300),
+                style: TextStyle(
+                  color: _currentStep == 0 ? Colors.white : Colors.grey.shade500,
+                  fontSize: 12,
+                  fontWeight: _currentStep == 0 ? FontWeight.w600 : FontWeight.w400,
+                  letterSpacing: 0.5,
+                ),
+                child: const Text('PHOTO'),
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Connecting line with gradient animation
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeInOut,
+                width: 24,
+                height: 2,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(1),
+                  gradient: LinearGradient(
+                    colors: _currentStep == 1 
+                      ? [AppColors.accentBlue, Colors.grey.shade600]
+                      : [Colors.grey.shade700, Colors.grey.shade700],
+                  ),
+                ),
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Step labels
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 300),
+                style: TextStyle(
+                  color: _currentStep == 1 ? Colors.white : Colors.grey.shade500,
+                  fontSize: 12,
+                  fontWeight: _currentStep == 1 ? FontWeight.w600 : FontWeight.w400,
+                  letterSpacing: 0.5,
+                ),
+                child: const Text('NAME'),
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Second step indicator (Name) with animation
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutBack,
+                width: _currentStep == 1 ? 12 : 10,
+                height: _currentStep == 1 ? 12 : 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _currentStep == 1 ? AppColors.accentBlue : Colors.grey.shade600,
+                  boxShadow: _currentStep == 1 ? [
+                    BoxShadow(
+                      color: AppColors.accentBlue.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ] : null,
+                ),
+              )
+              .animate()
+              .scale(
+                duration: 300.milliseconds,
+                curve: Curves.elasticOut,
+              ),
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
   

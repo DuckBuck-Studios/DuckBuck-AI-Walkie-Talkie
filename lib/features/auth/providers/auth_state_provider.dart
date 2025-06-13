@@ -6,6 +6,7 @@ import '../../../core/services/service_locator.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
 import '../../../core/services/auth/auth_security_manager.dart';
 import '../../../core/services/database/local_database_service.dart';
+import '../../friends/providers/relationship_provider.dart';
 
 /// Provider that manages authentication state throughout the app
 ///
@@ -325,6 +326,18 @@ class AuthStateProvider extends ChangeNotifier {
       // Stop Firebase document monitoring before signing out
       await _userRepository.stopUserDocumentMonitoring();
       debugPrint('🔐 AUTH PROVIDER: Stopped Firebase document monitoring');
+      
+      // CRITICAL: Close RelationshipProvider streams before signout to prevent memory leaks
+      // This ensures all relationship streams are properly closed and no background operations continue
+      debugPrint('🔐 AUTH PROVIDER: Closing RelationshipProvider streams...');
+      try {
+        final relationshipProvider = serviceLocator<RelationshipProvider>();
+        relationshipProvider.closeStreams(); // Use closeStreams() instead of dispose()
+        debugPrint('🔐 AUTH PROVIDER: RelationshipProvider streams closed successfully');
+      } catch (e) {
+        debugPrint('🔐 AUTH PROVIDER: Warning - Error closing RelationshipProvider streams: $e');
+        // Continue with signout even if relationship provider stream closure fails
+      }
       
       // Use UserRepository.signOut() for proper architecture flow: UI → Provider → Repository → Service
       // This handles Firebase auth logout and FCM token removal

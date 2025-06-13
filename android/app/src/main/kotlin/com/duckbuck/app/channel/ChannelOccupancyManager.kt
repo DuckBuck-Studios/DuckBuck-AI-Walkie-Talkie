@@ -141,6 +141,126 @@ class ChannelOccupancyManager {
     }
     
     /**
+     * Check channel occupancy with a quick join-check-leave approach for recovery scenarios
+     * Used when app resumes and finds stale call data to determine if channel should be rejoined
+     * 
+     * @param channelId Channel to check
+     * @param token Agora token for temporary join
+     * @param uid User ID for temporary join  
+     * @param onChannelOccupied Callback when channel has users (should rejoin)
+     * @param onChannelEmpty Callback when channel is empty (should clear data)
+     */
+    fun checkOccupancyWithQuickJoin(
+        channelId: String,
+        token: String,
+        uid: Int,
+        onChannelOccupied: (userCount: Int) -> Unit,
+        onChannelEmpty: () -> Unit
+    ) {
+        try {
+            AppLogger.i(TAG, "🔍 Quick occupancy check for recovery - channel: $channelId")
+            
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            if (agoraService == null) {
+                AppLogger.w(TAG, "⚠️ No Agora service available for quick check, treating as empty")
+                onChannelEmpty()
+                return
+            }
+            
+            // Store original event listener to restore after quick check
+            val originalListener = agoraService.getEventListener()
+            AppLogger.d(TAG, "🔄 Stored original event listener: ${if (originalListener != null) "present" else "none"}")
+            
+            // Create a temporary event listener for quick check
+            val tempListener = object : AgoraService.AgoraEventListener {
+                override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
+                    AppLogger.d(TAG, "🔍 Quick join successful, checking users after discovery delay")
+                    
+                    // Allow brief time for user discovery, then check occupancy
+                    handler.postDelayed({
+                        val userCount = agoraService.getRemoteUserCount()
+                        AppLogger.i(TAG, "👥 Quick check found $userCount users in channel")
+                        
+                        // Leave immediately after check
+                        agoraService.leaveChannel()
+                        
+                        if (userCount > 0) {
+                            onChannelOccupied(userCount)
+                        } else {
+                            onChannelEmpty()
+                        }
+                    }, 500) // Shorter delay for quick check
+                }
+                
+                override fun onLeaveChannel() {
+                    AppLogger.d(TAG, "🔍 Quick check completed, restoring original event listener")
+                    
+                    // Restore original event listener after leaving
+                    if (originalListener != null) {
+                        agoraService.setEventListener(originalListener)
+                        AppLogger.d(TAG, "✅ Original event listener restored")
+                    } else {
+                        agoraService.removeEventListener()
+                        AppLogger.d(TAG, "✅ No original listener to restore, cleared listener")
+                    }
+                }
+                
+                override fun onUserJoined(uid: Int, elapsed: Int) {}
+                override fun onUserOffline(uid: Int, reason: Int) {}
+                override fun onMicrophoneToggled(isMuted: Boolean) {}
+                override fun onSpeakerToggled(isEnabled: Boolean) {}
+                override fun onError(errorCode: Int, errorMessage: String) {
+                    AppLogger.e(TAG, "❌ Quick check error: $errorMessage, treating as empty")
+                    
+                    // Restore original listener even on error
+                    if (originalListener != null) {
+                        agoraService.setEventListener(originalListener)
+                        AppLogger.d(TAG, "✅ Original event listener restored after error")
+                    } else {
+                        agoraService.removeEventListener()
+                        AppLogger.d(TAG, "✅ No original listener to restore after error, cleared listener")
+                    }
+                    
+                    onChannelEmpty()
+                }
+            }
+            
+            // Set temporary listener and join
+            agoraService.setEventListener(tempListener)
+            val joinResult = agoraService.joinChannel(channelId, token, uid)
+            
+            if (!joinResult) {
+                AppLogger.w(TAG, "⚠️ Quick join failed, treating channel as empty")
+                
+                // Restore original listener if join failed
+                if (originalListener != null) {
+                    agoraService.setEventListener(originalListener)
+                    AppLogger.d(TAG, "✅ Original event listener restored after join failure")
+                } else {
+                    agoraService.removeEventListener()
+                    AppLogger.d(TAG, "✅ No original listener to restore after join failure, cleared listener")
+                }
+                
+                onChannelEmpty()
+            }
+            
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error during quick occupancy check", e)
+            
+            // Try to clean up any potential listener state issues on exception
+            try {
+                val agoraService = AgoraServiceManager.getValidatedAgoraService()
+                agoraService?.removeEventListener()
+                AppLogger.d(TAG, "🧹 Cleared listener state after exception")
+            } catch (cleanupException: Exception) {
+                AppLogger.e(TAG, "❌ Error during cleanup after exception", cleanupException)
+            }
+            
+            onChannelEmpty()
+        }
+    }
+    
+    /**
      * Clean up resources
      */
     fun cleanup() {

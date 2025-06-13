@@ -1,6 +1,6 @@
 package com.duckbuck.app.agora
 import com.duckbuck.app.core.AppLogger
-
+import com.duckbuck.app.R
 import android.content.Context
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
@@ -15,7 +15,11 @@ class AgoraService(private val context: Context) {
     
     companion object {
         private const val TAG = "AgoraService"
-        private const val APP_ID = "ccc5933082e7404682ae909f5654f31c"  
+    }
+    
+    // Get APP_ID from Android resources
+    private val APP_ID: String by lazy {
+        context.getString(R.string.agora_app_id)
     }
     
     private var rtcEngine: RtcEngine? = null
@@ -470,6 +474,13 @@ class AgoraService(private val context: Context) {
      */
     fun setEventListener(listener: AgoraEventListener) {
         this.eventListener = listener
+    }
+    
+    /**
+     * Get current event listener
+     */
+    fun getEventListener(): AgoraEventListener? {
+        return this.eventListener
     }
     
     /**

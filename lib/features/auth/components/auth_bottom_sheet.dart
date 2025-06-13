@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../providers/auth_state_provider.dart';
+import '../screens/profile_completion_screen.dart';
+import '../../main_navigation.dart';
 import 'bottom_sheet_components/index.dart';
 
 // Authentication flow states
@@ -138,11 +140,87 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // New user goes to profile completion
-          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+          // New user goes to profile completion with premium transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => 
+                const ProfileCompletionScreen(),
+              transitionDuration: const Duration(milliseconds: 1000),
+              reverseTransitionDuration: const Duration(milliseconds: 800),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                // Premium morph transition from onboarding to profile completion
+                return Stack(
+                  children: [
+                    // Background gradient transition
+                    AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.8 + (animation.value * 0.2)),
+                                Colors.blue.shade900.withValues(alpha: animation.value * 0.3),
+                                Colors.purple.shade900.withValues(alpha: animation.value * 0.2),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    // Main content with sophisticated 3D transform
+                    Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.002) // Enhanced perspective
+                        ..rotateX((1 - animation.value) * 0.15) // 3D rotation around X-axis
+                        ..rotateY((1 - animation.value) * 0.1) // Slight Y-axis rotation
+                        ..scale(
+                          0.8 + (animation.value * 0.2), // Scale from 80% to 100%
+                        )
+                        ..translate(
+                          (1 - animation.value) * 50, // Horizontal slide
+                          (1 - animation.value) * 100, // Vertical movement
+                          (1 - animation.value) * 200, // Z-depth movement
+                        ),
+                      child: Opacity(
+                        opacity: animation.value,
+                        child: child,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          );
         } else {
-          // Returning user goes to home
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
+          // Returning user goes to home with different premium transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => 
+                const MainNavigation(),
+              transitionDuration: const Duration(milliseconds: 800),
+              reverseTransitionDuration: const Duration(milliseconds: 600),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                // Fast premium transition for returning users
+                return Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.001)
+                    ..scale(0.9 + (animation.value * 0.1))
+                    ..translate(0.0, (1 - animation.value) * 30, 0.0),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+            ),
+          );
         }
       }
     } catch (e) {
@@ -190,11 +268,87 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // New user goes to profile completion
-          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+          // New user goes to profile completion with premium transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => 
+                const ProfileCompletionScreen(),
+              transitionDuration: const Duration(milliseconds: 1000),
+              reverseTransitionDuration: const Duration(milliseconds: 800),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                // Premium morph transition from onboarding to profile completion
+                return Stack(
+                  children: [
+                    // Background gradient transition
+                    AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, _) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.8 + (animation.value * 0.2)),
+                                Colors.blue.shade900.withValues(alpha: animation.value * 0.3),
+                                Colors.purple.shade900.withValues(alpha: animation.value * 0.2),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    // Main content with sophisticated 3D transform
+                    Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.002) // Enhanced perspective
+                        ..rotateX((1 - animation.value) * 0.15) // 3D rotation around X-axis
+                        ..rotateY((1 - animation.value) * 0.1) // Slight Y-axis rotation
+                        ..scale(
+                          0.8 + (animation.value * 0.2), // Scale from 80% to 100%
+                        )
+                        ..translate(
+                          (1 - animation.value) * 50, // Horizontal slide
+                          (1 - animation.value) * 100, // Vertical movement
+                          (1 - animation.value) * 200, // Z-depth movement
+                        ),
+                      child: Opacity(
+                        opacity: animation.value,
+                        child: child,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          );
         } else {
-          // Returning user goes to home
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
+          // Returning user goes to home with different premium transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => 
+                const MainNavigation(),
+              transitionDuration: const Duration(milliseconds: 800),
+              reverseTransitionDuration: const Duration(milliseconds: 600),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                // Fast premium transition for returning users
+                return Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.001)
+                    ..scale(0.9 + (animation.value * 0.1))
+                    ..translate(0.0, (1 - animation.value) * 30, 0.0),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+            ),
+          );
         }
       }
     } catch (e) {

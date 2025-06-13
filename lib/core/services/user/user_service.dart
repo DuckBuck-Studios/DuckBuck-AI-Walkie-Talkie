@@ -106,8 +106,8 @@ class UserService implements UserServiceInterface {
       // Get user map with only relevant fields based on auth method in metadata
       final userMap = user.toMap();
       
-      // Then exclude fcmTokenData to prevent overwriting it
-      userMap.remove('fcmTokenData'); // Don't overwrite FCM token data
+      // Keep FCM token data - no longer exclude it
+      // userMap.remove('fcmTokenData'); // REMOVED: Now we want to save FCM token data
       
       await _databaseService.setDocument(
         collection: _userCollection,

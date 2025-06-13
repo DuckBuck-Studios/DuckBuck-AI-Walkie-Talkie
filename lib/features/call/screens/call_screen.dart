@@ -6,7 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io' show Platform;
 
 import '../providers/call_provider.dart';
-import '../../../shared/widgets/call_ui_components.dart';
+import '../../shared/widgets/call_ui_components.dart';
 
 /// Call screen with consistent UI styling matching the fullscreen photo viewer
 /// Uses shared CallUIComponents for consistent positioning and styling

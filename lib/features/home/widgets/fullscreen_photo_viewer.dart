@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io' show Platform;
-import '../../../shared/widgets/call_ui_components.dart';
+import '../../shared/widgets/call_ui_components.dart';
 
 class FullscreenPhotoViewer extends StatelessWidget {
   final String? photoURL;
