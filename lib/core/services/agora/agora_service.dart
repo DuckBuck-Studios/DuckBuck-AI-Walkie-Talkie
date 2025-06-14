@@ -23,12 +23,25 @@ class AgoraService {
     int timeoutSeconds = 15,
   }) async {
     try {
-      final bool result = await _channel.invokeMethod('joinChannelAndWaitForUsers', {
+      // Log the exact parameters being sent through method channel
+      print('🔧 AgoraService: Invoking joinChannelAndWaitForUsers method channel with:');
+      print('   - channelName: $channelName');
+      print('   - token: $token');
+      print('   - uid: $uid');
+      print('   - timeoutSeconds: $timeoutSeconds');
+      
+      final methodChannelParams = {
         'channelName': channelName,
         'token': token,
         'uid': uid,
         'timeoutSeconds': timeoutSeconds,
-      });
+      };
+      
+      print('   - Full method channel params: $methodChannelParams');
+      
+      final bool result = await _channel.invokeMethod('joinChannelAndWaitForUsers', methodChannelParams);
+      
+      print('🔧 AgoraService: Method channel returned result: $result');
       
       if (result) {
         // Default to mic on (unmuted) after joining
@@ -37,6 +50,7 @@ class AgoraService {
       
       return result;
     } catch (e) {
+      print('❌ AgoraService: Exception in joinChannelAndWaitForUsers: $e');
       return false;
     }
   }

@@ -66,19 +66,17 @@ class AgoraTokenService {
   /// Generate Agora token for a channel
   /// 
   /// Parameters:
-  /// - [uid]: User ID for the call
+  /// - [uid]: User ID for the call (optional, defaults to 0 for auto-assignment)
   /// - [channelId]: Channel ID to join
-  /// - [callerPhoto]: URL of the caller's photo
-  /// - [callName]: Name/title of the call
   /// 
   /// Returns [AgoraTokenResponse] with token and metadata
   /// Throws [TokenGenerationException] on failure
   Future<AgoraTokenResponse> generateToken({
-    required int uid,
+    int uid = 0, // Default to 0 for backend auto-assignment
     required String channelId, 
   }) async {
     try {
-      _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid');
+      _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid (0 = auto-assign)');
 
       // Get Firebase ID token for authentication
       final firebaseToken = await _authService.refreshIdToken(forceRefresh: false);

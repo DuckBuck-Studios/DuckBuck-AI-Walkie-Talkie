@@ -148,7 +148,6 @@ class NotificationsService {
   Future<bool> sendDataOnlyNotification({
     required String uid,
     required String type,
-    required String agoraUid,
     required String agoraChannelId,
   }) async {
     try {
@@ -171,7 +170,6 @@ class NotificationsService {
       final success = await _apiService.sendDataOnlyNotification(
         uid: uid,
         type: type,
-        agoraUid: agoraUid,
         agoraChannelId: agoraChannelId,
         callName: callName,
         callerPhoto: callerPhoto,

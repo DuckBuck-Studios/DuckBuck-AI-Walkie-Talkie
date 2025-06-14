@@ -252,6 +252,13 @@ class AgoraService(private val context: Context) {
         }
         
         try {
+            // Enhanced logging for token debugging
+            AppLogger.d(TAG, "🔑 Attempting to join channel with:")
+            AppLogger.d(TAG, "   - Channel: $channelName")
+            AppLogger.d(TAG, "   - Token: ${if (token != null) "${token.substring(0, 20)}..." else "null"}")
+            AppLogger.d(TAG, "   - UID: $uid")
+            AppLogger.d(TAG, "   - Token length: ${token?.length ?: 0}")
+            
             val options = ChannelMediaOptions().apply {
                 channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
                 clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
@@ -263,15 +270,18 @@ class AgoraService(private val context: Context) {
             
             val result = rtcEngine?.joinChannel(token, channelName, uid, options)
             
+            AppLogger.d(TAG, "🔑 joinChannel result code: $result")
+            
             return if (result == 0) {
-                AppLogger.d(TAG, "Joining channel: $channelName")
+                AppLogger.d(TAG, "✅ Successfully initiated channel join: $channelName")
                 true
             } else {
-                AppLogger.e(TAG, "Failed to join channel. Error code: $result")
+                AppLogger.e(TAG, "❌ Failed to join channel. Error code: $result")
+                AppLogger.e(TAG, "   Error details: ${getErrorMessage(result ?: -1)}")
                 false
             }
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while joining channel", e)
+            AppLogger.e(TAG, "❌ Exception while joining channel", e)
             return false
         }
     }
@@ -657,6 +667,7 @@ class AgoraService(private val context: Context) {
             Constants.ERR_INVALID_USER_ACCOUNT -> "Invalid user account"
             Constants.ERR_AUDIO_BT_SCO_FAILED -> "Bluetooth SCO failed"
             Constants.ERR_ADM_GENERAL_ERROR -> "Audio device module general error"
+            110 -> "Invalid Token - Token expired, wrong UID, or wrong channel name"
             else -> "Unknown error: $errorCode"
         }
     }

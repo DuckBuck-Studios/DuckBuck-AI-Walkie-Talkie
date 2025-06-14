@@ -60,7 +60,7 @@ class ApiService {
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = 'https://api.duckbuck.app',
+    _baseUrl = 'https://a3bc-2409-40f0-1149-8a16-a8b8-c986-23e8-ccc3.ngrok-free.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
@@ -413,7 +413,6 @@ class ApiService {
   Future<bool> sendDataOnlyNotification({
     required String uid,
     required String type,
-    required String agoraUid,
     required String agoraChannelId,
     required String callName,
     required String callerPhoto,
@@ -428,7 +427,7 @@ class ApiService {
       }
       
       final response = await _dio.post(
-        '/api/users/send-data-only',
+        '/api/notifications/send-data-only',
         options: Options(
           headers: {
             'Authorization': 'Bearer $idToken',
@@ -439,7 +438,6 @@ class ApiService {
           'uid': uid,
           'data': {
             'type': type,
-            'agora_uid': agoraUid,
             'agora_channelid': agoraChannelId,
             'call_name': callName,
             'caller_photo': callerPhoto,
