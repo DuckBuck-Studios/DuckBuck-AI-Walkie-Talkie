@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/call_provider.dart';
+import '../models/call_state.dart';
 import '../screens/call_screen.dart';
 
 /// A global overlay widget that shows the call screen when a call is active
@@ -21,10 +22,14 @@ class CallOverlay extends StatelessWidget {
         // Main app content
         child,
         
-        // Call overlay - only visible when there's an active call
+        // Call overlay - only visible when there's an active call from receiver side
         Consumer<CallProvider>(
           builder: (context, callProvider, _) {
-            if (!callProvider.isInCall || callProvider.currentCall == null) {
+            // Only show overlay for receiver calls, not initiator calls
+            // Initiator calls should stay in the fullscreen photo viewer
+            if (!callProvider.isInCall || 
+                callProvider.currentCall == null ||
+                callProvider.currentRole == CallRole.INITIATOR) {
               return const SizedBox.shrink();
             }
             

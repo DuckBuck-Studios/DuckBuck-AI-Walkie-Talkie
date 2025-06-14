@@ -1,25 +1,58 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../models/call_data.dart';
+import '../models/call_state.dart';
 import '../../../core/services/agora/agora_service.dart';
+import '../../../core/services/service_locator.dart';
+import '../../../core/services/logger/logger_service.dart';
 
 class CallProvider with ChangeNotifier {
   static const MethodChannel _methodChannel = MethodChannel('com.duckbuck.app/call');
+  static const String _tag = 'CALL_PROVIDER';
+  final LoggerService _logger = serviceLocator<LoggerService>();
   
-  CallData? _currentCall;
+  CallState? _currentCall;
   bool _isInCall = false;
   bool _isMuted = false;
   bool _isSpeakerOn = true; // Speaker is on by default for calls
+  
+  // Initiator-specific state
+  CallRole _currentRole = CallRole.RECEIVER; // Default to receiver
+  String? _channelId;
+  int? _myUid;
+  bool _waitingForFriend = false;
+  bool _friendJoined = false;
 
-  // Protected getters for subclasses
-  CallData? get currentCall => _currentCall;
+  // Getters for all functionality
+  CallState? get currentCall => _currentCall;
   bool get isInCall => _isInCall;
   bool get isMuted => _isMuted;
   bool get isSpeakerOn => _isSpeakerOn;
+  
+  // Initiator-specific getters
+  CallRole get currentRole => _currentRole;
+  String? get channelId => _channelId;
+  int? get myUid => _myUid;
+  bool get waitingForFriend => _waitingForFriend;
+  bool get friendJoined => _friendJoined;
+  
+  /// Check if currently in an active call (friend has joined for initiator, or just in call for receiver)
+  bool get isActiveCall {
+    if (_currentRole == CallRole.INITIATOR) {
+      final result = isInCall && _friendJoined && !_waitingForFriend;
+      _logger.d(_tag, 'isActiveCall check (INITIATOR): isInCall=$isInCall, friendJoined=$_friendJoined, waitingForFriend=$_waitingForFriend => result=$result');
+      return result;
+    } else {
+      // For receiver, active call = just being in call
+      return isInCall;
+    }
+  }
+  
+  /// Check if currently waiting for friend to join (initiator only)
+  bool get isWaitingForFriend => _currentRole == CallRole.INITIATOR && isInCall && _waitingForFriend;
 
   // Protected setters for subclasses
   @protected
-  set currentCall(CallData? value) {
+  set currentCall(CallState? value) {
     _currentCall = value;
   }
   
@@ -44,6 +77,136 @@ class CallProvider with ChangeNotifier {
     AgoraService.setCallEndedCallback(_onAgoraCallEnded);
   }
 
+  // ========== INITIATOR FUNCTIONALITY ==========
+  
+  /// Start call as initiator
+  Future<bool> startCall({
+    required String friendName,
+    required String channelId,
+    required int uid,
+    required String token,
+    String? friendPhotoUrl,
+  }) async {
+    try {
+      _logger.i(_tag, 'Starting call as initiator...');
+      _logger.d(_tag, '  - Channel: $channelId');
+      _logger.d(_tag, '  - My UID: $uid');
+      _logger.d(_tag, '  - Friend: $friendName');
+
+      // Set initiator state
+      _currentRole = CallRole.INITIATOR;
+      _channelId = channelId;
+      _myUid = uid;
+      _waitingForFriend = true;
+      _friendJoined = false;
+
+      // Create call state for initiator
+      final callState = CallState(
+        callerName: friendName, // Show friend's name on initiator's screen
+        callerPhotoUrl: friendPhotoUrl,
+        channelId: channelId,
+        uid: uid,
+        isInitiator: true,
+        isActive: false, // Will become true when friend joins
+      );
+
+      // Show call UI immediately for initiator
+      _showInitiatorCallUI(callState);
+      
+      // CRITICAL: Notify listeners immediately to show UI
+      notifyListeners();
+
+      // Join channel and wait for friend in background - don't block UI
+      _joinChannelInBackground(channelId, token, uid);
+      
+      // Return true immediately since UI is shown
+      return true;
+
+    } catch (e) {
+      _logger.e(_tag, 'Error starting call: $e');
+      _waitingForFriend = false;
+      notifyListeners(); // Notify UI of state change
+      await endCall();
+      return false;
+    }
+  }
+
+  /// Show call UI for initiator
+  void _showInitiatorCallUI(CallState callState) {
+    _logger.i(_tag, 'Showing initiator call UI');
+    
+    _currentCall = callState;
+    _isInCall = true;
+    _isMuted = false; // Start unmuted for initiator
+    _isSpeakerOn = true; // Speaker on by default
+    
+    _logger.d(_tag, 'Initial UI state:');
+    _logger.d(_tag, '  - waitingForFriend: $_waitingForFriend');
+    _logger.d(_tag, '  - friendJoined: $_friendJoined');
+    _logger.d(_tag, '  - isInCall: $isInCall');
+    _logger.d(_tag, '  - isActiveCall: $isActiveCall');
+    
+    // Start monitoring for disconnections
+    _startStateMonitoring();
+    
+    notifyListeners();
+  }
+
+  /// Join channel in background without blocking UI
+  void _joinChannelInBackground(String channelId, String token, int uid) async {
+    try {
+      _logger.i(_tag, 'Starting background channel join process...');
+      
+      // Join channel and wait for friend in background
+      final friendJoined = await AgoraService.joinChannelAndWaitForUsers(
+        channelId,
+        token: token,
+        uid: uid,
+        timeoutSeconds: 25, // Increased timeout from 20 to 25 seconds
+      );
+
+      _waitingForFriend = false;
+      _friendJoined = friendJoined;
+      
+      _logger.d(_tag, 'Background join completed - State updated:');
+      _logger.d(_tag, '  - waitingForFriend: $_waitingForFriend');
+      _logger.d(_tag, '  - friendJoined: $_friendJoined');
+      _logger.d(_tag, '  - isInCall: $isInCall');
+      _logger.d(_tag, '  - isActiveCall: $isActiveCall');
+      
+      // CRITICAL: Notify listeners when background process completes
+      notifyListeners();
+
+      if (friendJoined) {
+        _logger.i(_tag, '✅ Friend joined the call in background!');
+        // UI will automatically show active call state via notifyListeners
+      } else {
+        _logger.w(_tag, '❌ Friend did not join within timeout - auto ending call');
+        // Auto-dismiss call UI
+        await endCall();
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error in background channel join: $e');
+      _waitingForFriend = false;
+      notifyListeners();
+      await endCall();
+    }
+  }
+
+  /// Start periodic state sync to detect when friend leaves
+  void _startStateMonitoring() {
+    // Check Agora state every 2 seconds to detect disconnections
+    Future.doWhile(() async {
+      if (!isInCall) return false; // Stop monitoring if call ended
+      
+      await _syncWithAgoraState();
+      await Future.delayed(const Duration(seconds: 2));
+      return isInCall; // Continue monitoring while in call
+    });
+  }
+
+  // ========== RECEIVER FUNCTIONALITY (ORIGINAL) ==========
+
   /// Handle call ended event from AgoraService
   void _onAgoraCallEnded() {
     if (_isInCall) {
@@ -61,9 +224,10 @@ class CallProvider with ChangeNotifier {
           final isMuted = call.arguments['isMuted'] as bool? ?? true;  
           
           if (callerName != null) {
-            _showCallUI(CallData(
+            _showReceiverCallUI(CallState(
               callerName: callerName,
               callerPhotoUrl: callerPhotoUrl,
+              isInitiator: false,
             ), isMuted);
           }
           break;
@@ -75,13 +239,15 @@ class CallProvider with ChangeNotifier {
     });
   }
 
-  /// Show call UI (called from Kotlin via method channel)
-  void _showCallUI(CallData callData, bool isMuted) {
-    _currentCall = callData;
-    _isInCall = true;
-    _isMuted = isMuted; // Use the actual mute state from Kotlin
-    _isSpeakerOn = true; // Default to speaker on
+  /// Show call UI for receiver (called from Kotlin via method channel)
+  void _showReceiverCallUI(CallState callState, bool isMuted) {
+    _logger.i(_tag, 'Showing receiver call UI');
     
+    _currentRole = CallRole.RECEIVER;
+    _currentCall = callState;
+    _isInCall = true;
+    _isMuted = isMuted; // Use the actual mute state from Kotlin (always starts muted)
+    _isSpeakerOn = true; // Default to speaker on
     
     notifyListeners();
   }
@@ -96,15 +262,40 @@ class CallProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// End call (sends request to Kotlin)
+  /// End call (handles both initiator and receiver)
   Future<void> endCall() async {
     try {
-      // Send end call request to Kotlin
-      await AgoraService.leaveChannel();
+      if (_currentRole == CallRole.INITIATOR) {
+        _logger.i(_tag, 'Ending call as initiator...');
+        
+        // Leave Agora channel using centralized service
+        await AgoraService.leaveChannel();
+        
+        // Clear initiator state
+        _channelId = null;
+        _myUid = null;
+        _waitingForFriend = false;
+        _friendJoined = false;
+        
+        _logger.i(_tag, 'Initiator call ended successfully');
+      } else {
+        _logger.i(_tag, 'Ending call as receiver...');
+        
+        // Send end call request to Kotlin (original receiver logic)
+        await AgoraService.leaveChannel();
+        
+        // Don't clear state here - wait for Kotlin to call dismissCallUI
+        _logger.i(_tag, 'Receiver call end request sent');
+        return; // Don't clear state for receiver
+      }
       
-      // Don't clear state here - wait for Kotlin to call dismissCallUI
+      // Clear call state only for initiator
+      clearCallState();
+      
     } catch (e) {
-      debugPrint('Error ending call: $e');
+      _logger.e(_tag, 'Error ending call: $e');
+      // Force clear state even if error
+      clearCallState();
     }
   }
 
@@ -164,10 +355,41 @@ class CallProvider with ChangeNotifier {
       _isInCall = await AgoraService.isInChannel();
       notifyListeners();
     } catch (e) {
-      debugPrint('Error syncing with Agora state: $e');
+      _logger.e(_tag, 'Error syncing with Agora state: $e');
     }
   }
- 
+
+  /// Sync state with actual Agora state (for initiator monitoring)
+  Future<void> _syncWithAgoraState() async {
+    try {
+      final isInChannel = await AgoraService.isInChannel();
+      final hasOtherUsers = await AgoraService.hasOtherUsers();
+      
+      _logger.d(_tag, 'Agora state check: isInChannel=$isInChannel, hasOtherUsers=$hasOtherUsers');
+      
+      // If we're not in channel anymore, end the call
+      if (!isInChannel && _friendJoined) {
+        _logger.i(_tag, 'No longer in channel - ending call');
+        await endCall();
+        return;
+      }
+      
+      // If no other users and we were in an active call, end it
+      if (!hasOtherUsers && _friendJoined) {
+        _logger.i(_tag, 'No other users in channel - ending call');
+        await endCall();
+        return;
+      }
+      
+      // Sync mute/speaker state (but DON'T sync isInCall)
+      _isMuted = await AgoraService.isMicrophoneMuted();
+      _isSpeakerOn = await AgoraService.isSpeakerEnabled();
+      notifyListeners();
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error syncing with Agora state: $e');
+    }
+  }
 
   /// Clear call state (for cleanup)
   void clearCallState() {
@@ -175,6 +397,14 @@ class CallProvider with ChangeNotifier {
     _isInCall = false;
     _isMuted = false;
     _isSpeakerOn = true;
+    
+    // Clear initiator-specific state
+    _currentRole = CallRole.RECEIVER; // Reset to default
+    _channelId = null;
+    _myUid = null;
+    _waitingForFriend = false;
+    _friendJoined = false;
+    
     notifyListeners();
   }
 }

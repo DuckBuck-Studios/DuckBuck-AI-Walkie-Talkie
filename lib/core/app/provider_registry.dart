@@ -5,7 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../../features/settings/providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart'; 
 import '../../features/call/providers/call_provider.dart';
-import '../../features/call/providers/call_initiator_provider.dart';
+
 import '../../features/settings/providers/settings_provider.dart';
 import '../../features/friends/providers/relationship_provider.dart';
 import '../../features/home/providers/home_provider.dart';
@@ -44,9 +44,7 @@ class ProviderRegistry {
       ),
       
       // Call initiator provider for handling call initiation (caller side)
-      ChangeNotifierProvider<CallInitiatorProvider>(
-        create: (_) => CallInitiatorProvider(),
-      ),
+
       
       // Settings provider for real-time user updates in settings screen
       ChangeNotifierProvider<SettingsProvider>(

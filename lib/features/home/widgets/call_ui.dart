@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../call/models/call_state.dart';
 import 'dart:io' show Platform;
 
 /// Enhanced call UI with different loading states, shimmer animations, and funny messages
@@ -635,11 +636,4 @@ class CallUI {
     )
     .fadeIn(duration: 500.ms, curve: Curves.easeOut);
   }
-}
-
-/// Enum for different call loading states
-enum CallLoadingState {
-  connecting,   // Initial "connecting to your friend" with shimmer
-  waitingLong,  // After 3-4 seconds, show funny message about friend's internet
-  failed,       // On failure, show funny error and restore instructions
 }

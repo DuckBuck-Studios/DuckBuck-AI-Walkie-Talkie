@@ -5,7 +5,7 @@ import '../../../core/services/logger/logger_service.dart';
 import '../../../core/services/agora/agora_token_service.dart';
 import '../../../core/services/agora/agora_service.dart';
 import '../../../core/services/notifications/notifications_service.dart';
-import '../../call/providers/call_initiator_provider.dart';
+import '../../call/providers/call_provider.dart';
 
 /// Handler for managing walkie-talkie call connections
 /// Separates the call initiation logic from UI components
@@ -13,7 +13,7 @@ class CallConnectionHandler {
   static const String _tag = 'CALL_CONNECTION_HANDLER';
   
   final BuildContext context;
-  final CallInitiatorProvider callProvider;
+  final CallProvider callProvider;
   final LoggerService _logger = serviceLocator<LoggerService>();
   
   CallConnectionHandler({
@@ -161,10 +161,10 @@ class CallConnectionHandler {
     }
   }
   
-  /// Start call using CallInitiatorProvider
+  /// Start call using CallProvider
   Future<bool> _startCallWithProvider(FriendData friendData, dynamic tokenResponse) async {
     try {
-      _logger.i(_tag, 'PART 5 - Starting call using CallInitiatorProvider...');
+      _logger.i(_tag, 'PART 5 - Starting call using CallProvider...');
       
       final callStarted = await callProvider.startCall(
         friendName: friendData.friendName,
@@ -173,17 +173,16 @@ class CallConnectionHandler {
         token: tokenResponse.token,
         friendPhotoUrl: friendData.friendPhotoUrl,
       );
-      
-      if (!callStarted) {
+       if (!callStarted) {
         _logger.w(_tag, '❌ Call failed - friend did not join or timed out');
-        // Note: The CallUIStateManager will handle the UI state transition
-        // based on the CallInitiatorProvider state changes
+        // The call provider will handle the UI state transition
+        // based on the timeout and friend join status
       }
-      
+
       return callStarted;
     } catch (e) {
       _logger.e(_tag, 'PART 5 - Error starting call with provider: $e');
-      // Note: The CallUIStateManager will handle showing the error UI
+      // The call provider will handle showing the error state
       return false;
     }
   }
