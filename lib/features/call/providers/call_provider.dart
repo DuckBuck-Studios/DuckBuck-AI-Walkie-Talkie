@@ -11,14 +11,44 @@ class CallProvider with ChangeNotifier {
   bool _isMuted = false;
   bool _isSpeakerOn = true; // Speaker is on by default for calls
 
-  // Getters
+  // Protected getters for subclasses
   CallData? get currentCall => _currentCall;
   bool get isInCall => _isInCall;
   bool get isMuted => _isMuted;
   bool get isSpeakerOn => _isSpeakerOn;
 
+  // Protected setters for subclasses
+  @protected
+  set currentCall(CallData? value) {
+    _currentCall = value;
+  }
+  
+  @protected
+  set isInCall(bool value) {
+    _isInCall = value;
+  }
+  
+  @protected
+  set isMuted(bool value) {
+    _isMuted = value;
+  }
+  
+  @protected
+  set isSpeakerOn(bool value) {
+    _isSpeakerOn = value;
+  }
+
   CallProvider() {
     _setupMethodChannelHandler();
+    // Set up callback to listen for call end events from AgoraService
+    AgoraService.setCallEndedCallback(_onAgoraCallEnded);
+  }
+
+  /// Handle call ended event from AgoraService
+  void _onAgoraCallEnded() {
+    if (_isInCall) {
+      _dismissCallUI();
+    }
   }
 
   /// Setup method channel handler to receive calls from Kotlin
@@ -81,7 +111,10 @@ class CallProvider with ChangeNotifier {
   /// Toggle microphone mute/unmute
   Future<void> toggleMute() async {
     try {
-      if (_isMuted) {
+      // Get current state from AgoraService
+      final currentlyMuted = await AgoraService.isMicrophoneMuted();
+      
+      if (currentlyMuted) {
         final result = await AgoraService.turnMicrophoneOn();
         if (result) {
           _isMuted = false;
@@ -102,7 +135,10 @@ class CallProvider with ChangeNotifier {
   /// Toggle speaker on/off
   Future<void> toggleSpeaker() async {
     try {
-      if (_isSpeakerOn) {
+      // Get current state from AgoraService
+      final currentlySpeakerOn = await AgoraService.isSpeakerEnabled();
+      
+      if (currentlySpeakerOn) {
         final result = await AgoraService.turnSpeakerOff();
         if (result) {
           _isSpeakerOn = false;
@@ -117,6 +153,18 @@ class CallProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error toggling speaker: $e');
+    }
+  }
+
+  /// Sync provider state with actual Agora state
+  Future<void> syncWithAgoraState() async {
+    try {
+      _isMuted = await AgoraService.isMicrophoneMuted();
+      _isSpeakerOn = await AgoraService.isSpeakerEnabled();
+      _isInCall = await AgoraService.isInChannel();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error syncing with Agora state: $e');
     }
   }
  

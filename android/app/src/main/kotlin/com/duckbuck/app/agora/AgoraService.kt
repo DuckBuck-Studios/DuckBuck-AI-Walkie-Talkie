@@ -94,6 +94,14 @@ class AgoraService(private val context: Context) {
                 val autoLeaveResult = forceLeaveChannel()
                 AppLogger.i(TAG, "🚪 Auto-leave result: ${if(autoLeaveResult) "SUCCESS" else "FAILED"}")
                 
+                // Trigger call end in Flutter when auto-leaving due to empty channel
+                try {
+                    com.duckbuck.app.core.CallUITrigger.dismissCallUI()
+                    AppLogger.i(TAG, "📱 Triggered call end in Flutter due to empty channel")
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "❌ Failed to trigger call end in Flutter", e)
+                }
+                
                 // Also notify listeners for additional handling
                 eventListener?.onAllUsersLeft()
                 eventListener?.onChannelEmpty()
@@ -291,14 +299,14 @@ class AgoraService(private val context: Context) {
      * @param channelName The name of the channel to join
      * @param token Optional token for channel authentication
      * @param uid User ID (0 for auto-assignment)
-     * @param timeoutSeconds Maximum time to wait for users (default 15 seconds)
+     * @param timeoutSeconds Maximum time to wait for users (default 25 seconds)
      * @return true if users joined within timeout, false otherwise
      */
     fun joinChannelAndWaitForUsers(
         channelName: String, 
         token: String? = null, 
         uid: Int = 0, 
-        timeoutSeconds: Int = 15
+        timeoutSeconds: Int = 25
     ): Boolean {
         AppLogger.d(TAG, "joinChannelAndWaitForUsers: $channelName, timeout: ${timeoutSeconds}s")
         

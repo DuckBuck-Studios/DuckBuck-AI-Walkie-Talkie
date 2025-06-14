@@ -8,6 +8,7 @@ import '../../../core/services/logger/logger_service.dart';
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/repositories/relationship_repository.dart';
+import '../../../core/theme/app_colors.dart';
 
 /// Premium $10,000 Application Splash Screen
 /// 
@@ -17,14 +18,14 @@ import '../../../core/repositories/relationship_repository.dart';
 /// - Premium visual effects and micro-interactions
 /// - Sophisticated loading experience
 /// - High-end brand presentation
-class PremiumSplashScreen extends StatefulWidget {
-  const PremiumSplashScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<PremiumSplashScreen> createState() => _PremiumSplashScreenState();
+  State<SplashScreen> createState() => _SplashScreen();
 }
 
-class _PremiumSplashScreenState extends State<PremiumSplashScreen>
+class _SplashScreen extends State<SplashScreen>
     with TickerProviderStateMixin {
   
   // Premium animation controllers
@@ -413,11 +414,11 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
           child: CircularProgressIndicator(
             value: _loadingProgressAnimation.value,
             strokeWidth: 4,
-            backgroundColor: const Color(0xFF10B981).withOpacity(0.2),
+            backgroundColor: AppColors.accentBlue.withOpacity(0.2),
             valueColor: AlwaysStoppedAnimation<Color>(
               _isAppReady 
-                ? const Color(0xFF10B981) 
-                : const Color(0xFF10B981).withOpacity(0.8),
+                ? AppColors.accentBlue 
+                : AppColors.accentBlue.withOpacity(0.8),
             ),
           ),
         ),
@@ -431,12 +432,12 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
             // Premium green glow effect
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF10B981).withOpacity(_glowAnimation.value * 0.6),
+                color: AppColors.accentBlue.withOpacity(_glowAnimation.value * 0.6),
                 blurRadius: 40 * _glowAnimation.value,
                 spreadRadius: 10 * _glowAnimation.value,
               ),
               BoxShadow(
-                color: const Color(0xFF34D399).withOpacity(_glowAnimation.value * 0.4),
+                color: AppColors.accentTeal.withOpacity(_glowAnimation.value * 0.4),
                 blurRadius: 80 * _glowAnimation.value,
                 spreadRadius: 20 * _glowAnimation.value,
               ),
@@ -477,9 +478,9 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
-            const Color(0xFF10B981), // Emerald green
-            const Color(0xFF34D399), // Light green
-            const Color(0xFF10B981), // Emerald green
+            AppColors.accentBlue, // Emerald green
+            AppColors.accentTeal, // Light green
+            AppColors.accentBlue, // Emerald green
           ],
           stops: [
             (_shimmerAnimation.value - 1.0).clamp(0.0, 1.0),
@@ -497,7 +498,7 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
           letterSpacing: 4.0,
           shadows: [
             Shadow(
-              color: const Color(0xFF10B981).withOpacity(0.5),
+              color: AppColors.accentBlue.withOpacity(0.5),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),

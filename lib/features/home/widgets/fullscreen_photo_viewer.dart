@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import 'dart:io' show Platform;
 import '../../shared/widgets/call_ui_components.dart';
+import 'call_ui.dart';
+import '../handlers/call_ui_state_manager.dart';
 
 class FullscreenPhotoViewer extends StatelessWidget {
   final String? photoURL;
@@ -17,6 +20,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
   final VoidCallback? onToggleMute;
   final VoidCallback? onToggleSpeaker;
   final VoidCallback? onEndCall;
+  final CallUIStateManager? callUIStateManager;
 
   const FullscreenPhotoViewer({
     super.key,
@@ -31,6 +35,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
     this.onToggleMute,
     this.onToggleSpeaker,
     this.onEndCall,
+    this.callUIStateManager,
   });
 
   @override
@@ -59,7 +64,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
             curve: Curves.easeOut,
           ),
           
-          // Bottom container with "tap to exit" or call controls - animated
+          // Bottom container with enhanced call UI
           showCallControls 
             ? CallUIComponents.buildCallControls(
                 context,
@@ -77,29 +82,40 @@ class FullscreenPhotoViewer extends StatelessWidget {
                 end: 0.0,
               )
               .fadeIn(duration: 300.ms)
-            : (isLoading 
-                ? CallUIComponents.buildLoadingIndicator(context)
-                  .animate()
-                  .slideY(
-                    duration: 400.ms,
-                    curve: Curves.easeOutCubic,
-                    begin: 1.0,
-                    end: 0.0,
+            : (callUIStateManager != null
+                ? Consumer<CallUIStateManager>(
+                    builder: (context, uiStateManager, child) {
+                      // Show enhanced UI if state manager is active, otherwise show instruction UI
+                      return uiStateManager.isActive
+                        ? CallUI.buildLoadingUI(
+                            context,
+                            state: uiStateManager.currentState,
+                            onCancel: onExit,
+                            onRetry: onLongPress, // Allow retry via long press
+                          )
+                        : CallUI.buildInstructionUI(
+                            context,
+                            onExit: onExit,
+                            onLongPress: onLongPress,
+                          );
+                    },
                   )
-                  .fadeIn(duration: 300.ms)
-                : CallUIComponents.buildTapToExit(
-                    context,
-                    onExit: onExit,
-                    onLongPress: onLongPress,
+                : (isLoading 
+                    ? CallUIComponents.buildLoadingIndicator(context)
+                      .animate()
+                      .slideY(
+                        duration: 400.ms,
+                        curve: Curves.easeOutCubic,
+                        begin: 1.0,
+                        end: 0.0,
+                      )
+                      .fadeIn(duration: 300.ms)
+                    : CallUI.buildInstructionUI(
+                        context,
+                        onExit: onExit,
+                        onLongPress: onLongPress,
+                      )
                   )
-                  .animate()
-                  .slideY(
-                    duration: 400.ms,
-                    curve: Curves.easeOutCubic,
-                    begin: 1.0,
-                    end: 0.0,
-                  )
-                  .fadeIn(duration: 300.ms)
               ),
           
           // Display name at top - animated

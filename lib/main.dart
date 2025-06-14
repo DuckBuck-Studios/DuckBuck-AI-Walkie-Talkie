@@ -8,6 +8,7 @@ import 'core/services/auth/auth_security_manager.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
 import 'core/services/logger/logger_service.dart';
 import 'core/services/service_locator.dart';
+import 'core/services/agora/agora_service.dart';
 import 'features/call/widgets/call_overlay.dart';
 
 /// Main entry point for the application
@@ -23,6 +24,10 @@ void main() async {
     // Get logger service after initialization
     final logger = serviceLocator<LoggerService>();
     logger.i('MAIN', 'App initialization completed successfully');
+
+    // Initialize AgoraService method channel handlers
+    AgoraService.initialize();
+    logger.i('MAIN', 'AgoraService initialized for method channel communication');
 
     // Start the application
     runApp(const MyApp());

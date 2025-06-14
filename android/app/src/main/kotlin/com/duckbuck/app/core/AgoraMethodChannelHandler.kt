@@ -49,6 +49,30 @@ class AgoraMethodChannelHandler {
             "getRemoteUserCount" -> {
                 handleGetRemoteUserCount(result)
             }
+            "isMicrophoneMuted" -> {
+                handleIsMicrophoneMuted(result)
+            }
+            "isSpeakerEnabled" -> {
+                handleIsSpeakerEnabled(result)
+            }
+            "isInChannel" -> {
+                handleIsInChannel(result)
+            }
+            "getCurrentChannelName" -> {
+                handleGetCurrentChannelName(result)
+            }
+            "getMyUid" -> {
+                handleGetMyUid(result)
+            }
+            "destroyEngine" -> {
+                handleDestroyEngine(result)
+            }
+            "forceLeaveChannel" -> {
+                handleForceLeaveChannel(result)
+            }
+            "getConnectionState" -> {
+                handleGetConnectionState(result)
+            }
             else -> {
                 AppLogger.w(TAG, "Method not implemented: ${call.method}")
                 result.notImplemented()
@@ -205,6 +229,103 @@ class AgoraMethodChannelHandler {
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error getting remote user count", e)
             result.error("GET_REMOTE_COUNT_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleIsMicrophoneMuted(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: isMicrophoneMuted")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val isMuted = agoraService?.isMicrophoneMuted() ?: true
+            result.success(isMuted)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error checking microphone mute status", e)
+            result.error("MIC_STATUS_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleIsSpeakerEnabled(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: isSpeakerEnabled")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val isEnabled = agoraService?.isSpeakerEnabled() ?: false
+            result.success(isEnabled)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error checking speaker status", e)
+            result.error("SPEAKER_STATUS_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleIsInChannel(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: isInChannel")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val isInChannel = agoraService?.isChannelJoined() ?: false
+            result.success(isInChannel)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error checking channel status", e)
+            result.error("CHANNEL_STATUS_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleGetCurrentChannelName(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: getCurrentChannelName")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val channelName = agoraService?.getCurrentChannelName()
+            result.success(channelName)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error getting current channel name", e)
+            result.error("GET_CHANNEL_NAME_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleGetMyUid(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: getMyUid")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val uid = agoraService?.getMyUid() ?: 0
+            result.success(uid)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error getting my UID", e)
+            result.error("GET_UID_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleDestroyEngine(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: destroyEngine")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            agoraService?.destroy()
+            result.success(true)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error destroying engine", e)
+            result.error("DESTROY_ENGINE_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleForceLeaveChannel(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: forceLeaveChannel")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            val success = agoraService?.forceLeaveChannel() ?: false
+            result.success(success)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error force leaving channel", e)
+            result.error("FORCE_LEAVE_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleGetConnectionState(result: MethodChannel.Result) {
+        try {
+            AppLogger.d(TAG, "Flutter requested: getConnectionState")
+            val agoraService = AgoraServiceManager.getValidatedAgoraService()
+            // Return connection state as integer (0 = disconnected, etc.)
+            val state = if (agoraService?.isChannelJoined() == true) 1 else 0
+            result.success(state)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error getting connection state", e)
+            result.error("CONNECTION_STATE_ERROR", e.message, null)
         }
     }
 }

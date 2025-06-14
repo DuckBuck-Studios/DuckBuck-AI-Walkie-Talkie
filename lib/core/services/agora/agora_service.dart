@@ -2,6 +2,14 @@ import 'package:flutter/services.dart';
 
 class AgoraService {
   static const MethodChannel _channel = MethodChannel('com.duckbuck.app/agora_channel');
+  
+  // Event listener for call state changes
+  static Function()? _onCallEnded;
+  
+  /// Set callback for when call ends (for providers to listen)
+  static void setCallEndedCallback(Function()? callback) {
+    _onCallEnded = callback;
+  }
 
   /// Initialize Agora Engine
   static Future<bool> initializeEngine() async {
@@ -20,7 +28,7 @@ class AgoraService {
     String channelName, {
     String? token,
     int uid = 0,
-    int timeoutSeconds = 15,
+    int timeoutSeconds = 25, // Increased from 15 to 25 seconds
   }) async {
     try {
       // Log the exact parameters being sent through method channel
@@ -123,5 +131,141 @@ class AgoraService {
     } catch (e) {
       return 0;
     }
+  }
+
+  /// Check if microphone is currently muted
+  static Future<bool> isMicrophoneMuted() async {
+    try {
+      final bool result = await _channel.invokeMethod('isMicrophoneMuted');
+      return result;
+    } catch (e) {
+      return true; // Default to muted on error
+    }
+  }
+
+  /// Check if speaker is currently enabled
+  static Future<bool> isSpeakerEnabled() async {
+    try {
+      final bool result = await _channel.invokeMethod('isSpeakerEnabled');
+      return result;
+    } catch (e) {
+      return false; // Default to disabled on error
+    }
+  }
+
+  /// Check if currently in a channel
+  static Future<bool> isInChannel() async {
+    try {
+      final bool result = await _channel.invokeMethod('isInChannel');
+      return result;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get current channel name
+  static Future<String?> getCurrentChannelName() async {
+    try {
+      final String? result = await _channel.invokeMethod('getCurrentChannelName');
+      return result;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get my UID in the current channel
+  static Future<int> getMyUid() async {
+    try {
+      final int result = await _channel.invokeMethod('getMyUid');
+      return result;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// Check if channel has other users besides me
+  static Future<bool> hasOtherUsers() async {
+    try {
+      final int userCount = await getRemoteUserCount();
+      return userCount > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Destroy Agora engine (cleanup)
+  static Future<bool> destroyEngine() async {
+    try {
+      final bool result = await _channel.invokeMethod('destroyEngine');
+      return result;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Force leave channel (for emergency cleanup)
+  static Future<bool> forceLeaveChannel() async {
+    try {
+      final bool result = await _channel.invokeMethod('forceLeaveChannel');
+      return result;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get Agora connection state
+  static Future<int> getConnectionState() async {
+    try {
+      final int result = await _channel.invokeMethod('getConnectionState');
+      return result;
+    } catch (e) {
+      return -1; // Unknown state
+    }
+  }
+
+  /// Join channel with basic parameters (without waiting)
+  static Future<bool> joinChannel({
+    required String channelName,
+    String? token,
+    int uid = 0,
+  }) async {
+    try {
+      final methodChannelParams = {
+        'channelName': channelName,
+        'token': token,
+        'uid': uid,
+      };
+      
+      final bool result = await _channel.invokeMethod('joinChannel', methodChannelParams);
+      return result;
+    } catch (e) {
+      print('❌ AgoraService: Exception in joinChannel: $e');
+      return false;
+    }
+  }
+
+  /// Set up method channel to listen for events from Android
+  static void _setupMethodChannelHandler() {
+    _channel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'onCallEnded':
+          // Notify any listening provider that the call has ended
+          _onCallEnded?.call();
+          break;
+        case 'onUserLeft':
+          // Handle user leaving scenario
+          _onCallEnded?.call();
+          break;
+        case 'onChannelEmpty':
+          // Handle empty channel scenario
+          _onCallEnded?.call();
+          break;
+      }
+    });
+  }
+
+  /// Initialize the method channel handler (call this once during app startup)
+  static void initialize() {
+    _setupMethodChannelHandler();
   }
 }

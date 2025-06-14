@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:duckbuck/features/splash/screens/premium_splash_screen.dart';
+import 'package:duckbuck/features/splash/screens/splash_screen.dart';
 import 'package:duckbuck/features/auth/screens/welcome_screen.dart';
 import 'package:duckbuck/features/auth/screens/onboarding_signup_screen.dart';
 import 'package:duckbuck/features/auth/screens/profile_completion_screen.dart';
@@ -27,7 +27,7 @@ class AppRoutes {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case splash:
-        return MaterialPageRoute(builder: (_) => const PremiumSplashScreen());
+        return MaterialPageRoute(builder: (_) => const SplashScreen());
 
       case welcome:
         // Mark that user has seen welcome screen
