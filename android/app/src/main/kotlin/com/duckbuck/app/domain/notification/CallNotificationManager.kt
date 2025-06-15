@@ -151,29 +151,6 @@ class CallNotificationManager(private val context: Context) {
     }
     
     /**
-     * Show call ended notification when walkie-talkie call ends
-     */
-    fun showCallEndedNotification() {
-        try {
-            AppLogger.i(TAG, "📞 Call ended")
-            
-            val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
-                .setContentTitle("📞 Call ended")
-                .setSmallIcon(R.drawable.ic_speaker)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setCategory(NotificationCompat.CATEGORY_STATUS)
-                .setAutoCancel(true)
-                .setOngoing(false)
-                .build()
-            
-            notificationManager?.notify(DISCONNECTION_NOTIFICATION_ID + 1, notification)
-            
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "❌ Error showing call ended notification", e)
-        }
-    }
-    
-    /**
      * Clear only the speaking notification (keep disconnection notifications)
      */
     fun clearSpeakingNotification() {

@@ -319,6 +319,11 @@ class WalkieTalkieService : Service() {
                 // Leave Agora channel
                 agoraCallManager.leaveCall("Walkie-talkie channel disconnection")
                 
+                // Dismiss call UI and show disconnection notification with user's name
+                CallUITrigger.dismissCallUI()
+                notificationManager.showDisconnectionNotification(myUsername ?: "You")
+                AppLogger.i(TAG, "� Dismissed UI and showed disconnection notification: ${myUsername ?: "You"} over")
+                
                 // Clear state
                 callStatePersistence.clearCallData()
                 
@@ -463,6 +468,10 @@ class WalkieTalkieService : Service() {
                 // Dismiss call UI when leaving channel
                 CallUITrigger.dismissCallUI()
                 AppLogger.i(TAG, "🎯 Dismissed call UI for walkie-talkie leave")
+                
+                // Show disconnection notification with user's name
+                notificationManager.showDisconnectionNotification(myUsername ?: "You")
+                AppLogger.i(TAG, "� Showed disconnection notification: ${myUsername ?: "You"} over")
                 
                 // Auto-cleanup state
                 currentChannelId = null
