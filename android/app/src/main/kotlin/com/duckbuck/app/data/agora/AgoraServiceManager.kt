@@ -1,7 +1,7 @@
-package com.duckbuck.app.core
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.data.agora
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
-import com.duckbuck.app.agora.AgoraService
+import com.duckbuck.app.data.agora.AgoraService
 
 /**
  * Centralized Agora Service Manager that replaces AgoraServiceHolder

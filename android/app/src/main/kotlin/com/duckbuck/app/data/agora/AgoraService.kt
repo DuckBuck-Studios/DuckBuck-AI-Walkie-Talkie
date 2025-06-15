@@ -1,5 +1,5 @@
-package com.duckbuck.app.agora
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.data.agora
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 import com.duckbuck.app.R
 import android.content.Context
 import io.agora.rtc2.ChannelMediaOptions
@@ -10,6 +10,7 @@ import io.agora.rtc2.RtcEngineConfig
 import io.agora.rtc2.IRtcEngineEventHandler.AudioVolumeInfo
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import com.duckbuck.app.presentation.bridges.CallUITrigger
 
 class AgoraService(private val context: Context) {
     
@@ -96,7 +97,7 @@ class AgoraService(private val context: Context) {
                 
                 // Trigger call end in Flutter when auto-leaving due to empty channel
                 try {
-                    com.duckbuck.app.core.CallUITrigger.dismissCallUI()
+                    CallUITrigger.dismissCallUI()
                     AppLogger.i(TAG, "📱 Triggered call end in Flutter due to empty channel")
                 } catch (e: Exception) {
                     AppLogger.e(TAG, "❌ Failed to trigger call end in Flutter", e)

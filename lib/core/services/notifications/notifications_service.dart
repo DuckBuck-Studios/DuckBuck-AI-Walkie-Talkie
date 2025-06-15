@@ -163,9 +163,42 @@ class NotificationsService {
       }
       
       final callName = currentUser.displayName ?? 'Unknown User';
-      final callerPhoto = currentUser.photoURL ?? '';
       
-      _logger.d(_tag, 'Using caller data - Name: $callName, Photo: ${callerPhoto.isNotEmpty ? "present" : "not present"}');
+      // 🔧 FIX: Get the network URL instead of local cached path
+      String callerPhoto = '';
+      final photoURL = currentUser.photoURL ?? '';
+      
+      if (photoURL.isNotEmpty) {
+        if (photoURL.startsWith('file://') || photoURL.startsWith('/')) {
+          // This is a local cached file path - we need the network URL instead
+          // Try to get the network URL from user service or fallback to empty
+          _logger.w(_tag, 'Detected local file path in photoURL: $photoURL');
+          
+          try {
+            // Get fresh user data from Firestore to get the network URL
+            final freshUserData = await _userService.getUserData(currentUser.uid);
+            if (freshUserData?.photoURL != null && 
+                !freshUserData!.photoURL!.startsWith('file://') && 
+                !freshUserData.photoURL!.startsWith('/')) {
+              callerPhoto = freshUserData.photoURL!;
+              _logger.i(_tag, 'Using network URL from fresh user data: ${callerPhoto.substring(0, 50)}...');
+            } else {
+              _logger.w(_tag, 'Fresh user data also contains local path, using empty photo URL');
+              callerPhoto = '';
+            }
+          } catch (e) {
+            _logger.e(_tag, 'Error fetching fresh user data for network URL: $e');
+            callerPhoto = '';
+          }
+        } else {
+          // This is already a network URL
+          callerPhoto = photoURL;
+          _logger.d(_tag, 'Using network URL: ${callerPhoto.substring(0, 50)}...');
+        }
+      }
+      
+      _logger.d(_tag, 'Using caller data - Name: $callName, Photo: ${callerPhoto.isNotEmpty ? "network URL present" : "not present"}');
+      _logger.d(_tag, 'Final photo URL for FCM: ${callerPhoto.isNotEmpty ? callerPhoto : "EMPTY"}');
       
       final success = await _apiService.sendDataOnlyNotification(
         uid: uid,

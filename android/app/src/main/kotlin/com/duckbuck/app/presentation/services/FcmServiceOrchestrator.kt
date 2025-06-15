@@ -1,11 +1,14 @@
-package com.duckbuck.app.fcm
+package com.duckbuck.app.presentation.services
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import com.duckbuck.app.core.AppLogger
-import com.duckbuck.app.services.WalkieTalkieService
-import com.duckbuck.app.audio.VolumeAcquireManager
-import com.duckbuck.app.channel.ChannelOccupancyManager
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
+import com.duckbuck.app.presentation.services.WalkieTalkieService
+import com.duckbuck.app.infrastructure.audio.VolumeAcquireManager
+import com.duckbuck.app.domain.call.ChannelOccupancyManager
+import com.duckbuck.app.domain.messaging.FcmDataHandler
+import com.duckbuck.app.domain.messaging.FcmAppStateDetector
+import com.duckbuck.app.domain.notification.UniversalNotificationManager
 
 /**
  * FCM Service Orchestrator - Pure coordination and delegation
@@ -27,6 +30,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
     private lateinit var appStateDetector: FcmAppStateDetector
     private lateinit var volumeAcquireManager: VolumeAcquireManager
     private lateinit var occupancyManager: ChannelOccupancyManager
+    private lateinit var universalNotificationManager: UniversalNotificationManager
     
     override fun onCreate() {
         super.onCreate()
@@ -49,6 +53,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
                 appStateDetector = FcmAppStateDetector(this)
                 volumeAcquireManager = VolumeAcquireManager(this)
                 occupancyManager = ChannelOccupancyManager()
+                universalNotificationManager = UniversalNotificationManager(this)
                 AppLogger.i(TAG, "✅ All high-level managers initialized successfully (async)")
             } catch (e: Exception) {
                 AppLogger.e(TAG, "❌ Error initializing managers (async)", e)
@@ -70,6 +75,9 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
         if (!::occupancyManager.isInitialized) {
             occupancyManager = ChannelOccupancyManager()
         }
+        if (!::universalNotificationManager.isInitialized) {
+            universalNotificationManager = UniversalNotificationManager(this)
+        }
     }
     
     /**
@@ -85,7 +93,33 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
             
             AppLogger.i(TAG, "📨 FCM message received: ${remoteMessage.messageId}")
             
-            // 🕐 TIMESTAMP VALIDATION: Check if message is fresh before processing
+            // Determine message type
+            val messageType = FcmDataHandler.getMessageType(remoteMessage)
+            AppLogger.i(TAG, "� Message type detected: $messageType")
+            
+            when (messageType) {
+                FcmDataHandler.MessageType.WALKIE_TALKIE_CALL -> {
+                    handleWalkieTalkieCall(remoteMessage)
+                }
+                FcmDataHandler.MessageType.GENERAL_NOTIFICATION -> {
+                    handleGeneralNotification(remoteMessage)
+                }
+                FcmDataHandler.MessageType.UNKNOWN -> {
+                    AppLogger.w(TAG, "⚠️ Unknown FCM message type received")
+                }
+            }
+            
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error processing FCM message", e)
+        }
+    }
+    
+    /**
+     * Handle walkie-talkie call messages
+     */
+    private fun handleWalkieTalkieCall(remoteMessage: RemoteMessage) {
+        try {
+            // �🕐 TIMESTAMP VALIDATION: Check if message is fresh before processing
             if (!isMessageTimestampValid(remoteMessage)) {
                 AppLogger.w(TAG, "🕐 FCM message too old, rejecting stale walkie-talkie invitation")
                 return
@@ -95,7 +129,7 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
             val callData = FcmDataHandler.extractCallData(remoteMessage)
             
             if (callData == null) {
-                AppLogger.w(TAG, "⚠️ Invalid or non-call FCM message received")
+                AppLogger.w(TAG, "⚠️ Invalid call data in walkie-talkie message")
                 return
             }
             
@@ -106,7 +140,40 @@ class FcmServiceOrchestrator : FirebaseMessagingService() {
             handleWalkieTalkieMessage(callData)
             
         } catch (e: Exception) {
-            AppLogger.e(TAG, "❌ Error processing FCM message", e)
+            AppLogger.e(TAG, "❌ Error handling walkie-talkie call", e)
+        }
+    }
+    
+    /**
+     * Handle general notification messages
+     */
+    private fun handleGeneralNotification(remoteMessage: RemoteMessage) {
+        try {
+            AppLogger.i(TAG, "📢 Processing general notification")
+            
+            // Extract notification data
+            val notificationData = FcmDataHandler.extractGeneralNotificationData(remoteMessage)
+            
+            if (notificationData == null) {
+                AppLogger.w(TAG, "⚠️ Invalid notification data in general message")
+                return
+            }
+            
+            FcmDataHandler.logGeneralNotificationData(notificationData)
+            
+            // Show notification using the universal notification manager
+            universalNotificationManager.showGeneralNotification(
+                title = notificationData.title,
+                message = notificationData.message,
+                imageUrl = notificationData.imageUrl,
+                clickAction = notificationData.clickAction,
+                extraData = notificationData.extraData
+            )
+            
+            AppLogger.i(TAG, "✅ General notification displayed: ${notificationData.title}")
+            
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error handling general notification", e)
         }
     }
     

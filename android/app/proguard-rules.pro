@@ -12,7 +12,7 @@
 }
 
 # Remove AppLogger calls in release builds (our custom logger)
--assumenosideeffects class com.duckbuck.app.core.AppLogger {
+-assumenosideeffects class com.duckbuck.app.infrastructure.monitoring.AppLogger {
     public static void d(...);
     public static void i(...);
     public static void w(...);
@@ -20,7 +20,7 @@
 }
 
 # Keep AppLogger.e for crash reporting
--keep class com.duckbuck.app.core.AppLogger {
+-keep class com.duckbuck.app.infrastructure.monitoring.AppLogger {
     public static void e(...);
 }
 
@@ -40,7 +40,7 @@
 -keep class com.google.firebase.messaging.** { *; }
 
 # Keep model classes (data classes)
--keep class com.duckbuck.app.fcm.FcmDataHandler$CallData { *; }
+-keep class com.duckbuck.app.domain.messaging.FcmDataHandler$CallData { *; }
 -keep class com.duckbuck.app.callstate.** { *; }
 
 # Remove debug/test related code

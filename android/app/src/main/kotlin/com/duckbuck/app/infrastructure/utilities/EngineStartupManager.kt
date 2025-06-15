@@ -1,6 +1,9 @@
-package com.duckbuck.app.core
+package com.duckbuck.app.infrastructure.utilities
 
 import android.content.Context
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
+import com.duckbuck.app.data.agora.AgoraServiceManager
+import com.duckbuck.app.data.agora.AgoraEngineInitializer
 
 /**
  * Engine Startup Manager - Handles Agora engine initialization at app startup

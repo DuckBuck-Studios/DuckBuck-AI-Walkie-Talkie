@@ -1,19 +1,19 @@
-package com.duckbuck.app.services
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.presentation.services
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import android.os.PowerManager
-import com.duckbuck.app.agora.AgoraCallManager
-import com.duckbuck.app.agora.AgoraService
-import com.duckbuck.app.callstate.CallStatePersistenceManager
-import com.duckbuck.app.core.AgoraServiceManager
-import com.duckbuck.app.core.CallUITrigger
-import com.duckbuck.app.notifications.CallNotificationManager
-import com.duckbuck.app.audio.VolumeAcquireManager
-import com.duckbuck.app.channel.ChannelOccupancyManager
+import com.duckbuck.app.data.agora.AgoraCallManager
+import com.duckbuck.app.data.agora.AgoraService
+import com.duckbuck.app.data.local.CallStatePersistenceManager
+import com.duckbuck.app.data.agora.AgoraServiceManager
+import com.duckbuck.app.presentation.bridges.CallUITrigger
+import com.duckbuck.app.domain.notification.CallNotificationManager
+import com.duckbuck.app.infrastructure.audio.VolumeAcquireManager
+import com.duckbuck.app.domain.call.ChannelOccupancyManager
 
 /**
  * Persistent Walkie-Talkie Foreground Service
@@ -249,7 +249,7 @@ class WalkieTalkieService : Service() {
             }
             
             // CRITICAL: Save call data first before joining (for killed state UI recovery)
-            val callData = com.duckbuck.app.fcm.FcmDataHandler.CallData(
+            val callData = com.duckbuck.app.domain.messaging.FcmDataHandler.CallData(
                 token = token,
                 uid = uid,
                 channelId = channelId,
@@ -264,9 +264,22 @@ class WalkieTalkieService : Service() {
             // Store my own UID and username
             myUid = uid
             myUsername = username
+            
+            // Store username mapping for myself (the receiver/initiator)
             if (username != null) {
                 uidToUsernameMap[uid] = username
                 AppLogger.i(TAG, "✅ Stored username mapping: $uid -> $username")
+            } else {
+                // If no username provided, try to get current user's display name
+                // This happens when receiver joins via FCM - we only get initiator's name
+                val currentUserDisplayName = getCurrentUserDisplayName()
+                if (currentUserDisplayName != null) {
+                    uidToUsernameMap[uid] = currentUserDisplayName
+                    myUsername = currentUserDisplayName
+                    AppLogger.i(TAG, "✅ Stored current user's display name in mapping: $uid -> $currentUserDisplayName")
+                } else {
+                    AppLogger.w(TAG, "⚠️ No username available for UID: $uid")
+                }
             }
             
             // Join the new channel
@@ -377,6 +390,29 @@ class WalkieTalkieService : Service() {
     }
     
     /**
+     * Get current user's display name from SharedPreferences or Firebase Auth
+     * This is used when the receiver joins but we only have initiator's info from FCM
+     */
+    private fun getCurrentUserDisplayName(): String? {
+        return try {
+            // Get from SharedPreferences (should be set by Flutter when user logs in)
+            val prefs = getSharedPreferences("call_state_prefs", MODE_PRIVATE)
+            val cachedName = prefs.getString("current_user_display_name", null)
+            
+            if (!cachedName.isNullOrBlank()) {
+                AppLogger.d(TAG, "Got current user display name from cache: $cachedName")
+                return cachedName
+            }
+            
+            AppLogger.w(TAG, "Could not get current user display name from SharedPreferences")
+            null
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error getting current user display name: ${e.message}")
+            null
+        }
+    }
+    
+    /**
      * Create event listener for service-managed walkie-talkie events
      */
     private fun createServiceEventListener(channelId: String): AgoraService.AgoraEventListener {
@@ -385,21 +421,20 @@ class WalkieTalkieService : Service() {
                 AppLogger.i(TAG, "✅ Service: Walkie-talkie channel joined: $channel (uid: $uid)")
                 callStatePersistence.markCallAsJoined(channelId)
                 
-                // 👥 OCCUPANCY CHECK WITH DISCOVERY DELAY: Allow time for Agora to discover existing users
-                AppLogger.i(TAG, "🔍 Starting occupancy check with discovery delay for channel: $channel")
-                occupancyManager.checkOccupancyAfterDiscovery(
+                // 👥 OCCUPANCY CHECK FOR WALKIE-TALKIE: Use walkie-talkie specific logic
+                AppLogger.i(TAG, "🔍 Starting walkie-talkie occupancy check for channel: $channel")
+                occupancyManager.checkWalkieTalkieOccupancy(
                     channelId = channel,
+                    isInitiator = false, // For now, assume all FCM-triggered joins are listeners
                     onChannelOccupied = { userCount ->
                         AppLogger.i(TAG, "✅ Channel has $userCount users - proceeding with normal walkie-talkie flow")
                         
-                        // Show speaking notification for the person who triggered the FCM
+                        // Show notification that someone is speaking in walkie-talkie
                         val speakerName = lastSpeakerUsername ?: "Someone"
-                        
-                        // Get speaker photo from persisted call data
                         val speakerPhotoUrl = callStatePersistence.getCurrentCallData()?.callerPhoto
                         
                         notificationManager.showSpeakingNotification(speakerName, speakerPhotoUrl)
-                        AppLogger.i(TAG, "📢 Showing speaking notification: $speakerName is speaking (photo: ${if (speakerPhotoUrl != null) "present" else "none"})")
+                        AppLogger.i(TAG, "📢 Showing walkie-talkie speaking notification: $speakerName")
                         
                         // Trigger call UI for walkie-talkie calls with actual mute state and photo
                         val callerName = lastSpeakerUsername ?: "Walkie-Talkie Call"
@@ -453,34 +488,42 @@ class WalkieTalkieService : Service() {
             }
             
             override fun onUserOffline(uid: Int, reason: Int) {
-                AppLogger.i(TAG, "👋 Service: User left walkie-talkie: $uid (lastSpeakerUid: $lastSpeakerUid)")
+                AppLogger.i(TAG, "👋 Service: User left walkie-talkie: $uid (lastSpeakerUid: $lastSpeakerUid, myUid: $myUid)")
                 
-                // Only show disconnection notification for OTHER users (not self)
-                if (uid != myUid) {
-                    // Clear any existing speaking notification first
-                    notificationManager.clearSpeakingNotification()
-                    AppLogger.i(TAG, "🧹 Cleared speaking notification before showing leave notification")
-                    
-                    // In walkie-talkie mode, prioritize the last speaker's username
-                    // since FCM and Agora UIDs might differ but usually only one person speaks
-                    val username = if (lastSpeakerUsername != null) {
-                        val speakerName = lastSpeakerUsername!!
-                        AppLogger.i(TAG, "📻 Using stored speaker name: $speakerName for leaving user $uid")
-                        speakerName
+                // Clear any existing speaking notification first
+                notificationManager.clearSpeakingNotification()
+                AppLogger.i(TAG, "🧹 Cleared speaking notification before showing leave notification")
+                
+                // Only show "over" notification on receiver's phone, not on initiator's phone
+                // Check if current user is the receiver (not the initiator who sent the call)
+                val isCurrentUserInitiator = (lastSpeakerUid != 0 && lastSpeakerUid == myUid)
+                
+                if (!isCurrentUserInitiator) {
+                    // Current user is the receiver - show the "over" notification with initiator's name
+                    val initiatorName = if (lastSpeakerUsername != null) {
+                        lastSpeakerUsername!!
                     } else {
-                        val fallbackName = getUsernameForUid(uid)
-                        AppLogger.i(TAG, "📻 Using fallback name: $fallbackName for leaving user $uid")
-                        fallbackName
+                        // Fallback: try to get the best available username
+                        if (uid != myUid) {
+                            getUsernameForUid(uid)
+                        } else {
+                            // If self is leaving and we don't have initiator name, try to find the other user's name
+                            val otherUserName = uidToUsernameMap.values.firstOrNull { it != myUsername }
+                            otherUserName ?: "Call"
+                        }
                     }
                     
-                    notificationManager.showDisconnectionNotification(username)
-                    AppLogger.i(TAG, "📢 Showing disconnection notification for: $username")
-                    
-                    // Clear speaker info after showing the leave notification
-                    lastSpeakerUid = 0
-                    lastSpeakerUsername = null
-                    AppLogger.i(TAG, "🧹 Cleared speaker info after user left")
+                    AppLogger.i(TAG, "📻 Showing 'over' notification on receiver's phone: $initiatorName (leaving UID: $uid)")
+                    notificationManager.showDisconnectionNotification(initiatorName)
+                    AppLogger.i(TAG, "📢 Showing disconnection notification for: $initiatorName")
+                } else {
+                    AppLogger.i(TAG, "👤 Current user is initiator - not showing 'over' notification")
                 }
+                
+                // Clear speaker info after showing the leave notification
+                lastSpeakerUid = 0
+                lastSpeakerUsername = null
+                AppLogger.i(TAG, "🧹 Cleared speaker info after user left")
                 
                 // Remove from username mapping
                 uidToUsernameMap.remove(uid)
@@ -511,9 +554,7 @@ class WalkieTalkieService : Service() {
                 AppLogger.i(TAG, "🏠 Service: Walkie-talkie channel empty")
             }
             
-            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
-                // Speaking notifications are handled immediately in FCM orchestrator
-                // This is just for logging/debugging Agora events
+            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) { 
                 AppLogger.d(TAG, "🎤 Service: Agora detected user $uid speaking: $isSpeaking (volume: $volume)")
             }
         }

@@ -1,9 +1,9 @@
-package com.duckbuck.app.agora
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.data.agora
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 import android.content.Context
-import com.duckbuck.app.core.AgoraServiceManager
-import com.duckbuck.app.core.AgoraEngineInitializer
+import com.duckbuck.app.data.agora.AgoraServiceManager
+import com.duckbuck.app.data.agora.AgoraEngineInitializer
 
 /**
  * Agora Call Manager responsible for managing call joining logic

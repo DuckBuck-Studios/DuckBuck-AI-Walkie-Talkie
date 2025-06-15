@@ -1,8 +1,8 @@
-package com.duckbuck.app.fcm
+package com.duckbuck.app.domain.messaging
 
 import android.app.ActivityManager
 import android.content.Context
-import com.duckbuck.app.core.AppLogger
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 /**
  * FCM App State Detector responsible for determining current app state

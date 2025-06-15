@@ -1,9 +1,9 @@
-package com.duckbuck.app.callstate
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.data.local
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.duckbuck.app.fcm.FcmDataHandler.CallData
+import com.duckbuck.app.domain.messaging.FcmDataHandler.CallData
 
 /**
  * Call State Persistence Manager - Handles all call state operations

@@ -1,13 +1,17 @@
-package com.duckbuck.app.core
+package com.duckbuck.app.presentation.bridges
 
+import android.content.Context
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
+import com.duckbuck.app.presentation.bridges.AgoraMethodChannelHandler
+import com.duckbuck.app.presentation.bridges.CallUITrigger
 
 /**
  * Flutter Bridge Manager - Handles all Flutter-Native communication setup
  * Extracted from MainActivity for better separation of concerns and testability
  */
-class FlutterBridgeManager {
+class FlutterBridgeManager(private val context: Context) {
     
     companion object {
         private const val TAG = "FlutterBridgeManager"

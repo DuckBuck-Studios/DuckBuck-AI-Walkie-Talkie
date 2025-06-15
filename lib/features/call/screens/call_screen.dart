@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, File;
 
 import '../providers/call_provider.dart';
 import '../../shared/widgets/call_ui_components.dart';
@@ -121,31 +121,93 @@ class CallScreen extends StatelessWidget {
   }
 
   Widget _buildPhoto(BuildContext context, String? photoUrl, String displayName) {
+    print('🖼️ _buildPhoto called with photoUrl: $photoUrl');
+    
     if (photoUrl != null && photoUrl.isNotEmpty) {
-      return SizedBox(
-        width: double.infinity,
-        height: double.infinity,
-        child: CachedNetworkImage(
-          imageUrl: photoUrl,
-          fit: BoxFit.cover,
+      // Check if it's a local file path
+      final isLocalFile = photoUrl.startsWith('file://') || photoUrl.startsWith('/');
+      print('📁 Is local file: $isLocalFile for URL: $photoUrl');
+      
+      if (isLocalFile) {
+        // Handle local file paths
+        final localPath = photoUrl.startsWith('file://') 
+            ? photoUrl.replaceFirst('file://', '') 
+            : photoUrl;
+        
+        print('📂 Processing local file path: $localPath');
+        
+        // Check if file exists
+        final file = File(localPath);
+        if (!file.existsSync()) {
+          print('❌ Local file does not exist: $localPath');
+          return _buildFallbackPhoto(context, displayName);
+        }
+        
+        print('✅ Local file exists, loading: $localPath');
+            
+        return SizedBox(
           width: double.infinity,
           height: double.infinity,
-          placeholder: (context, url) => Center(
-            child: Platform.isIOS
-                ? const CupertinoActivityIndicator(
-                    color: Colors.white,
-                    radius: 20,
-                  )
-                : const CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 3,
-                  ),
+          child: Image.file(
+            file,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (context, error, stackTrace) {
+              print('❌ Error loading local file: $localPath - $error');
+              return _buildFallbackPhoto(context, displayName);
+            },
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded || frame != null) {
+                print('✅ Local file loaded successfully: $localPath');
+                return child;
+              }
+              return Center(
+                child: Platform.isIOS
+                    ? const CupertinoActivityIndicator(
+                        color: Colors.white,
+                        radius: 20,
+                      )
+                    : const CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+              );
+            },
           ),
-          errorWidget: (context, url, error) => _buildFallbackPhoto(context, displayName),
-        ),
-      );
+        );
+      } else {
+        // Handle network URLs
+        print('🌐 Processing network URL: $photoUrl');
+        return SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: CachedNetworkImage(
+            imageUrl: photoUrl,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            placeholder: (context, url) => Center(
+              child: Platform.isIOS
+                  ? const CupertinoActivityIndicator(
+                      color: Colors.white,
+                      radius: 20,
+                    )
+                  : const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+            ),
+            errorWidget: (context, url, error) {
+              print('❌ Error loading network image: $photoUrl - $error');
+              return _buildFallbackPhoto(context, displayName);
+            },
+          ),
+        );
+      }
     }
 
+    print('⚠️ No photo URL provided, using fallback');
     return _buildFallbackPhoto(context, displayName);
   }
 

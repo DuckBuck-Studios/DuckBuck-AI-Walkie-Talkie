@@ -1,4 +1,4 @@
-package com.duckbuck.app.core
+package com.duckbuck.app.infrastructure.monitoring
 
 import android.util.Log
 

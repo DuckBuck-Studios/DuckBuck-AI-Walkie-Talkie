@@ -1,15 +1,16 @@
-package com.duckbuck.app.core
+package com.duckbuck.app.domain.call
 
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.duckbuck.app.callstate.CallStatePersistenceManager
-import com.duckbuck.app.services.WalkieTalkieService
-import com.duckbuck.app.audio.VolumeAcquireManager
-import com.duckbuck.app.channel.ChannelOccupancyManager
-import com.duckbuck.app.core.AgoraServiceManager
-import com.duckbuck.app.fcm.FcmDataHandler
+import com.duckbuck.app.data.local.CallStatePersistenceManager
+import com.duckbuck.app.presentation.services.WalkieTalkieService
+import com.duckbuck.app.infrastructure.audio.VolumeAcquireManager
+import com.duckbuck.app.domain.call.ChannelOccupancyManager
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
+import com.duckbuck.app.domain.messaging.FcmDataHandler
+import com.duckbuck.app.data.agora.AgoraServiceManager
 
 /**
  * App State Manager - Handles app lifecycle state management

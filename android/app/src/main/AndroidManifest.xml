@@ -91,7 +91,7 @@
             
         <!-- Walkie-Talkie FCM Service (handles all FCM operations through orchestrator) -->
         <service
-            android:name=".fcm.FcmServiceOrchestrator"
+            android:name=".presentation.services.FcmServiceOrchestrator"
             android:enabled="true"
             android:exported="false">
             <intent-filter android:priority="1">
@@ -101,7 +101,7 @@
         
         <!-- Walkie-Talkie Service (starts only when FCM received, stops when all leave) -->
         <service
-            android:name=".services.WalkieTalkieService"
+            android:name=".presentation.services.WalkieTalkieService"
             android:enabled="true"
             android:exported="false"
             android:stopWithTask="false" />

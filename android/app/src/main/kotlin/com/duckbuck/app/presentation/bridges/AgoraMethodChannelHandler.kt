@@ -1,8 +1,9 @@
-package com.duckbuck.app.core
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.presentation.bridges
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import com.duckbuck.app.data.agora.AgoraServiceManager
 
 /**
  * Handles all Agora-related method channel calls from Flutter

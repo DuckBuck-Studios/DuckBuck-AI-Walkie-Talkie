@@ -1,8 +1,8 @@
-package com.duckbuck.app.audio
+package com.duckbuck.app.infrastructure.audio
 
 import android.content.Context
 import android.media.AudioManager
-import com.duckbuck.app.core.AppLogger
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 /**
  * Volume Acquire Manager - Manages system volume acquisition for walkie-talkie

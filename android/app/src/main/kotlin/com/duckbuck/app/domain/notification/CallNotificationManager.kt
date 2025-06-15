@@ -1,5 +1,5 @@
-package com.duckbuck.app.notifications
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.domain.notification
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 import com.duckbuck.app.R
 import android.app.NotificationChannel
 import android.app.NotificationManager as AndroidNotificationManager
@@ -147,6 +147,29 @@ class CallNotificationManager(private val context: Context) {
             
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Error showing disconnection notification", e)
+        }
+    }
+    
+    /**
+     * Show call ended notification when walkie-talkie call ends
+     */
+    fun showCallEndedNotification() {
+        try {
+            AppLogger.i(TAG, "📞 Call ended")
+            
+            val notification = NotificationCompat.Builder(context, SPEAKING_NOTIFICATION_CHANNEL_ID)
+                .setContentTitle("📞 Call ended")
+                .setSmallIcon(R.drawable.ic_speaker)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setOngoing(false)
+                .build()
+            
+            notificationManager?.notify(DISCONNECTION_NOTIFICATION_ID + 1, notification)
+            
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Error showing call ended notification", e)
         }
     }
     

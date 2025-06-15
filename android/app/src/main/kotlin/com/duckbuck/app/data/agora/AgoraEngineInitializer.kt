@@ -1,8 +1,8 @@
-package com.duckbuck.app.core
-import com.duckbuck.app.core.AppLogger
+package com.duckbuck.app.data.agora
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 import android.content.Context
-import com.duckbuck.app.agora.AgoraService
+import com.duckbuck.app.data.agora.AgoraService
 
 /**
  * Core module responsible for Agora Engine initialization

@@ -8,7 +8,7 @@ echo "🔄 Updating Kotlin modules to use production-safe logging..."
 # Array of files to update
 files=(
     "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/core/AgoraEngineInitializer.kt"
-    "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/core/AgoraMethodChannelHandler.kt"
+    "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/presentation/bridges/AgoraMethodChannelHandler.kt"
     "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/core/AgoraServiceManager.kt"
     "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/agora/AgoraService.kt"
     "/Users/rudra/Development/DuckBuck/android/app/src/main/kotlin/com/duckbuck/app/agora/AgoraCallManager.kt"
@@ -27,10 +27,10 @@ update_file() {
         echo "  📝 Updating: $(basename "$file")"
         
         # Add AppLogger import if not present
-        if ! grep -q "import com.duckbuck.app.core.AppLogger" "$file"; then
+        if ! grep -q "import com.duckbuck.app.infrastructure.monitoring.AppLogger" "$file"; then
             # Find the package line and add import after it
             sed -i '' '/^package /a\
-import com.duckbuck.app.core.AppLogger
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 ' "$file"
         fi
         

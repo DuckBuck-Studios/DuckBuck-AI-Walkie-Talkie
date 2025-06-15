@@ -147,7 +147,7 @@ class CallConnectionHandler {
       
       final invitationSent = await notificationsService.sendDataOnlyNotification(
         uid: friendData.friendUid,
-        type: 'walkie_talkie_invite',
+        type: 'invite',
         agoraChannelId: friendData.relationshipId,
       );
       

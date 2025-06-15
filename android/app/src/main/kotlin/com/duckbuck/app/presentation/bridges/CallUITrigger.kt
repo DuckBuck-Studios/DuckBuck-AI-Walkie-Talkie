@@ -1,9 +1,10 @@
-package com.duckbuck.app.core
+package com.duckbuck.app.presentation.bridges
 
 import android.os.Handler
 import android.os.Looper
 import android.text.Html
 import io.flutter.plugin.common.MethodChannel
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
 /**
  * Utility class for triggering call UI in Flutter from Kotlin
