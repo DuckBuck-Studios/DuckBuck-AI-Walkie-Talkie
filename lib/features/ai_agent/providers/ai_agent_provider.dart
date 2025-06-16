@@ -1,0 +1,357 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../../../core/repositories/ai_agent_repository.dart';
+import '../../../core/services/service_locator.dart';
+import '../../../core/services/logger/logger_service.dart';
+import '../../../core/exceptions/ai_agent_exceptions.dart';
+import '../models/ai_agent_models.dart';
+
+/// Provider for managing AI agent state and operations
+class AiAgentProvider extends ChangeNotifier {
+  final AiAgentRepository _repository;
+  final LoggerService _logger;
+  
+  static const String _tag = 'AI_AGENT_PROVIDER';
+  
+  // Current state
+  AiAgentState _state = AiAgentState.idle;
+  AiAgentSession? _currentSession;
+  String? _errorMessage;
+  
+  // Timer for tracking agent usage
+  Timer? _usageTimer;
+  Timer? _autoStopTimer;
+  Timer? _firebaseSyncTimer;
+  
+  // Sync interval
+  static const Duration _firebaseSyncInterval = Duration(seconds: 5);
+  
+  // Stream subscriptions
+  StreamSubscription<int>? _timeStreamSubscription;
+  
+  // User data
+  String? _currentUid;
+  int _remainingTimeSeconds = 0;
+  
+  /// Creates a new AiAgentProvider
+  AiAgentProvider({
+    AiAgentRepository? repository,
+    LoggerService? logger,
+  }) : _repository = repository ?? serviceLocator<AiAgentRepository>(),
+       _logger = logger ?? serviceLocator<LoggerService>();
+
+  // Getters
+  AiAgentState get state => _state;
+  AiAgentSession? get currentSession => _currentSession;
+  String? get errorMessage => _errorMessage;
+  int get remainingTimeSeconds => _remainingTimeSeconds;
+  bool get isAgentRunning => _state == AiAgentState.running;
+  bool get canStartAgent => _state == AiAgentState.idle && _remainingTimeSeconds > 0;
+  
+  /// Get formatted remaining time
+  String get formattedRemainingTime {
+    return _formatTime(_remainingTimeSeconds);
+  }
+  
+  /// Get formatted elapsed time for current session
+  String get formattedElapsedTime {
+    if (_currentSession == null) return '0:00';
+    return _formatTime(_currentSession!.elapsedSeconds);
+  }
+
+  /// Initialize provider with user ID
+  Future<void> initialize(String uid) async {
+    try {
+      _logger.i(_tag, 'Initializing AI agent provider for user: $uid');
+      
+      _currentUid = uid;
+      
+      // Get initial remaining time
+      _remainingTimeSeconds = await _repository.getUserRemainingTime(uid);
+      
+      // Listen to real-time time updates
+      _timeStreamSubscription?.cancel();
+      _timeStreamSubscription = _repository.getUserRemainingTimeStream(uid).listen(
+        (remainingTime) {
+          _logger.d(_tag, 'Time update received: ${_formatTime(remainingTime)}');
+          _remainingTimeSeconds = remainingTime;
+          
+          // Auto-stop agent if time runs out
+          if (remainingTime <= 0 && isAgentRunning) {
+            _logger.w(_tag, 'Time exhausted, auto-stopping agent');
+            stopAgent();
+          }
+          
+          notifyListeners();
+        },
+        onError: (error) {
+          _logger.e(_tag, 'Error in time stream: $error');
+          _setError('Failed to get real-time time updates');
+        },
+      );
+      
+      _logger.i(_tag, 'AI agent provider initialized successfully');
+      notifyListeners();
+    } catch (e) {
+      _logger.e(_tag, 'Error initializing AI agent provider: $e');
+      _setError('Failed to initialize AI agent service');
+    }
+  }
+
+  /// Start AI agent with full Agora setup
+  Future<bool> startAgent() async {
+    if (_currentUid == null) {
+      _setError('User not initialized');
+      return false;
+    }
+    
+    if (_state != AiAgentState.idle) {
+      _logger.w(_tag, 'Cannot start agent, current state: $_state');
+      return false;
+    }
+    
+    if (_remainingTimeSeconds <= 0) {
+      _setError('No remaining AI agent time');
+      return false;
+    }
+
+    try {
+      _logger.i(_tag, 'Starting AI agent with full setup');
+      _setState(AiAgentState.starting);
+      
+      // Use the service to handle all Agora and backend logic
+      final responseData = await _repository.joinAgentWithFullSetup(uid: _currentUid!);
+      
+      if (responseData != null) {
+        // Parse the real response from backend to get the actual agent_id
+        final response = AiAgentResponse.fromJson(responseData);
+        
+        if (response.success && response.data != null) {
+          // Create session with the real agent data from backend
+          _currentSession = AiAgentSession(
+            agentData: response.data!,
+            startTime: DateTime.now(),
+            uid: _currentUid!,
+          );
+          
+          _setState(AiAgentState.running);
+          _startUsageTracking();
+          _setAutoStopTimer();
+          
+          _logger.i(_tag, 'AI agent started successfully with real agent ID: ${response.data!.agentId}');
+          return true;
+        } else {
+          _setError(response.message);
+          _setState(AiAgentState.idle);
+          return false;
+        }
+      } else {
+        _setError('Failed to start AI agent');
+        _setState(AiAgentState.idle);
+        return false;
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error starting AI agent: $e');
+      if (e is AiAgentException) {
+        _setError(e.message);
+      } else {
+        _setError('Failed to start AI agent');
+      }
+      _setState(AiAgentState.idle);
+      return false;
+    }
+  }
+
+  /// Stop AI agent with full cleanup
+  Future<bool> stopAgent() async {
+    if (_currentSession == null) {
+      _logger.w(_tag, 'No active agent session to stop');
+      return false;
+    }
+    
+    if (_state == AiAgentState.stopping) {
+      _logger.w(_tag, 'Agent already stopping');
+      return false;
+    }
+
+    try {
+      _logger.i(_tag, 'Stopping AI agent');
+      _setState(AiAgentState.stopping);
+      
+      // Stop the agent and leave Agora channel through repository
+      final success = await _repository.stopAgentWithFullCleanup(
+        agentId: _currentSession!.agentData.agentId,
+        uid: _currentSession!.uid,
+        timeUsedSeconds: _currentSession!.elapsedSeconds,
+      );
+      
+      // Clean up regardless of success to prevent stuck state
+      _stopUsageTracking();
+      _currentSession = null;
+      _setState(AiAgentState.idle);
+      
+      if (success) {
+        _logger.i(_tag, 'AI agent stopped successfully');
+        return true;
+      } else {
+        _setError('Failed to stop AI agent completely');
+        return false;
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error stopping AI agent: $e');
+      
+      // Clean up on error to prevent stuck state
+      _stopUsageTracking();
+      _currentSession = null;
+      _setState(AiAgentState.idle);
+      
+      if (e is AiAgentException) {
+        _setError(e.message);
+      } else {
+        _setError('Failed to stop AI agent');
+      }
+      return false;
+    }
+  }
+
+  /// Clear error message
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  /// Refresh remaining time from server
+  Future<void> refreshRemainingTime() async {
+    if (_currentUid == null) return;
+    
+    try {
+      final remainingTime = await _repository.getUserRemainingTime(_currentUid!);
+      _remainingTimeSeconds = remainingTime;
+      notifyListeners();
+    } catch (e) {
+      _logger.e(_tag, 'Error refreshing remaining time: $e');
+    }
+  }
+
+  /// Start tracking agent usage time with Firebase sync
+  void _startUsageTracking() {
+    _usageTimer?.cancel();
+    _firebaseSyncTimer?.cancel();
+    
+    int lastSyncedTime = _remainingTimeSeconds;
+    
+    // Timer for local UI updates every second
+    _usageTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      // Update remaining time locally for real-time UI updates
+      if (_remainingTimeSeconds > 0) {
+        _remainingTimeSeconds--;
+        notifyListeners();
+        
+        // Auto-stop when time reaches 0
+        if (_remainingTimeSeconds <= 0) {
+          _logger.w(_tag, 'Time exhausted during usage tracking, auto-stopping agent');
+          // Auto-stop with Agora cleanup
+          stopAgent();
+        }
+      }
+    });
+    
+    // Timer for Firebase sync every 5 seconds
+    _firebaseSyncTimer = Timer.periodic(_firebaseSyncInterval, (timer) async {
+      if (_currentSession != null && _currentUid != null) {
+        try {
+          final timeUsedSinceLastSync = lastSyncedTime - _remainingTimeSeconds;
+          
+          if (timeUsedSinceLastSync > 0) {
+            _logger.d(_tag, 'Syncing ${timeUsedSinceLastSync}s usage to Firebase');
+            
+            // Update Firebase with current remaining time
+            await _repository.updateUserRemainingTime(
+              uid: _currentUid!,
+              timeUsedSeconds: timeUsedSinceLastSync,
+            );
+            
+            lastSyncedTime = _remainingTimeSeconds;
+            _logger.d(_tag, 'Firebase sync completed. Remaining: ${_formatTime(_remainingTimeSeconds)}');
+          }
+        } catch (e) {
+          _logger.e(_tag, 'Error syncing time to Firebase: $e');
+          // Don't stop the agent on sync errors, just log them
+        }
+      }
+    });
+  }
+
+  /// Stop usage tracking timer
+  void _stopUsageTracking() {
+    _usageTimer?.cancel();
+    _usageTimer = null;
+    _firebaseSyncTimer?.cancel();
+    _firebaseSyncTimer = null;
+    _autoStopTimer?.cancel();
+    _autoStopTimer = null;
+  }
+
+  /// Set auto-stop timer based on remaining time
+  void _setAutoStopTimer() {
+    _autoStopTimer?.cancel();
+    
+    if (_remainingTimeSeconds > 0) {
+      _autoStopTimer = Timer(Duration(seconds: _remainingTimeSeconds), () {
+        _logger.w(_tag, 'Auto-stop timer triggered - time expired');
+        if (isAgentRunning) {
+          // Auto-stop with full cleanup when timer expires
+          stopAgent();
+        }
+      });
+    }
+  }
+
+  /// Set provider state
+  void _setState(AiAgentState newState) {
+    if (_state != newState) {
+      _logger.d(_tag, 'State changed: $_state -> $newState');
+      _state = newState;
+      _errorMessage = null; // Clear error when state changes
+      notifyListeners();
+    }
+  }
+
+  /// Set error message
+  void _setError(String message) {
+    _logger.e(_tag, 'Error: $message');
+    _errorMessage = message;
+    notifyListeners();
+  }
+
+  /// Format time in MM:SS or HH:MM:SS format
+  String _formatTime(int seconds) {
+    if (seconds <= 0) return '0:00';
+    
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _logger.d(_tag, 'Disposing AI agent provider');
+    
+    // Cancel all timers
+    _stopUsageTracking();
+    
+    // Cancel stream subscription
+    _timeStreamSubscription?.cancel();
+    
+    // Dispose repository resources
+    _repository.dispose();
+    
+    super.dispose();
+  }
+}

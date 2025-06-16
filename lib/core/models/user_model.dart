@@ -11,7 +11,8 @@ class UserModel {
   final bool isEmailVerified;
   final Map<String, dynamic>? metadata;
   final Map<String, dynamic>? fcmTokenData;
-  final bool isNewUser;  
+  final bool isNewUser;
+  final int agentRemainingTime; // Time in seconds, default 1 hour (3600 seconds)  
 
   /// Creates a new UserModel instance
   UserModel({
@@ -24,6 +25,7 @@ class UserModel {
     this.metadata,
     this.fcmTokenData,
     this.isNewUser = false, // Default to false
+    this.agentRemainingTime = 3600, // Default to 1 hour (3600 seconds)
   });
 
   /// Creates a UserModel from Firebase User
@@ -50,6 +52,7 @@ class UserModel {
       phoneNumber: user.phoneNumber,
       // No more specific email verification since we don't have email/password auth
       isEmailVerified: false,
+      agentRemainingTime: 3600, // Default 1 hour for new users
       metadata: {
         'creationTime': user.metadata.creationTime?.millisecondsSinceEpoch,
         'lastSignInTime': user.metadata.lastSignInTime?.millisecondsSinceEpoch,
@@ -69,6 +72,7 @@ class UserModel {
       'metadata': metadata,
       'fcmTokenData': fcmTokenData,
       'isNewUser': isNewUser, // Include isNewUser field
+      'agentRemainingTime': agentRemainingTime, // Include agent remaining time
     };
     
     // Get auth method from metadata if available
@@ -104,6 +108,7 @@ class UserModel {
       phoneNumber: map['phoneNumber'],
       isNewUser: map['isNewUser'] ?? false,
       isEmailVerified: map['isEmailVerified'] ?? false,
+      agentRemainingTime: map['agentRemainingTime'] ?? 3600, // Default to 1 hour if not present
       metadata: map['metadata'],
       fcmTokenData: map['fcmTokenData'],
     );
@@ -118,6 +123,7 @@ class UserModel {
     bool? isEmailVerified,
     Map<String, dynamic>? metadata,
     Map<String, dynamic>? fcmTokenData,
+    int? agentRemainingTime,
   }) {
     return UserModel(
       uid: uid,
@@ -128,6 +134,7 @@ class UserModel {
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,
       metadata: metadata ?? this.metadata,
       fcmTokenData: fcmTokenData ?? this.fcmTokenData,
+      agentRemainingTime: agentRemainingTime ?? this.agentRemainingTime,
     );
   }
 }

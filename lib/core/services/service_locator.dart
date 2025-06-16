@@ -13,11 +13,14 @@ import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
 import '../repositories/user_repository.dart'; 
-import '../repositories/relationship_repository.dart'; 
+import '../repositories/relationship_repository.dart';
+import '../repositories/ai_agent_repository.dart'; 
 import 'logger/logger_service.dart';
 import 'relationship/relationship_service_interface.dart';
 import 'relationship/relationship_service.dart';
 import 'agora/agora_token_service.dart';
+import 'ai_agent/ai_agent_service_interface.dart';
+import 'ai_agent/ai_agent_service.dart';
 import 'cache/cache_sync_service.dart';
 import 'lifecycle/app_lifecycle_manager.dart';
 import 'permissions/permissions_service.dart';
@@ -102,6 +105,15 @@ Future<void> setupServiceLocator() async {
       logger: serviceLocator<LoggerService>(),
     ),
   );
+
+  // Register AI agent repository
+  serviceLocator.registerLazySingleton<AiAgentRepository>(
+    () => AiAgentRepository(
+      aiAgentService: serviceLocator<AiAgentServiceInterface>(),
+      userService: serviceLocator<UserServiceInterface>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
    
   // Register authentication security manager
   serviceLocator.registerLazySingleton<AuthSecurityManager>(
@@ -136,6 +148,14 @@ Future<void> setupServiceLocator() async {
       userService: serviceLocator<UserServiceInterface>(),
       authService: serviceLocator<AuthServiceInterface>(),
       notificationsService: serviceLocator<NotificationsService>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+
+  // Register AI agent service
+  serviceLocator.registerLazySingleton<AiAgentServiceInterface>(
+    () => AiAgentService(
+      apiService: serviceLocator<ApiService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );

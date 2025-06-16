@@ -60,7 +60,7 @@ class ApiService {
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = 'https://6c03-2409-40f0-1003-e3b-5cf4-a7fc-32dd-e269.ngrok-free.app',
+    _baseUrl = 'https://1cc8-2409-40f0-1003-e3b-5cf4-a7fc-32dd-e269.ngrok-free.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
@@ -513,6 +513,222 @@ class ApiService {
     }
   }
   
+  /// Join AI agent to a channel
+  /// BLOCKING method - throws exceptions on failure to ensure proper error handling
+  /// Returns AiAgentResponse with agent details if successful
+  Future<Map<String, dynamic>?> joinAiAgent({
+    required String uid,
+    required String channelName,
+  }) async {
+    try {
+      // Check circuit breaker first
+      if (_isCircuitBreakerOpen) {
+        _logger.e(_tag, 'Circuit breaker is open - rejecting AI agent join request');
+        throw const ApiException(
+          'Service temporarily unavailable due to circuit breaker',
+          statusCode: 503,
+          errorCode: 'CIRCUIT_BREAKER_OPEN',
+        );
+      }
+
+      // Handle rate limiting
+      await _handleRateLimit();
+
+      _logger.i(_tag, 'Joining AI agent to channel: $channelName for user: $uid');
+
+      // Get the Firebase ID token for authentication
+      final idToken = await _getValidToken();
+      
+      if (idToken == null) {
+        _logger.e(_tag, 'Failed to get Firebase ID token for AI agent join');
+        throw const ApiException(
+          'Authentication failed - unable to get Firebase token',
+          statusCode: 401,
+          errorCode: 'AUTH_TOKEN_FAILED',
+        );
+      }
+
+      final response = await _dio.post(
+        '/api/ai-agent/join',
+        data: {
+          'uid': uid,
+          'channelName': channelName,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'x-api-key': _apiKey,
+          },
+        ),
+      );
+
+      _onRequestSuccess();
+
+      if (response.statusCode == 200 && response.data != null) {
+        _logger.i(_tag, 'AI agent successfully joined channel: $channelName');
+        return response.data as Map<String, dynamic>;
+      } else {
+        _logger.e(_tag, 'Failed to join AI agent to channel. Status: ${response.statusCode}');
+        throw ApiException(
+          'Failed to join AI agent to channel',
+          statusCode: response.statusCode,
+          errorCode: 'AI_AGENT_JOIN_FAILED',
+        );
+      }
+    } on DioException catch (e) {
+      _onRequestFailure();
+      _logger.e(_tag, 'DioException joining AI agent: ${e.message}');
+      
+      if (e.response?.statusCode == 401) {
+        throw const ApiException(
+          'Authentication failed - invalid Firebase token',
+          statusCode: 401,
+          errorCode: 'AUTH_FAILED',
+        );
+      } else if (e.response?.statusCode == 403) {
+        throw const ApiException(
+          'Access forbidden - invalid API key',
+          statusCode: 403,
+          errorCode: 'ACCESS_FORBIDDEN',
+        );
+      } else if (e.response?.statusCode == 400) {
+        throw ApiException(
+          'Bad request - invalid parameters: ${e.response?.data?['message'] ?? 'Unknown error'}',
+          statusCode: 400,
+          errorCode: 'BAD_REQUEST',
+        );
+      } else {
+        throw ApiException(
+          'Failed to join AI agent: ${e.message}',
+          statusCode: e.response?.statusCode,
+          errorCode: 'NETWORK_ERROR',
+          originalError: e,
+        );
+      }
+    } catch (e) {
+      _onRequestFailure();
+      if (e is ApiException) rethrow;
+      _logger.e(_tag, 'Unexpected error joining AI agent: $e');
+      throw ApiException(
+        'Unexpected error during AI agent join: ${e.toString()}',
+        errorCode: 'UNEXPECTED_ERROR',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Stop AI agent
+  /// BLOCKING method - throws exceptions on failure to ensure proper error handling
+  Future<bool> stopAiAgent({
+    required String agentId,
+  }) async {
+    try {
+      // Check circuit breaker first
+      if (_isCircuitBreakerOpen) {
+        _logger.e(_tag, 'Circuit breaker is open - rejecting AI agent stop request');
+        throw const ApiException(
+          'Service temporarily unavailable due to circuit breaker',
+          statusCode: 503,
+          errorCode: 'CIRCUIT_BREAKER_OPEN',
+        );
+      }
+
+      // Handle rate limiting
+      await _handleRateLimit();
+
+      _logger.i(_tag, 'Stopping AI agent: $agentId');
+
+      // Get the Firebase ID token for authentication
+      final idToken = await _getValidToken();
+      
+      if (idToken == null) {
+        _logger.e(_tag, 'Failed to get Firebase ID token for AI agent stop');
+        throw const ApiException(
+          'Authentication failed - unable to get Firebase token',
+          statusCode: 401,
+          errorCode: 'AUTH_TOKEN_FAILED',
+        );
+      }
+
+      // Log the exact data being sent to backend
+      final requestData = {
+        'agentId': agentId,
+      };
+      
+      _logger.i(_tag, 'Sending stop request to backend with data: $requestData');
+
+      final response = await _dio.post(
+        '/api/ai-agent/stop',
+        data: requestData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'x-api-key': _apiKey,
+          },
+        ),
+      );
+
+      _onRequestSuccess();
+
+      if (response.statusCode == 200) {
+        _logger.i(_tag, 'AI agent successfully stopped: $agentId');
+        return true;
+      } else {
+        _logger.e(_tag, 'Failed to stop AI agent. Status: ${response.statusCode}');
+        throw ApiException(
+          'Failed to stop AI agent',
+          statusCode: response.statusCode,
+          errorCode: 'AI_AGENT_STOP_FAILED',
+        );
+      }
+    } on DioException catch (e) {
+      _onRequestFailure();
+      _logger.e(_tag, 'DioException stopping AI agent: ${e.message}');
+      
+      if (e.response?.statusCode == 401) {
+        throw const ApiException(
+          'Authentication failed - invalid Firebase token',
+          statusCode: 401,
+          errorCode: 'AUTH_FAILED',
+        );
+      } else if (e.response?.statusCode == 403) {
+        throw const ApiException(
+          'Access forbidden - invalid API key',
+          statusCode: 403,
+          errorCode: 'ACCESS_FORBIDDEN',
+        );
+      } else if (e.response?.statusCode == 400) {
+        throw ApiException(
+          'Bad request - invalid agent ID: ${e.response?.data?['message'] ?? 'Unknown error'}',
+          statusCode: 400,
+          errorCode: 'BAD_REQUEST',
+        );
+      } else if (e.response?.statusCode == 404) {
+        throw const ApiException(
+          'AI agent not found or already stopped',
+          statusCode: 404,
+          errorCode: 'AGENT_NOT_FOUND',
+        );
+      } else {
+        throw ApiException(
+          'Failed to stop AI agent: ${e.message}',
+          statusCode: e.response?.statusCode,
+          errorCode: 'NETWORK_ERROR',
+          originalError: e,
+        );
+      }
+    } catch (e) {
+      _onRequestFailure();
+      if (e is ApiException) rethrow;
+      _logger.e(_tag, 'Unexpected error stopping AI agent: $e');
+      throw ApiException(
+        'Unexpected error during AI agent stop: ${e.toString()}',
+        errorCode: 'UNEXPECTED_ERROR',
+        originalError: e,
+      );
+    }
+  }
+
   /// Generate Agora token from backend
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   Future<AgoraTokenResponse> generateAgoraToken({

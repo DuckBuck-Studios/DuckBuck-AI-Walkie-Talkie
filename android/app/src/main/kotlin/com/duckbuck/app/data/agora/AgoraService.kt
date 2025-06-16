@@ -31,12 +31,61 @@ class AgoraService(private val context: Context) {
     private var isSpeakerOn = true
     private var currentChannelName: String? = null
     private var myUid: Int = 0
+    private var mAudioRouting = Constants.AUDIO_ROUTE_DEFAULT
     
     // Track remote users in the channel
     private val remoteUsersInChannel = mutableSetOf<Int>()
     
     // Timer logic moved to Dart - no blocking wait mechanism needed
     private var eventListener: AgoraEventListener? = null
+    
+    /**
+     * Set advanced audio configuration parameters for enhanced quality
+     */
+    private fun setAudioConfigParameters(routing: Int) {
+        mAudioRouting = routing
+        rtcEngine?.apply {
+            try {
+                AppLogger.d(TAG, "Setting advanced audio configuration parameters for routing: $routing")
+                
+                // Advanced Echo Cancellation and Audio Processing
+                setParameters("{\"che.audio.aec.split_srate_for_48k\":16000}")
+                setParameters("{\"che.audio.sf.enabled\":true}")
+                setParameters("{\"che.audio.sf.stftType\":6}")
+                setParameters("{\"che.audio.sf.ainlpLowLatencyFlag\":1}")
+                setParameters("{\"che.audio.sf.ainsLowLatencyFlag\":1}")
+                setParameters("{\"che.audio.sf.procChainMode\":1}")
+                setParameters("{\"che.audio.sf.nlpDynamicMode\":1}")
+
+                // Adaptive NLP algorithm routing based on audio route
+                if (routing == Constants.AUDIO_ROUTE_HEADSET || // 0
+                    routing == Constants.AUDIO_ROUTE_EARPIECE || // 1  
+                    routing == Constants.AUDIO_ROUTE_HEADSETNOMIC || // 2
+                    routing == Constants.AUDIO_ROUTE_BLUETOOTH_DEVICE_HFP || // 5
+                    routing == Constants.AUDIO_ROUTE_BLUETOOTH_DEVICE_A2DP) { // 10
+                    setParameters("{\"che.audio.sf.nlpAlgRoute\":0}")
+                } else {
+                    setParameters("{\"che.audio.sf.nlpAlgRoute\":1}")
+                }
+                
+                // Enhanced AI-specific audio processing
+                setParameters("{\"che.audio.sf.ainlpModelPref\":10}")
+                setParameters("{\"che.audio.sf.nsngAlgRoute\":12}")
+                setParameters("{\"che.audio.sf.ainsModelPref\":10}")
+                setParameters("{\"che.audio.sf.nsngPredefAgg\":11}")
+                setParameters("{\"che.audio.agc.enable\":false}")
+                
+                // Additional quality enhancements
+                setParameters("{\"che.audio.keep_audiosession\":true}")
+                setParameters("{\"che.audio.playout.channel_num\":1}")
+                setParameters("{\"che.audio.record.channel_num\":1}")
+                
+                AppLogger.d(TAG, "✅ Advanced audio configuration applied successfully for routing: $routing")
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "❌ Failed to apply audio configuration parameters", e)
+            }
+        } ?: AppLogger.w(TAG, "⚠️ Cannot apply audio configuration - RTC Engine is null")
+    }
     
     private val rtcEventHandler = object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
@@ -59,6 +108,13 @@ class AgoraService(private val context: Context) {
             // Clear remote users when leaving
             remoteUsersInChannel.clear()
             eventListener?.onLeaveChannel()
+        }
+        
+        override fun onAudioRouteChanged(routing: Int) {
+            super.onAudioRouteChanged(routing)
+            AppLogger.d(TAG, "Audio route changed to: $routing")
+            // Apply enhanced audio configuration when route changes
+            setAudioConfigParameters(routing)
         }
         
         override fun onUserJoined(uid: Int, elapsed: Int) {
@@ -169,6 +225,8 @@ class AgoraService(private val context: Context) {
                 config.mEventHandler = rtcEventHandler
                 // Set area code for better performance based on region
                 config.mAreaCode = RtcEngineConfig.AreaCode.AREA_CODE_GLOB
+                // Set audio scenario to AI dialogue for enhanced AI conversation quality
+                config.mAudioScenario = Constants.AUDIO_SCENARIO_CHATROOM
                 
                 // Create engine with better error handling
                 AppLogger.d(TAG, "Creating Agora RTC Engine with config: appId=${APP_ID.substring(0, 4)}...")
@@ -179,20 +237,23 @@ class AgoraService(private val context: Context) {
                     return false
                 }
                 
-                AppLogger.d(TAG, "RTC Engine created successfully, applying configuration")
+                AppLogger.d(TAG, "RTC Engine created successfully, applying enhanced audio configuration")
                 
                 // Apply necessary configurations right after creation
                 rtcEngine?.setChannelProfile(Constants.CHANNEL_PROFILE_COMMUNICATION)
                 rtcEngine?.enableAudio()
+                
+                // Apply enhanced audio configuration for better quality
+                setAudioConfigParameters(mAudioRouting)
                 
                 // Enable audio volume indication for speaking detection
                 // Interval: 200ms, smooth: 3 (smooth the volume), reportVad: true (voice activity detection)
                 rtcEngine?.enableAudioVolumeIndication(200, 3, true)
                 AppLogger.d(TAG, "Audio volume indication enabled for speaking detection")
                 
-                // Set audio profile for better call quality
+                // Set enhanced audio profile for better call quality
                 rtcEngine?.setAudioProfile(
-                    Constants.AUDIO_PROFILE_DEFAULT,
+                    Constants.AUDIO_PROFILE_SPEECH_STANDARD,
                     Constants.AUDIO_SCENARIO_CHATROOM
                 )
                 
@@ -264,6 +325,10 @@ class AgoraService(private val context: Context) {
             AppLogger.d(TAG, "   - Token: ${if (token != null) "${token.substring(0, 20)}..." else "null"}")
             AppLogger.d(TAG, "   - UID: $uid")
             AppLogger.d(TAG, "   - Token length: ${token?.length ?: 0}")
+            
+            // Apply enhanced audio configuration before joining
+            AppLogger.d(TAG, "Applying enhanced audio configuration before channel join")
+            setAudioConfigParameters(mAudioRouting)
             
             val options = ChannelMediaOptions().apply {
                 channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION

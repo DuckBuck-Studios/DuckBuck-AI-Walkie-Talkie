@@ -8,12 +8,14 @@ class HomeFriendsSection extends StatelessWidget {
   final List<Map<String, dynamic>> friends;
   final bool isLoading;
   final Function(Map<String, dynamic>)? onFriendTap;
+  final VoidCallback? onAiAgentTap;
 
   const HomeFriendsSection({
     super.key,
     required this.friends,
     this.isLoading = false,
     this.onFriendTap,
+    this.onAiAgentTap,
   });
 
   @override
@@ -64,38 +66,48 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                CupertinoIcons.person_2,
-                size: 80,
-                color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'No friends yet',
-                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: CupertinoColors.label.resolveFrom(context),
+      // Show AI agent even when no friends
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // DuckBuck AI Agent - always visible
+            CupertinoListSection.insetGrouped(
+              backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+              children: [
+                CupertinoListTile(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: CupertinoColors.systemGrey6.resolveFrom(context),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/logo.png',
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            CupertinoIcons.sparkles,
+                            color: CupertinoColors.systemBlue.resolveFrom(context),
+                            size: 24,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    'DuckBuck AI',
+                    style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 17,
+                    ),
+                  ),
+                  onTap: onAiAgentTap,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Go to Friends tab to add some!',
-                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                  fontSize: 16,
-                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       );
     }
@@ -105,12 +117,50 @@ class HomeFriendsSection extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: CupertinoListSection.insetGrouped(
-        backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-        children: displayFriends.asMap().entries.map((entry) {
-          final friendProfile = entry.value;
-          return _buildFriendTile(context, friendProfile, true);
-        }).toList(),
+      child: Column(
+        children: [
+          // Friends List including AI Agent
+          CupertinoListSection.insetGrouped(
+            backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+            children: [
+              // DuckBuck AI Agent as first tile
+              CupertinoListTile(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                leading: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: CupertinoColors.systemGrey6.resolveFrom(context),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          CupertinoIcons.sparkles,
+                          color: CupertinoColors.systemBlue.resolveFrom(context),
+                          size: 24,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                title: Text(
+                  'DuckBuck AI',
+                  style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
+                ),
+                onTap: onAiAgentTap,
+              ),
+              // Add friends after AI agent
+              ...displayFriends.map((friendProfile) {
+                return _buildFriendTile(context, friendProfile, true);
+              }),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -164,36 +214,48 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.people_outline,
-                size: 80,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'No friends yet',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface,
+      // Show AI agent even when no friends
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // DuckBuck AI Agent - always visible
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.auto_awesome,
+                          color: theme.colorScheme.primary,
+                          size: 24,
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Go to Friends tab to add some!',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                title: Text(
+                  'DuckBuck AI',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
                 ),
-                textAlign: TextAlign.center,
+                onTap: onAiAgentTap,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -203,19 +265,59 @@ class HomeFriendsSection extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: displayFriends.length,
-          itemBuilder: (context, index) {
-            final friendProfile = displayFriends[index];
-            return _buildFriendTile(context, friendProfile, false);
-          },
-        ),
+      child: Column(
+        children: [
+          // Friends List including AI Agent
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: displayFriends.length + 1, // +1 for AI agent
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // DuckBuck AI Agent as first tile
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/logo.png',
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.auto_awesome,
+                              color: theme.colorScheme.primary,
+                              size: 24,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      'DuckBuck AI',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
+                    onTap: onAiAgentTap,
+                  );
+                } else {
+                  // Friend tiles
+                  final friendProfile = displayFriends[index - 1];
+                  return _buildFriendTile(context, friendProfile, false);
+                }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

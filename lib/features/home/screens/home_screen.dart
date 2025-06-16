@@ -3,7 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../providers/home_provider.dart';
 import '../widgets/home_friends_section.dart';
-import '../handlers/fullscreen_photo_handler.dart'; 
+import '../handlers/fullscreen_photo_handler.dart';
+import '../../../core/navigation/app_routes.dart';
 import 'dart:io' show Platform;
 
 class HomeScreen extends StatefulWidget {
@@ -44,6 +45,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _photoHandler.showPhotoViewer(friend);
   }
 
+  void _handleAiAgentTap() {
+    Navigator.pushNamed(context, AppRoutes.aiAgent);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<HomeProvider>(
@@ -65,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 friends: homeProvider.friends, // Use real friends from HomeProvider
                 isLoading: homeProvider.isLoadingFriends, // Use real loading state
                 onFriendTap: _handleFriendTap,
+                onAiAgentTap: _handleAiAgentTap,
               ),
             ),
           );
@@ -83,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 friends: homeProvider.friends, // Use real friends from HomeProvider
                 isLoading: homeProvider.isLoadingFriends, // Use real loading state
                 onFriendTap: _handleFriendTap,
+                onAiAgentTap: _handleAiAgentTap,
               ),
             ),
           );

@@ -9,6 +9,7 @@ import 'package:duckbuck/core/legal/legal_document_screen.dart';
 import 'package:duckbuck/core/legal/legal_service.dart';
 import 'package:duckbuck/features/settings/screens/privacy_settings_screen.dart';
 import 'package:duckbuck/features/settings/screens/blocked_users_screen.dart';
+import 'package:duckbuck/features/ai_agent/screens/ai_agent_screen.dart';
 
 /// Main app routes and navigation helper
 class AppRoutes {
@@ -21,7 +22,8 @@ class AppRoutes {
   static const String termsOfService = '/terms';
   static const String privacyPolicy = '/privacy';
   static const String privacySettings = '/privacy_settings';
-  static const String blockedUsers = '/blocked_users'; 
+  static const String blockedUsers = '/blocked_users';
+  static const String aiAgent = '/ai-agent'; 
 
   /// Generate routes for the app
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -77,6 +79,11 @@ class AppRoutes {
       case blockedUsers:
         return MaterialPageRoute(
           builder: (_) => const BlockedUsersScreen(),
+        );
+        
+      case aiAgent:
+        return MaterialPageRoute(
+          builder: (_) => const AiAgentScreen(),
         );
               
       // case friends: // Removed as it's part of HomeScreen's GNav

@@ -5,6 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../../features/settings/providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart'; 
 import '../../features/call/providers/call_provider.dart';
+import '../../features/ai_agent/providers/ai_agent_provider.dart';
 
 import '../../features/settings/providers/settings_provider.dart';
 import '../../features/friends/providers/relationship_provider.dart';
@@ -41,6 +42,11 @@ class ProviderRegistry {
       // Call provider for handling call UI state (receiver side)
       ChangeNotifierProvider<CallProvider>(
         create: (_) => CallProvider(),
+      ),
+      
+      // AI Agent provider for managing AI agent operations and state
+      ChangeNotifierProvider<AiAgentProvider>(
+        create: (_) => AiAgentProvider(),
       ),
       
       // Call initiator provider for handling call initiation (caller side)
