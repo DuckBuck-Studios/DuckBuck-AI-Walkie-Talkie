@@ -11,7 +11,7 @@ class UserModel {
   final bool isEmailVerified;
   final Map<String, dynamic>? metadata;
   final Map<String, dynamic>? fcmTokenData;
-  final bool isNewUser; // Added for auth flow
+  final bool isNewUser;  
 
   /// Creates a new UserModel instance
   UserModel({
