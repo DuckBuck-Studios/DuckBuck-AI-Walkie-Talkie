@@ -39,19 +39,22 @@ class HomeFriendsSection extends StatelessWidget {
             highlightColor: Colors.white38,
             duration: const Duration(milliseconds: 1000),
           ),
-          child: CupertinoListSection.insetGrouped(
-            backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-            children: List.generate(
-              3, // Show 3 skeleton tiles for home
-              (index) => CupertinoListTile(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.white24,
-                ),
-                title: Text(
-                  'Friend Name Loading',
-                  style: TextStyle(color: Colors.white24),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: CupertinoListSection.insetGrouped(
+              backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+              children: List.generate(
+                3, // Show 3 skeleton tiles for home
+                (index) => CupertinoListTile(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.white24,
+                  ),
+                  title: Text(
+                    'Friend Name Loading',
+                    style: TextStyle(color: Colors.white24),
+                  ),
                 ),
               ),
             ),
@@ -61,39 +64,37 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.person_2,
-                  size: 80,
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                CupertinoIcons.person_2,
+                size: 80,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No friends yet',
+                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Go to Friends tab to add some!',
+                style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+                  fontSize: 16,
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'No friends yet',
-                  style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: CupertinoColors.label.resolveFrom(context),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Go to Friends tab to add some!',
-                  style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                    fontSize: 16,
-                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       );
@@ -102,16 +103,14 @@ class HomeFriendsSection extends StatelessWidget {
     // Show only first 5 friends on home screen
     final displayFriends = friends.take(5).toList();
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: CupertinoListSection.insetGrouped(
-          backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-          children: displayFriends.asMap().entries.map((entry) {
-            final friendProfile = entry.value;
-            return _buildFriendTile(context, friendProfile, true);
-          }).toList(),
-        ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: CupertinoListSection.insetGrouped(
+        backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+        children: displayFriends.asMap().entries.map((entry) {
+          final friendProfile = entry.value;
+          return _buildFriendTile(context, friendProfile, true);
+        }).toList(),
       ),
     );
   }
@@ -136,23 +135,25 @@ class HomeFriendsSection extends StatelessWidget {
             highlightColor: Colors.white38,
             duration: const Duration(milliseconds: 1000),
           ),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: theme.colorScheme.surfaceContainerHighest,
-            margin: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              children: List.generate(
-                3, // Show 3 skeleton tiles for home
-                (index) => ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.white24,
-                  ),
-                  title: Text(
-                    'Friend Name Loading',
-                    style: TextStyle(color: Colors.white24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: Column(
+                children: List.generate(
+                  3, // Show 3 skeleton tiles for home
+                  (index) => ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.white24,
+                    ),
+                    title: Text(
+                      'Friend Name Loading',
+                      style: TextStyle(color: Colors.white24),
+                    ),
                   ),
                 ),
               ),
@@ -163,37 +164,35 @@ class HomeFriendsSection extends StatelessWidget {
     }
 
     if (friends.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 80,
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.people_outline,
+                size: 80,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No friends yet',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Go to Friends tab to add some!',
+                style: theme.textTheme.bodyLarge?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'No friends yet',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Go to Friends tab to add some!',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       );
@@ -202,20 +201,20 @@ class HomeFriendsSection extends StatelessWidget {
     // Show only first 5 friends on home screen
     final displayFriends = friends.take(5).toList();
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: ListView.builder(
-            itemCount: displayFriends.length,
-            itemBuilder: (context, index) {
-              final friendProfile = displayFriends[index];
-              return _buildFriendTile(context, friendProfile, false);
-            },
-          ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: displayFriends.length,
+          itemBuilder: (context, index) {
+            final friendProfile = displayFriends[index];
+            return _buildFriendTile(context, friendProfile, false);
+          },
         ),
       ),
     );
