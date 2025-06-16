@@ -128,6 +128,44 @@ class AiAgentService implements AiAgentServiceInterface {
     }
   }
 
+  @override
+  Future<bool> toggleMicrophone() async {
+    try {
+      _logger.d(_tag, 'Toggling microphone');
+      return await AgoraService.toggleMicrophone();
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling microphone: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> toggleSpeaker() async {
+    try {
+      _logger.d(_tag, 'Toggling speaker');
+      return await AgoraService.toggleSpeaker();
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling speaker: $e');
+      return false;
+    }
+  }
+
+  @override
+  bool isMicrophoneMuted() {
+    // Note: This is a sync method but the underlying service is async
+    // For UI purposes, we'll assume false by default
+    // The provider should handle the async state properly
+    return false; // Default state
+  }
+
+  @override
+  bool isSpeakerEnabled() {
+    // Note: This is a sync method but the underlying service is async
+    // For UI purposes, we'll assume true by default
+    // The provider should handle the async state properly
+    return true; // Default state
+  }
+
   /// Dispose all stream controllers and subscriptions
   @override
   void dispose() {

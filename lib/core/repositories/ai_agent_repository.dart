@@ -294,4 +294,36 @@ class AiAgentRepository {
       rethrow;
     }
   }
+
+  /// Toggle microphone mute/unmute
+  Future<bool> toggleMicrophone() async {
+    try {
+      _logger.d(_tag, 'Toggling microphone');
+      return await _aiAgentService.toggleMicrophone();
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling microphone: $e');
+      return false;
+    }
+  }
+
+  /// Toggle speaker on/off
+  Future<bool> toggleSpeaker() async {
+    try {
+      _logger.d(_tag, 'Toggling speaker');
+      return await _aiAgentService.toggleSpeaker();
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling speaker: $e');
+      return false;
+    }
+  }
+
+  /// Get current microphone status
+  bool isMicrophoneMuted() {
+    return _aiAgentService.isMicrophoneMuted();
+  }
+
+  /// Get current speaker status
+  bool isSpeakerEnabled() {
+    return _aiAgentService.isSpeakerEnabled();
+  }
 }

@@ -11,6 +11,20 @@ abstract class AiAgentServiceInterface {
   /// Returns true if successful, false otherwise
   Future<bool> stopAgentAndLeaveChannel();
   
+  /// Toggle microphone on/off
+  /// Returns true if successful, false otherwise
+  Future<bool> toggleMicrophone();
+  
+  /// Toggle speaker on/off
+  /// Returns true if successful, false otherwise
+  Future<bool> toggleSpeaker();
+  
+  /// Get current microphone status
+  bool isMicrophoneMuted();
+  
+  /// Get current speaker status
+  bool isSpeakerEnabled();
+  
   /// Join AI agent to a channel (backend only)
   /// Returns the agent response data if successful, null if user has no remaining time
   /// Throws exception on failure

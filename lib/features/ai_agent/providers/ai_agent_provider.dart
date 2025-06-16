@@ -32,6 +32,9 @@ class AiAgentProvider extends ChangeNotifier {
   // User data
   String? _currentUid;
   int _remainingTimeSeconds = 0;
+  bool _isAiSpeaking = false;
+  bool _isMicrophoneMuted = false;
+  bool _isSpeakerEnabled = true;
   
   /// Creates a new AiAgentProvider
   AiAgentProvider({
@@ -47,6 +50,9 @@ class AiAgentProvider extends ChangeNotifier {
   int get remainingTimeSeconds => _remainingTimeSeconds;
   bool get isAgentRunning => _state == AiAgentState.running;
   bool get canStartAgent => _state == AiAgentState.idle && _remainingTimeSeconds > 0;
+  bool get isAiSpeaking => _isAiSpeaking && isAgentRunning;
+  bool get isMicrophoneMuted => _isMicrophoneMuted;
+  bool get isSpeakerEnabled => _isSpeakerEnabled;
   
   /// Get formatted remaining time
   String get formattedRemainingTime {
@@ -220,6 +226,40 @@ class AiAgentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle microphone mute/unmute
+  Future<bool> toggleMicrophone() async {
+    if (!isAgentRunning) return false;
+    
+    try {
+      final success = await _repository.toggleMicrophone();
+      if (success) {
+        _isMicrophoneMuted = !_isMicrophoneMuted;
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling microphone: $e');
+      return false;
+    }
+  }
+
+  /// Toggle speaker on/off
+  Future<bool> toggleSpeaker() async {
+    if (!isAgentRunning) return false;
+    
+    try {
+      final success = await _repository.toggleSpeaker();
+      if (success) {
+        _isSpeakerEnabled = !_isSpeakerEnabled;
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      _logger.e(_tag, 'Error toggling speaker: $e');
+      return false;
+    }
+  }
+
   /// Refresh remaining time from server
   Future<void> refreshRemainingTime() async {
     if (_currentUid == null) return;
@@ -245,6 +285,18 @@ class AiAgentProvider extends ChangeNotifier {
       // Update remaining time locally for real-time UI updates
       if (_remainingTimeSeconds > 0) {
         _remainingTimeSeconds--;
+        
+        // Simulate AI speaking patterns (random intervals for demo)
+        if (isAgentRunning) {
+          // Random speaking pattern: speak for 2-4 seconds, then pause for 1-3 seconds
+          final random = DateTime.now().millisecondsSinceEpoch % 100;
+          if (random < 30) { // ~30% chance to start speaking
+            _setAiSpeaking(true);
+          } else if (random > 80) { // ~20% chance to stop speaking
+            _setAiSpeaking(false);
+          }
+        }
+        
         notifyListeners();
         
         // Auto-stop when time reaches 0
@@ -290,6 +342,7 @@ class AiAgentProvider extends ChangeNotifier {
     _firebaseSyncTimer = null;
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
+    _isAiSpeaking = false; // Stop speaking animation when stopping
   }
 
   /// Set auto-stop timer based on remaining time
@@ -322,6 +375,15 @@ class AiAgentProvider extends ChangeNotifier {
     _logger.e(_tag, 'Error: $message');
     _errorMessage = message;
     notifyListeners();
+  }
+  
+  /// Set AI speaking state
+  void _setAiSpeaking(bool speaking) {
+    if (_isAiSpeaking != speaking) {
+      _isAiSpeaking = speaking;
+      // Don't call notifyListeners here to avoid extra rebuilds
+      // The timer already calls notifyListeners
+    }
   }
 
   /// Format time in MM:SS or HH:MM:SS format

@@ -78,6 +78,34 @@ class AgoraService {
     }
   }
 
+  /// Toggle microphone (mute/unmute)
+  static Future<bool> toggleMicrophone() async {
+    try {
+      final bool currentlyMuted = await isMicrophoneMuted();
+      if (currentlyMuted) {
+        return await turnMicrophoneOn();
+      } else {
+        return await turnMicrophoneOff();
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Toggle speaker (on/off)
+  static Future<bool> toggleSpeaker() async {
+    try {
+      final bool currentlyEnabled = await isSpeakerEnabled();
+      if (currentlyEnabled) {
+        return await turnSpeakerOff();
+      } else {
+        return await turnSpeakerOn();
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Check if Agora engine is active
   static Future<bool> isEngineActive() async {
     try {
