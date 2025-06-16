@@ -2,6 +2,8 @@ package com.duckbuck.app.data.agora
 import com.duckbuck.app.infrastructure.monitoring.AppLogger
 import com.duckbuck.app.R
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -33,10 +35,7 @@ class AgoraService(private val context: Context) {
     // Track remote users in the channel
     private val remoteUsersInChannel = mutableSetOf<Int>()
     
-    // For joinChannelAndWaitForUsers functionality
-    private var userJoinedLatch: CountDownLatch? = null
-    private var isWaitingForUsers = false
-    
+    // Timer logic moved to Dart - no blocking wait mechanism needed
     private var eventListener: AgoraEventListener? = null
     
     private val rtcEventHandler = object : IRtcEngineEventHandler() {
@@ -69,12 +68,10 @@ class AgoraService(private val context: Context) {
             remoteUsersInChannel.add(uid)
             AppLogger.d(TAG, "Remote users in channel: ${remoteUsersInChannel.size}")
             
-            // If we're waiting for users to join, signal the latch
-            if (isWaitingForUsers && userJoinedLatch != null) {
-                AppLogger.d(TAG, "User joined while waiting - signaling latch")
-                userJoinedLatch?.countDown()
-            }
+            // Debug: Check if event listener exists
+            AppLogger.d(TAG, "Event listener exists: ${eventListener != null}")
             
+            // Notify listener immediately - no blocking wait mechanism
             eventListener?.onUserJoined(uid, elapsed)
         }
         
@@ -296,67 +293,6 @@ class AgoraService(private val context: Context) {
     }
     
     /**
-     * Join a channel and wait for other users to join within the specified timeout
-     * @param channelName The name of the channel to join
-     * @param token Optional token for channel authentication
-     * @param uid User ID (0 for auto-assignment)
-     * @param timeoutSeconds Maximum time to wait for users (default 25 seconds)
-     * @return true if users joined within timeout, false otherwise
-     */
-    fun joinChannelAndWaitForUsers(
-        channelName: String, 
-        token: String? = null, 
-        uid: Int = 0, 
-        timeoutSeconds: Int = 25
-    ): Boolean {
-        AppLogger.d(TAG, "joinChannelAndWaitForUsers: $channelName, timeout: ${timeoutSeconds}s")
-        
-        // First, try to join the channel using existing method
-        val joinResult = joinChannel(channelName, token, uid)
-        if (!joinResult) {
-            AppLogger.e(TAG, "Failed to join channel in joinChannelAndWaitForUsers")
-            return false
-        }
-        
-        // Check if there are already users in the channel
-        if (remoteUsersInChannel.isNotEmpty()) {
-            AppLogger.d(TAG, "Users already present in channel: ${remoteUsersInChannel.size}")
-            return true
-        }
-        
-        // Set up waiting mechanism
-        isWaitingForUsers = true
-        userJoinedLatch = CountDownLatch(1)
-        
-        AppLogger.d(TAG, "Waiting for users to join channel for $timeoutSeconds seconds...")
-        
-        return try {
-            // Wait for the specified timeout or until someone joins
-            val userJoined = userJoinedLatch?.await(timeoutSeconds.toLong(), TimeUnit.SECONDS) ?: false
-            
-            if (userJoined) {
-                AppLogger.d(TAG, "✅ User(s) joined within timeout! Users in channel: ${remoteUsersInChannel.size}")
-                true
-            } else {
-                AppLogger.d(TAG, "❌ No users joined within $timeoutSeconds seconds timeout")
-                false
-            }
-        } catch (e: InterruptedException) {
-            AppLogger.w(TAG, "Wait for users interrupted", e)
-            Thread.currentThread().interrupt()
-            false
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while waiting for users", e)
-            false
-        } finally {
-            // Cleanup waiting state
-            isWaitingForUsers = false
-            userJoinedLatch = null
-            AppLogger.d(TAG, "Cleaned up waiting state")
-        }
-    }
-    
-    /**
      * Leave the current channel
      */
     fun leaveChannel(): Boolean {
@@ -375,6 +311,9 @@ class AgoraService(private val context: Context) {
             
             if (result == 0) {
                 AppLogger.d(TAG, "Leaving channel: $currentChannelName")
+                // Clear event listener to stop receiving events from this channel
+                AppLogger.d(TAG, "🔇 Clearing event listener on normal channel leave")
+                eventListener = null
                 true
             } else {
                 AppLogger.e(TAG, "Failed to leave channel. Error code: $result")
@@ -492,6 +431,7 @@ class AgoraService(private val context: Context) {
      * Set event listener for callbacks
      */
     fun setEventListener(listener: AgoraEventListener) {
+        AppLogger.d(TAG, "🎯 Setting event listener: ${listener.javaClass.simpleName}")
         this.eventListener = listener
     }
     
@@ -592,37 +532,53 @@ class AgoraService(private val context: Context) {
     
     /**
      * Force leave channel and cleanup (used for auto-leave scenarios)
+     * This ensures immediate and complete disconnection from the channel
+     * CRITICAL: Resets all state immediately to prevent race conditions
      */
     fun forceLeaveChannel(): Boolean {
         AppLogger.i(TAG, "🚪 Force leaving channel due to auto-leave trigger")
         
         try {
-            // Check if we're already joined to avoid unnecessary operations
-            if (!isJoined) {
-                AppLogger.w(TAG, "Not in a channel - no need to force leave")
+            // STEP 1: Reset state IMMEDIATELY to prevent race conditions
+            isJoined = false
+            val oldChannelName = currentChannelName
+            currentChannelName = null
+            myUid = 0
+            remoteUsersInChannel.clear()
+            
+            // STEP 1.5: Clear event listener to stop receiving events from this channel
+            AppLogger.i(TAG, "🔇 Clearing event listener to stop receiving channel events")
+            eventListener = null
+            
+            AppLogger.i(TAG, "✅ Channel state reset immediately: isJoined=false, channel=null, users=0, eventListener=null")
+            
+            // STEP 2: If we weren't in a channel, we're done
+            if (oldChannelName == null) {
+                AppLogger.w(TAG, "Not in a channel - state already reset")
                 return true
             }
             
-            // Always clear our tracking data regardless of outcome
-            remoteUsersInChannel.clear()
+            // STEP 3: Force immediate audio disconnection
+            try {
+                rtcEngine?.muteLocalAudioStream(true)
+                AppLogger.d(TAG, "Muted audio before leaving channel")
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Failed to mute audio", e)
+            }
             
-            // Try to leave the channel properly
+            // STEP 4: Leave the channel (async operation, but state already reset)
             val leaveResult = rtcEngine?.leaveChannel() == 0
             
             if (leaveResult) {
                 AppLogger.i(TAG, "✅ Successfully left channel via forceLeaveChannel")
-                isJoined = false
-                currentChannelName = null
-                myUid = 0
             } else {
                 AppLogger.e(TAG, "❌ Failed to leave channel via forceLeaveChannel")
-                // Force the state to be reset even if API call failed
-                isJoined = false
-                currentChannelName = null
-                myUid = 0
+                // State is already reset above, so this is just a warning
             }
             
-            return leaveResult
+            // Always return true since state is already reset
+            return true
+            
         } catch (e: Exception) {
             AppLogger.e(TAG, "❌ Exception during forceLeaveChannel", e)
             // Force reset state even when exception occurs
@@ -630,7 +586,7 @@ class AgoraService(private val context: Context) {
             currentChannelName = null
             myUid = 0
             remoteUsersInChannel.clear()
-            return false
+            return true // Return true since state is reset
         }
     }
     

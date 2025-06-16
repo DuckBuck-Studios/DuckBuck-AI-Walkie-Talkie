@@ -36,12 +36,23 @@ class ChannelOccupancyManager {
             return
         }
         
-        AppLogger.i(TAG, "🔍 Receiver: Checking walkie-talkie occupancy immediately for channel: $channelId")
+        AppLogger.i(TAG, "🔍 Receiver: Checking walkie-talkie occupancy for channel: $channelId")
         
-        // Add a small delay to allow channel state to synchronize
+        // Safety timeout - if occupancy check doesn't complete within 3 seconds, assume empty
+        val timeoutHandler = Handler(Looper.getMainLooper())
+        val timeoutRunnable = Runnable {
+            AppLogger.w(TAG, "⏰ Occupancy check timeout for $channelId - assuming empty channel")
+            onChannelEmpty()
+        }
+        timeoutHandler.postDelayed(timeoutRunnable, 3000) // 3 second timeout
+        
+        // Add a shorter delay to allow channel state to synchronize, but not too long
+        // to prevent showing notifications for empty channels
         Handler(Looper.getMainLooper()).postDelayed({
+            // Remove timeout since we're proceeding with the check
+            timeoutHandler.removeCallbacks(timeoutRunnable)
             performWalkieTalkieOccupancyCheck(channelId, isInitiator, onChannelOccupied, onChannelEmpty)
-        }, 1000) // 1 second delay for channel sync
+        }, 500) // Reduced to 500ms for faster empty channel detection
     }
     
     /**
@@ -125,8 +136,18 @@ class ChannelOccupancyManager {
                     AppLogger.i(TAG, "✅ Receiver: Other users present ($userCount) - showing notification/UI")
                     onChannelOccupied(userCount)
                 } else {
-                    AppLogger.i(TAG, "🏃‍♂️ Receiver: Channel appears empty (0 users) - leaving silently without notification/UI")
-                    onChannelEmpty()
+                    // Double-check after a brief moment to avoid false negatives due to network delays
+                    AppLogger.i(TAG, "🔍 Receiver: Initial check shows empty channel, double-checking in 200ms...")
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val finalUserCount = agoraService.getRemoteUserCount()
+                        if (finalUserCount > 0) {
+                            AppLogger.i(TAG, "✅ Receiver: Double-check found users ($finalUserCount) - showing notification/UI")
+                            onChannelOccupied(finalUserCount)
+                        } else {
+                            AppLogger.i(TAG, "🏃‍♂️ Receiver: Double-check confirms empty channel - leaving silently without notification/UI")
+                            onChannelEmpty()
+                        }
+                    }, 200) // Brief 200ms double-check
                 }
             }
             

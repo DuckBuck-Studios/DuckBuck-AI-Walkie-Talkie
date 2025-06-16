@@ -21,7 +21,7 @@ class FlutterBridgeManager(private val context: Context) {
         private const val CALL_UI_CHANNEL = "com.duckbuck.app/call"
     }
     
-    private val agoraMethodChannelHandler = AgoraMethodChannelHandler()
+    private val agoraMethodChannelHandler = AgoraMethodChannelHandler(context)
     private var callUIMethodChannel: MethodChannel? = null
     
     /**
@@ -32,10 +32,13 @@ class FlutterBridgeManager(private val context: Context) {
         
         try {
             // Set up method channel for Flutter to communicate with native Agora service
-            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AGORA_CHANNEL)
-                .setMethodCallHandler { call, result ->
-                    agoraMethodChannelHandler.handleMethodCall(call, result)
-                }
+            val agoraChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AGORA_CHANNEL)
+            agoraChannel.setMethodCallHandler { call, result ->
+                agoraMethodChannelHandler.handleMethodCall(call, result)
+            }
+            
+            // Set the method channel on the handler so it can send events back to Flutter
+            agoraMethodChannelHandler.setMethodChannel(agoraChannel)
             
             // Set up call UI method channel for triggering Flutter call UI
             callUIMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_UI_CHANNEL)

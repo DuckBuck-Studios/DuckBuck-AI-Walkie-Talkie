@@ -93,6 +93,9 @@ class CallProvider with ChangeNotifier {
       _logger.d(_tag, '  - My UID: $uid');
       _logger.d(_tag, '  - Friend: $friendName');
 
+      // Haptic feedback for call initiation
+      HapticFeedback.lightImpact();
+
       // Set initiator state
       _currentRole = CallRole.INITIATOR;
       _channelId = channelId;
@@ -156,40 +159,108 @@ class CallProvider with ChangeNotifier {
   void _joinChannelInBackground(String channelId, String token, int uid) async {
     try {
       _logger.i(_tag, 'Starting background channel join process...');
-      
-      // Join channel and wait for friend in background
-      final friendJoined = await AgoraService.joinChannelAndWaitForUsers(
-        channelId,
+
+      // Join channel (non-blocking)
+      final joinResult = await AgoraService.joinChannel(
+        channelName: channelId,
         token: token,
         uid: uid,
-        timeoutSeconds: 25, // Increased timeout from 20 to 25 seconds
       );
 
-      _waitingForFriend = false;
-      _friendJoined = friendJoined;
-      
+      if (!joinResult) {
+        _logger.w(_tag, 'Failed to join channel');
+        _waitingForFriend = false;
+        notifyListeners();
+        return;
+      }
+
+      // Set up a timer for waiting (e.g., 25 seconds)
+      _waitingForFriend = true;
+      _friendJoined = false;
+      notifyListeners();
+
+      bool friendJoined = false;
+      late void Function() userJoinedListener;
+      userJoinedListener = () {
+        friendJoined = true;
+        _friendJoined = true;
+        _waitingForFriend = false;
+        _logger.i(_tag, 'Friend joined the call!');
+        
+        // Haptic feedback for successful friend join
+        HapticFeedback.mediumImpact();
+        
+        notifyListeners();
+        AgoraService.setUserJoinedCallback(null); // Remove listener
+      };
+      AgoraService.setUserJoinedCallback(userJoinedListener);
+
+      // Wait for friend to join or timeout
+      await Future.any([
+        Future.delayed(const Duration(seconds: 25)),
+        Future(() async {
+          while (!friendJoined) {
+            await Future.delayed(const Duration(milliseconds: 200));
+          }
+        }),
+      ]);
+
+      // Remove listener after wait
+      AgoraService.setUserJoinedCallback(null);
+
+      if (!friendJoined) {
+        _logger.i(_tag, 'Friend did not join within timeout - cleaning up');
+        
+        // Haptic feedback for call failure
+        HapticFeedback.heavyImpact();
+        
+        _waitingForFriend = false;
+        _friendJoined = false;
+        _isInCall = false;
+        try {
+          await AgoraService.leaveChannel();
+        } catch (e) {
+          _logger.w(_tag, 'Error leaving channel during cleanup: $e');
+        }
+        notifyListeners();
+        return;
+      }
+
+      if (!friendJoined) {
+        _logger.i(_tag, 'Timeout waiting for friend - cleaning up');
+        
+        // Haptic feedback for call failure
+        HapticFeedback.heavyImpact();
+        
+        _waitingForFriend = false;
+        _friendJoined = false;
+        _isInCall = false;
+        try {
+          await AgoraService.leaveChannel();
+        } catch (e) {
+          _logger.w(_tag, 'Error leaving channel during timeout cleanup: $e');
+        }
+        notifyListeners();
+        return;
+      }
+
+      // Friend joined successfully
       _logger.d(_tag, 'Background join completed - State updated:');
       _logger.d(_tag, '  - waitingForFriend: $_waitingForFriend');
       _logger.d(_tag, '  - friendJoined: $_friendJoined');
       _logger.d(_tag, '  - isInCall: $isInCall');
       _logger.d(_tag, '  - isActiveCall: $isActiveCall');
-      
-      // CRITICAL: Notify listeners when background process completes
       notifyListeners();
-
-      if (friendJoined) {
-        _logger.i(_tag, '✅ Friend joined the call in background!');
-        // UI will automatically show active call state via notifyListeners
-      } else {
-        _logger.w(_tag, '❌ Friend did not join within timeout - auto ending call');
-        // Auto-dismiss call UI
-        await endCall();
-      }
     } catch (e) {
-      _logger.e(_tag, 'Error in background channel join: $e');
+      _logger.e(_tag, 'Exception in _joinChannelInBackground: $e');
+      
+      // Haptic feedback for call failure
+      HapticFeedback.heavyImpact();
+      
       _waitingForFriend = false;
+      _friendJoined = false;
+      _isInCall = false;
       notifyListeners();
-      await endCall();
     }
   }
 
@@ -243,6 +314,9 @@ class CallProvider with ChangeNotifier {
   void _showReceiverCallUI(CallState callState, bool isMuted) {
     _logger.i(_tag, 'Showing receiver call UI');
     
+    // Haptic feedback when call UI appears for receiver
+    HapticFeedback.lightImpact();
+    
     _currentRole = CallRole.RECEIVER;
     _currentCall = callState;
     _isInCall = true;
@@ -265,10 +339,12 @@ class CallProvider with ChangeNotifier {
   /// End call (handles both initiator and receiver)
   Future<void> endCall() async {
     try {
+      _logger.i(_tag, 'Ending call...');
+      
       if (_currentRole == CallRole.INITIATOR) {
         _logger.i(_tag, 'Ending call as initiator...');
         
-        // Leave Agora channel using centralized service
+        // Leave the channel
         await AgoraService.leaveChannel();
         
         // Clear initiator state

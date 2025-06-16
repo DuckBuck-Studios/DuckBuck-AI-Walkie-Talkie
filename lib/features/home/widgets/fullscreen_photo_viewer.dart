@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io' show Platform;
 import '../../shared/widgets/call_ui_components.dart';
 import 'call_ui.dart';
+import '../handlers/walkie_talkie_handler.dart';
 
 class FullscreenPhotoViewer extends StatelessWidget {
   final String? photoURL;
@@ -18,6 +19,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
   final VoidCallback? onToggleMute;
   final VoidCallback? onToggleSpeaker;
   final VoidCallback? onEndCall;
+  final WalkieTalkieHandler? walkieTalkieHandler;
 
   const FullscreenPhotoViewer({
     super.key,
@@ -32,6 +34,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
     this.onToggleMute,
     this.onToggleSpeaker,
     this.onEndCall,
+    this.walkieTalkieHandler,
   });
 
   @override
@@ -61,39 +64,43 @@ class FullscreenPhotoViewer extends StatelessWidget {
           ),
           
           // Bottom container with enhanced call UI
-          showCallControls 
-            ? CallUIComponents.buildCallControls(
-                context,
-                isMuted: isMuted,
-                isSpeakerOn: isSpeakerOn,
-                onToggleMute: onToggleMute,
-                onToggleSpeaker: onToggleSpeaker,
-                onEndCall: onEndCall,
-              )
+          if (showCallControls) 
+            CallUIComponents.buildCallControls(
+              context,
+              isMuted: isMuted,
+              isSpeakerOn: isSpeakerOn,
+              onToggleMute: onToggleMute,
+              onToggleSpeaker: onToggleSpeaker,
+              onEndCall: onEndCall,
+            )
+            .animate()
+            .slideY(
+              duration: 500.ms,
+              curve: Curves.easeOutCubic,
+              begin: 1.0,
+              end: 0.0,
+            )
+            .fadeIn(duration: 300.ms)
+          else if (isLoading) 
+            CallUIComponents.buildLoadingIndicator(context)
               .animate()
               .slideY(
-                duration: 500.ms,
+                duration: 400.ms,
                 curve: Curves.easeOutCubic,
                 begin: 1.0,
                 end: 0.0,
               )
               .fadeIn(duration: 300.ms)
-            : (isLoading 
-                ? CallUIComponents.buildLoadingIndicator(context)
-                  .animate()
-                  .slideY(
-                    duration: 400.ms,
-                    curve: Curves.easeOutCubic,
-                    begin: 1.0,
-                    end: 0.0,
-                  )
-                  .fadeIn(duration: 300.ms)
-                : CallUI.buildInstructionUI(
-                    context,
-                    onExit: onExit,
-                    onLongPress: onLongPress,
-                  )
-              ),
+          else
+            CallUI.buildInstructionUI(
+              context,
+              onExit: onExit,
+              onLongPress: onLongPress,
+              // Pass walkie-talkie state
+              isConnecting: walkieTalkieHandler?.isConnecting ?? false,
+              connectingMessage: walkieTalkieHandler?.currentMessage ?? '',
+              remainingSeconds: walkieTalkieHandler?.remainingSeconds ?? 0,
+            ),
           
           // Display name at top - animated
           CallUIComponents.buildCallerName(

@@ -5,10 +5,16 @@ class AgoraService {
   
   // Event listener for call state changes
   static Function()? _onCallEnded;
+  static Function()? _onUserJoined;
   
   /// Set callback for when call ends (for providers to listen)
   static void setCallEndedCallback(Function()? callback) {
     _onCallEnded = callback;
+  }
+
+  /// Set callback for when a remote user joins
+  static void setUserJoinedCallback(Function()? callback) {
+    _onUserJoined = callback;
   }
 
   /// Initialize Agora Engine
@@ -21,47 +27,6 @@ class AgoraService {
     }
   }
  
-
-  /// Join a channel and wait for other users to join within the specified timeout
-  /// Returns true if users joined within timeout, false otherwise
-  static Future<bool> joinChannelAndWaitForUsers(
-    String channelName, {
-    String? token,
-    int uid = 0,
-    int timeoutSeconds = 25, // Increased from 15 to 25 seconds
-  }) async {
-    try {
-      // Log the exact parameters being sent through method channel
-      print('🔧 AgoraService: Invoking joinChannelAndWaitForUsers method channel with:');
-      print('   - channelName: $channelName');
-      print('   - token: $token');
-      print('   - uid: $uid');
-      print('   - timeoutSeconds: $timeoutSeconds');
-      
-      final methodChannelParams = {
-        'channelName': channelName,
-        'token': token,
-        'uid': uid,
-        'timeoutSeconds': timeoutSeconds,
-      };
-      
-      print('   - Full method channel params: $methodChannelParams');
-      
-      final bool result = await _channel.invokeMethod('joinChannelAndWaitForUsers', methodChannelParams);
-      
-      print('🔧 AgoraService: Method channel returned result: $result');
-      
-      if (result) {
-        // Default to mic on (unmuted) after joining
-        await turnMicrophoneOn();
-      }
-      
-      return result;
-    } catch (e) {
-      print('❌ AgoraService: Exception in joinChannelAndWaitForUsers: $e');
-      return false;
-    }
-  }
 
   /// Leave current channel
   static Future<bool> leaveChannel() async {
@@ -249,16 +214,16 @@ class AgoraService {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onCallEnded':
-          // Notify any listening provider that the call has ended
           _onCallEnded?.call();
           break;
         case 'onUserLeft':
-          // Handle user leaving scenario
           _onCallEnded?.call();
           break;
         case 'onChannelEmpty':
-          // Handle empty channel scenario
           _onCallEnded?.call();
+          break;
+        case 'onUserJoined':
+          _onUserJoined?.call();
           break;
       }
     });

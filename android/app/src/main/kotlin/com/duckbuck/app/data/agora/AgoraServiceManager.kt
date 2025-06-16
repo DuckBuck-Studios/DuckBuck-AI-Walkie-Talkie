@@ -98,4 +98,32 @@ object AgoraServiceManager {
             }
         }
     }
+    
+    /**
+     * Leave the channel and clean up resources
+     * This ensures that all resources are released and the service is stopped
+     */
+    @Synchronized
+    fun leaveChannelAndCleanup(context: android.content.Context): Boolean {
+        return try {
+            AppLogger.i(TAG, "🚪 Leaving channel and cleaning up resources...")
+            
+            // Leave the channel gracefully
+            val leaveResult = agoraService?.leaveChannel() ?: false
+            AppLogger.i(TAG, "Leave channel result: $leaveResult")
+            
+            // Stop the WalkieTalkieService if it's running
+            val stopIntent = android.content.Intent(context, com.duckbuck.app.presentation.services.WalkieTalkieService::class.java).apply {
+                putExtra("action", "stop_service")
+            }
+            context.startService(stopIntent)
+            AppLogger.i(TAG, "✅ Sent stop service intent to WalkieTalkieService")
+            
+            // Return the result of the leave operation
+            leaveResult
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Error leaving channel and cleaning up", e)
+            false
+        }
+    }
 }

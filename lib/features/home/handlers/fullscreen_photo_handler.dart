@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../widgets/fullscreen_photo_viewer.dart';
 import '../../call/providers/call_provider.dart';
 import 'call_connection_handler.dart';
+import 'walkie_talkie_handler.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
 
@@ -16,6 +17,7 @@ class FullscreenPhotoHandler {
   final Function(Widget)? onShowFullscreenOverlay;
   final VoidCallback? onHideFullscreenOverlay;
   final LoggerService _logger = serviceLocator<LoggerService>();
+  final WalkieTalkieHandler _walkieTalkieHandler = WalkieTalkieHandler();
   
   Map<String, dynamic>? _currentFriend;
   
@@ -34,17 +36,24 @@ class FullscreenPhotoHandler {
     // Wrap FullscreenPhotoViewer in Consumer to listen to real-time provider changes
     final photoViewer = Consumer<CallProvider>(
       builder: (context, callProvider, child) {
-        return FullscreenPhotoViewer(
-          photoURL: _currentFriend!['photoURL'],
-          displayName: _currentFriend!['displayName'] ?? 'Unknown User',
-          onExit: _handleExit,
-          onLongPress: () => _handleLongPress(callProvider),
-          showCallControls: callProvider.isActiveCall,
-          isMuted: callProvider.isMuted,
-          isSpeakerOn: callProvider.isSpeakerOn,
-          onToggleMute: callProvider.toggleMute,
-          onToggleSpeaker: callProvider.toggleSpeaker,
-          onEndCall: callProvider.endCall,
+        return ListenableBuilder(
+          listenable: _walkieTalkieHandler,
+          builder: (context, child) {
+            return FullscreenPhotoViewer(
+              photoURL: _currentFriend!['photoURL'],
+              displayName: _currentFriend!['displayName'] ?? 'Unknown User',
+              onExit: _handleExit,
+              onLongPress: () => _handleLongPress(callProvider),
+              showCallControls: callProvider.isActiveCall,
+              isMuted: callProvider.isMuted,
+              isSpeakerOn: callProvider.isSpeakerOn,
+              onToggleMute: callProvider.toggleMute,
+              onToggleSpeaker: callProvider.toggleSpeaker,
+              onEndCall: callProvider.endCall,
+              // Walkie-talkie properties
+              walkieTalkieHandler: _walkieTalkieHandler,
+            );
+          },
         );
       },
     );
@@ -55,16 +64,32 @@ class FullscreenPhotoHandler {
   /// Handle exit from fullscreen photo viewer
   void _handleExit() async {
     try {
-      // Get call provider to handle cancellation
+      _logger.i(_tag, 'Handling exit from fullscreen photo viewer...');
+      
+      // Stop walkie-talkie connection if active
+      if (_walkieTalkieHandler.isConnecting) {
+        _logger.i(_tag, 'Stopping walkie-talkie connection on exit...');
+        _walkieTalkieHandler.stopConnection();
+      }
+      
+      // Get call provider to handle cleanup
       final callProvider = context.read<CallProvider>();
       
       // If user is in a call or waiting for friend, end the call first
-      if (callProvider.isActiveCall || callProvider.waitingForFriend) {
-        _logger.i(_tag, 'Cancelling call and leaving channel...');
+      if (callProvider.isActiveCall || callProvider.waitingForFriend || callProvider.isInCall) {
+        _logger.i(_tag, 'Ending call and leaving channel on exit...');
+        _logger.d(_tag, 'Current call state - isActiveCall: ${callProvider.isActiveCall}, waitingForFriend: ${callProvider.waitingForFriend}, isInCall: ${callProvider.isInCall}');
+        
         await callProvider.endCall(); // This will clear everything and leave Agora channel
+        _logger.i(_tag, 'Call ended and channel left successfully on exit');
+        
+        // Add delay to ensure cleanup is complete
+        await Future.delayed(const Duration(milliseconds: 300));
+      } else {
+        _logger.d(_tag, 'No active call state to clean up on exit');
       }
       
-      // Always allow exit after cancellation
+      // Always allow exit after cleanup
       HapticFeedback.mediumImpact();
       
       // Add exit animation before hiding overlay
@@ -75,8 +100,8 @@ class FullscreenPhotoHandler {
       });
       
     } catch (e) {
-      _logger.e(_tag, 'Error during exit/cancellation: $e');
-      // Force exit even if cancellation fails
+      _logger.e(_tag, 'Error during exit cleanup: $e');
+      // Force exit even if cleanup fails
       if (onHideFullscreenOverlay != null) {
         onHideFullscreenOverlay!();
       }
@@ -89,11 +114,20 @@ class FullscreenPhotoHandler {
     await Future.delayed(const Duration(milliseconds: 200));
   }
   
-  /// Handle long press to initiate call
-  void _handleLongPress(CallProvider callProvider) {
+  /// Handle long press to start connection
+  void _handleLongPress(CallProvider callProvider) async {
     if (_currentFriend == null) return;
     
-    _logger.i(_tag, 'Starting call initiation process...');
+    // Don't allow starting a new connection if already connecting or in a call
+    if (_walkieTalkieHandler.isConnecting || callProvider.isActiveCall) {
+      _logger.w(_tag, 'Cannot start connection - already connecting or in call');
+      return;
+    }
+    
+    _logger.i(_tag, 'Starting walkie-talkie connection process...');
+    
+    // Start walkie-talkie connection UI immediately
+    _walkieTalkieHandler.startConnection();
     
     // Set up listeners for call events to update UI
     _setupCallEventListeners(callProvider);
@@ -131,26 +165,41 @@ class FullscreenPhotoHandler {
       if (callProvider.isActiveCall) {
         // Call succeeded - friend joined and call is active
         _logger.i(_tag, '✅ Call succeeded');
+        _walkieTalkieHandler.connectionSucceeded();
       } else if (!callProvider.waitingForFriend && !callProvider.friendJoined && callProvider.isInCall) {
         // Call failed (not waiting, friend didn't join, but still marked as in call)
         _logger.w(_tag, '❌ Call failed');
+        _walkieTalkieHandler.connectionFailed();
+      } else if (!callProvider.isInCall && !callProvider.waitingForFriend) {
+        // Call completely ended
+        _walkieTalkieHandler.endSession();
       }
     });
+    
+    // Listen to walkie-talkie handler for timeout events
+    _walkieTalkieHandler.addListener(() {
+      if (!_walkieTalkieHandler.isConnecting && 
+          _walkieTalkieHandler.remainingSeconds <= 0 &&
+          (callProvider.waitingForFriend || callProvider.isInCall)) {
+        // Walkie-talkie timed out, force end the call
+        _logger.w(_tag, 'Walkie-talkie timed out, force ending call...');
+        _forceCleanupCall(callProvider);
+      }
+    });
+  }
+  
+  /// Force cleanup call and channel leaving
+  void _forceCleanupCall(CallProvider callProvider) async {
+    try {
+      _logger.i(_tag, 'Force cleanup: ending call and leaving channel...');
+      await callProvider.endCall();
+      _logger.i(_tag, 'Force cleanup completed successfully');
+    } catch (e) {
+      _logger.e(_tag, 'Error during force cleanup: $e');
+    }
   }
   
   /// Get current friend data
   Map<String, dynamic>? get currentFriend => _currentFriend;
 }
-
-/*
-   * ENHANCED CALL UI FLOW:
-   * 
-   * 1. User long presses -> _handleLongPress() called
-   * 2. Call initiation starts immediately with UI feedback
-   * 3. Background call initiation starts (_initiateCallInBackground)
-   * 4. Actual Agora channel join happens in background
-   * 5. If friend joins successfully, UI transitions to call controls
-   * 6. If friend doesn't join, call times out and ends
-   * 
-   * Key: UI messaging is managed by CallProvider state for better UX
-   */
+ 

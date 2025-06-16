@@ -1,18 +1,35 @@
 package com.duckbuck.app.presentation.bridges
-import com.duckbuck.app.infrastructure.monitoring.AppLogger
 
+import com.duckbuck.app.infrastructure.monitoring.AppLogger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.duckbuck.app.data.agora.AgoraServiceManager
+import com.duckbuck.app.data.agora.AgoraService
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Handles all Agora-related method channel calls from Flutter
  * Provides a clean separation between Flutter communication and Agora service logic
  */
-class AgoraMethodChannelHandler {
+class AgoraMethodChannelHandler(private val context: android.content.Context) {
     
     companion object {
         private const val TAG = "AgoraMethodChannelHandler"
+    }
+    
+    // Method channel for sending events to Flutter
+    private var methodChannel: MethodChannel? = null
+    
+    /**
+     * Set the method channel for sending events to Flutter
+     */
+    fun setMethodChannel(channel: MethodChannel) {
+        methodChannel = channel
+        // Try to set up Agora event listener, but it might not be available yet
+        // We'll ensure it's set up when the service is actually initialized
+        val listenerSetUp = setupAgoraEventListener()
+        AppLogger.d(TAG, "Initial event listener setup result: $listenerSetUp")
     }
     
     /**
@@ -26,9 +43,7 @@ class AgoraMethodChannelHandler {
             "joinChannel" -> {
                 handleJoinChannel(call, result)
             }
-            "joinChannelAndWaitForUsers" -> {
-                handleJoinChannelAndWaitForUsers(call, result)
-            }
+            // Removed joinChannelAndWaitForUsers - timing now handled in Dart
             "leaveChannel" -> {
                 handleLeaveChannel(result)
             }
@@ -86,6 +101,14 @@ class AgoraMethodChannelHandler {
             AppLogger.d(TAG, "Flutter requested: initializeAgoraEngine")
             val agoraService = AgoraServiceManager.getValidatedAgoraService()
             val success = agoraService?.initializeEngine() ?: false
+            
+            // After initializing the engine, ensure event listener is set up
+            if (success) {
+                AppLogger.d(TAG, "Engine initialized successfully, setting up event listener")
+                val listenerSetUp = setupAgoraEventListener()
+                AppLogger.d(TAG, "Event listener setup result after engine init: $listenerSetUp")
+            }
+            
             result.success(success)
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error initializing engine", e)
@@ -114,42 +137,6 @@ class AgoraMethodChannelHandler {
         }
     }
 
-    private fun handleJoinChannelAndWaitForUsers(call: MethodCall, result: MethodChannel.Result) {
-        try {
-            val channelName = call.argument<String>("channelName")
-            val token = call.argument<String?>("token")
-            val uid = call.argument<Int>("uid") ?: 0
-            val timeoutSeconds = call.argument<Int>("timeoutSeconds") ?: 15
-            
-            AppLogger.d(TAG, "Flutter requested: joinChannelAndWaitForUsers - $channelName, timeout: ${timeoutSeconds}s")
-            
-            if (channelName != null) {
-                // Run in background thread to avoid blocking Flutter UI
-                Thread {
-                    try {
-                        val agoraService = AgoraServiceManager.getValidatedAgoraService()
-                        val success = agoraService?.joinChannelAndWaitForUsers(channelName, token, uid, timeoutSeconds) ?: false
-                        
-                        // Return result on main thread
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            result.success(success)
-                        }
-                    } catch (e: Exception) {
-                        AppLogger.e(TAG, "Error in joinChannelAndWaitForUsers background thread", e)
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            result.error("JOIN_AND_WAIT_ERROR", e.message, null)
-                        }
-                    }
-                }.start()
-            } else {
-                result.error("INVALID_ARGUMENT", "Channel name is required", null)
-            }
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Error setting up joinChannelAndWaitForUsers", e)
-            result.error("JOIN_AND_WAIT_SETUP_ERROR", e.message, null)
-        }
-    }
-    
     private fun handleLeaveChannel(result: MethodChannel.Result) {
         try {
             AppLogger.d(TAG, "Flutter requested: leaveChannel")
@@ -327,6 +314,102 @@ class AgoraMethodChannelHandler {
         } catch (e: Exception) {
             AppLogger.e(TAG, "Error getting connection state", e)
             result.error("CONNECTION_STATE_ERROR", e.message, null)
+        }
+    }
+
+    /**
+     * Set up event listener to forward Agora events to Flutter
+     * Returns true if event listener was set successfully, false otherwise
+     */
+    private fun setupAgoraEventListener(): Boolean {
+        val agoraService = AgoraServiceManager.getValidatedAgoraService()
+        if (agoraService == null) {
+            AppLogger.w(TAG, "Cannot set up event listener: AgoraService not available or not initialized")
+            return false
+        }
+        
+        AppLogger.d(TAG, "Setting up event listener for Agora service")
+        agoraService.setEventListener(object : AgoraService.AgoraEventListener {
+            override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
+                sendEventToFlutter("onJoinChannelSuccess", mapOf(
+                    "channel" to channel,
+                    "uid" to uid,
+                    "elapsed" to elapsed
+                ))
+            }
+            
+            override fun onUserJoined(uid: Int, elapsed: Int) {
+                AppLogger.d(TAG, "🎯 Method channel handler received onUserJoined: uid=$uid")
+                AppLogger.d(TAG, "Forwarding onUserJoined event to Flutter: uid=$uid")
+                sendEventToFlutter("onUserJoined", mapOf(
+                    "uid" to uid,
+                    "elapsed" to elapsed
+                ))
+            }
+            
+            override fun onUserOffline(uid: Int, reason: Int) {
+                sendEventToFlutter("onUserOffline", mapOf(
+                    "uid" to uid,
+                    "reason" to reason
+                ))
+            }
+            
+            override fun onLeaveChannel() {
+                sendEventToFlutter("onLeaveChannel", null)
+            }
+            
+            override fun onError(errorCode: Int, errorMessage: String) {
+                sendEventToFlutter("onError", mapOf(
+                    "errorCode" to errorCode,
+                    "message" to errorMessage
+                ))
+            }
+            
+            override fun onMicrophoneToggled(isMuted: Boolean) {
+                sendEventToFlutter("onMicrophoneToggled", mapOf(
+                    "isMuted" to isMuted
+                ))
+            }
+            
+            override fun onSpeakerToggled(isEnabled: Boolean) {
+                sendEventToFlutter("onSpeakerToggled", mapOf(
+                    "isEnabled" to isEnabled
+                ))
+            }
+            
+            override fun onUserSpeaking(uid: Int, volume: Int, isSpeaking: Boolean) {
+                sendEventToFlutter("onUserSpeaking", mapOf(
+                    "uid" to uid,
+                    "volume" to volume,
+                    "isSpeaking" to isSpeaking
+                ))
+            }
+            
+            override fun onAllUsersLeft() {
+                sendEventToFlutter("onAllUsersLeft", null)
+            }
+            
+            override fun onChannelEmpty() {
+                sendEventToFlutter("onChannelEmpty", null)
+            }
+        })
+        
+        AppLogger.d(TAG, "Event listener set up successfully")
+        return true
+    }
+    
+    /**
+     * Send event to Flutter via method channel
+     */
+    private fun sendEventToFlutter(method: String, arguments: Map<String, Any>?) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        mainHandler.post {
+            try {
+                methodChannel?.invokeMethod(method, arguments)
+                AppLogger.d(TAG, "Sent event to Flutter: $method")
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Failed to send event to Flutter: $method", e)
+            }
         }
     }
 }

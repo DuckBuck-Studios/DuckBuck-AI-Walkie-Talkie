@@ -434,6 +434,9 @@ class WalkieTalkieService : Service() {
                     onChannelOccupied = { userCount ->
                         AppLogger.i(TAG, "✅ Channel has $userCount users - proceeding with normal walkie-talkie flow")
                         
+                        // 🚨 CRITICAL: Only show notification/UI after occupancy check passes
+                        AppLogger.i(TAG, "📢 OCCUPANCY CHECK PASSED - Now showing notification/UI for walkie-talkie")
+                        
                         // Show notification that someone is speaking in walkie-talkie
                         val speakerName = lastSpeakerUsername ?: "Someone"
                         val speakerPhotoUrl = callStatePersistence.getCurrentCallData()?.callerPhoto
@@ -454,7 +457,7 @@ class WalkieTalkieService : Service() {
                         AppLogger.i(TAG, "🎯 Triggered call UI for walkie-talkie: $callerName (photo: ${if (callerPhoto.isNullOrEmpty()) "none" else "present"}, muted: $isMuted)")
                     },
                     onChannelEmpty = {
-                        AppLogger.i(TAG, "🏃‍♂️ Channel is empty - leaving silently without notifications/UI")
+                        AppLogger.i(TAG, "🏃‍♂️ OCCUPANCY CHECK FAILED - Channel is empty, leaving silently without notifications/UI")
                         
                         // Leave channel silently without triggering notifications or UI
                         leaveCurrentChannelSilently()
