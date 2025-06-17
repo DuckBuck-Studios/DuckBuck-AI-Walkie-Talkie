@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Completely invisible native splash - only Flutter splash will show -->
+<!-- Native splash screen that appears instantly while Flutter loads -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/transparent" />
+    <!-- Black background matching Flutter splash -->
+    <item android:drawable="@android:color/black" />
+    
+    <!-- App logo in center -->
+    <item android:gravity="center">
+        <bitmap android:src="@mipmap/launcher_icon" 
+                android:gravity="center" />
+    </item>
 </layer-list>
