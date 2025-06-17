@@ -370,12 +370,11 @@ class _SplashScreen extends State<SplashScreen>
                   ],
                 ),
               ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Premium Logo with sophisticated animations and loading ring
-                    SlideTransition(
+              child: Stack(
+                children: [
+                  // Logo centered independently (like Android)
+                  Center(
+                    child: SlideTransition(
                       position: _logoSlideAnimation,
                       child: Transform.scale(
                         scale: _logoScaleAnimation.value,
@@ -385,16 +384,19 @@ class _SplashScreen extends State<SplashScreen>
                         ),
                       ),
                     ),
-                    
-                    SizedBox(height: size.height * 0.08),
-                    
-                    // Premium Brand Text with shimmer effect
-                    Opacity(
+                  ),
+                  
+                  // Text positioned below the centered logo
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: size.height * 0.5 + 75 + (size.height * 0.08), // Center + logo half height + spacing
+                    child: Opacity(
                       opacity: _textFadeAnimation.value,
                       child: _buildPremiumBrandText(size),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );
@@ -404,13 +406,16 @@ class _SplashScreen extends State<SplashScreen>
   }
   
   Widget _buildPremiumLogoWithLoading(Size size) {
+    // Match Android logo size exactly (180dp - bigger size)
+    const logoSize = 180.0;
+    
     return Stack(
       alignment: Alignment.center,
       children: [
         // Circular loading progress bar
         SizedBox(
-          width: size.width * 0.42,
-          height: size.width * 0.42,
+          width: logoSize + 20,
+          height: logoSize + 20,
           child: CircularProgressIndicator(
             value: _loadingProgressAnimation.value,
             strokeWidth: 4,
@@ -423,10 +428,10 @@ class _SplashScreen extends State<SplashScreen>
           ),
         ),
         
-        // Logo with glow effect
+        // Logo with glow effect - exact same size as Android (120dp)
         Container(
-          width: size.width * 0.35,
-          height: size.width * 0.35,
+          width: logoSize,
+          height: logoSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             // Premium green glow effect
@@ -472,37 +477,39 @@ class _SplashScreen extends State<SplashScreen>
   }
   
   Widget _buildPremiumBrandText(Size size) {
-    return ShaderMask(
-      shaderCallback: (Rect bounds) {
-        return LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            AppColors.accentBlue, // Emerald green
-            AppColors.accentTeal, // Light green
-            AppColors.accentBlue, // Emerald green
-          ],
-          stops: [
-            (_shimmerAnimation.value - 1.0).clamp(0.0, 1.0),
-            _shimmerAnimation.value.clamp(0.0, 1.0),
-            (_shimmerAnimation.value + 1.0).clamp(0.0, 1.0),
-          ],
-        ).createShader(bounds);
-      },
-      child: Text(
-        'DuckBuck',
-        style: TextStyle(
-          fontSize: size.width * 0.1,
-          fontWeight: FontWeight.w300,
-          color: Colors.white,
-          letterSpacing: 4.0,
-          shadows: [
-            Shadow(
-              color: AppColors.accentBlue.withOpacity(0.5),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    return Center(
+      child: ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              AppColors.accentBlue, // Emerald green
+              AppColors.accentTeal, // Light green
+              AppColors.accentBlue, // Emerald green
+            ],
+            stops: [
+              (_shimmerAnimation.value - 1.0).clamp(0.0, 1.0),
+              _shimmerAnimation.value.clamp(0.0, 1.0),
+              (_shimmerAnimation.value + 1.0).clamp(0.0, 1.0),
+            ],
+          ).createShader(bounds);
+        },
+        child: Text(
+          'DuckBuck',
+          style: TextStyle(
+            fontSize: size.width * 0.1,
+            fontWeight: FontWeight.w300,
+            color: Colors.white,
+            letterSpacing: 4.0,
+            shadows: [
+              Shadow(
+                color: AppColors.accentBlue.withOpacity(0.5),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
         ),
       ),
     );
