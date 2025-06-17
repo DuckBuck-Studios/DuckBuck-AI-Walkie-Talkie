@@ -8,14 +8,14 @@ import 'dart:math' as math;
 /// - Floating geometric particles
 /// - Subtle depth and dimension
 /// - Optimized for 120fps performance
-class PremiumBackground extends StatefulWidget {
-  const PremiumBackground({super.key});
+class Background extends StatefulWidget {
+  const Background({super.key});
 
   @override
-  State<PremiumBackground> createState() => _PremiumBackgroundState();
+  State<Background> createState() => _PremiumBackgroundState();
 }
 
-class _PremiumBackgroundState extends State<PremiumBackground>
+class _PremiumBackgroundState extends State<Background>
     with TickerProviderStateMixin {
   
   late AnimationController _particleController;
