@@ -90,14 +90,14 @@ class AnimatedText extends StatelessWidget {
                   Shadow(
                     offset: const Offset(0, 2),
                     blurRadius: 4,
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                   ),
                   // Glow effect for latest letter
                   if (isLatest)
                     Shadow(
                       offset: Offset.zero,
                       blurRadius: 8,
-                      color: Colors.blue.withOpacity(0.5),
+                      color: Colors.blue.withValues(alpha: 0.5),
                     ),
                 ],
               ),
@@ -121,15 +121,15 @@ class AnimatedText extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             Colors.transparent,
-            Colors.blue.withOpacity(0.8),
-            Colors.blue.withOpacity(0.4),
+            Colors.blue.withValues(alpha: 0.8),
+            Colors.blue.withValues(alpha: 0.4),
             Colors.transparent,
           ],
           stops: const [0.0, 0.3, 0.7, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.3 * lineProgress),
+            color: Colors.blue.withValues(alpha: 0.3 * lineProgress),
             blurRadius: 4,
             spreadRadius: 1,
           ),

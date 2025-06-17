@@ -55,33 +55,33 @@ class _SplashScreen extends State<SplashScreen>
   }
   
   void _setupPremiumAnimations() {
-    // Primary animation controller (2 seconds for premium feel)
+    // Primary animation controller (faster - 800ms for quick feel)
     _primaryController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
     
-    // Glow effect controller
+    // Glow effect controller (faster)
     _glowController = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
     
-    // Shimmer effect controller
+    // Shimmer effect controller (faster)
     _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 2500),
+      duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
     
-    // Loading progress controller
+    // Loading progress controller (much faster)
     _loadingController = AnimationController(
-      duration: const Duration(milliseconds: 1800), // 1.8 second loading animation
+      duration: const Duration(milliseconds: 600), // Reduced from 1800ms
       vsync: this,
     );
     
-    // Fade out controller
+    // Fade out controller (keep responsive)
     _fadeOutController = AnimationController(
-      duration: const Duration(milliseconds: 800), // Faster, responsive fade
+      duration: const Duration(milliseconds: 400), // Faster fade
       vsync: this,
     );
     
@@ -166,22 +166,22 @@ class _SplashScreen extends State<SplashScreen>
       // Start primary entrance animation
       _primaryController.forward();
       
-      // Start glow effect after logo appears
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Start glow effect earlier and faster
+      await Future.delayed(const Duration(milliseconds: 200)); // Reduced from 800ms
       _glowController.repeat(reverse: true);
       
-      // Start shimmer effect
-      await Future.delayed(const Duration(milliseconds: 400));
+      // Start shimmer effect earlier
+      await Future.delayed(const Duration(milliseconds: 100)); // Reduced from 400ms
       _shimmerController.repeat(reverse: true);
       
-      // Start loading progress after animations settle
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Start loading progress much earlier
+      await Future.delayed(const Duration(milliseconds: 200)); // Reduced from 800ms
       _loadingController.forward();
       
-      // Initialize app during loading animation
+      // Initialize app during loading animation with shorter wait
       await Future.wait([
         _initializeApp(),
-        Future.delayed(const Duration(milliseconds: 3000)), // Wait for loading animation duration
+        Future.delayed(const Duration(milliseconds: 800)), // Reduced from 3000ms
       ]);
       
       // Mark app as ready
@@ -189,8 +189,8 @@ class _SplashScreen extends State<SplashScreen>
         _isAppReady = true;
       });
       
-      // Hold the complete state briefly
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Much shorter hold time
+      await Future.delayed(const Duration(milliseconds: 200)); // Reduced from 500ms
       
       // Start fade out transition
       await _fadeOutController.forward();
@@ -207,7 +207,7 @@ class _SplashScreen extends State<SplashScreen>
         if (!_loadingController.isCompleted) {
           await _loadingController.forward();
         }
-        await Future.delayed(const Duration(milliseconds: 1000));
+        await Future.delayed(const Duration(milliseconds: 300)); // Reduced from 1000ms
         await _fadeOutController.forward();
         if (mounted) {
           _navigateToNextScreen();
@@ -248,8 +248,8 @@ class _SplashScreen extends State<SplashScreen>
       final logger = serviceLocator<LoggerService>();
       logger.i('SPLASH', 'Starting critical data pre-loading');
       
-      // Wait a bit for core services to be ready
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Shorter wait for core services to be ready
+      await Future.delayed(const Duration(milliseconds: 100)); // Reduced from 500ms
       
       // Pre-load user data and relationship data if user is authenticated
       await _preloadUserAndRelationshipData();
@@ -301,10 +301,10 @@ class _SplashScreen extends State<SplashScreen>
       // Import relationship repository to pre-load data
       final relationshipRepository = serviceLocator<RelationshipRepository>();
       
-      // Pre-load friends data (this will cache it)
+      // Pre-load friends data (this will cache it) with shorter timeout
       final friendsStream = relationshipRepository.getFriendsStream();
       await friendsStream.first.timeout(
-        const Duration(seconds: 3),
+        const Duration(seconds: 1), // Reduced from 3 seconds
         onTimeout: () {
           logger.w('SPLASH', 'Friends data pre-loading timed out');
           return <Map<String, dynamic>>[];
@@ -365,7 +365,7 @@ class _SplashScreen extends State<SplashScreen>
                   radius: 1.5,
                   colors: [
                     Colors.black,
-                    Colors.black.withOpacity(0.95),
+                    Colors.black.withValues(alpha: 0.95),
                     Colors.black,
                   ],
                 ),
@@ -419,11 +419,11 @@ class _SplashScreen extends State<SplashScreen>
           child: CircularProgressIndicator(
             value: _loadingProgressAnimation.value,
             strokeWidth: 4,
-            backgroundColor: AppColors.accentBlue.withOpacity(0.2),
+            backgroundColor: AppColors.accentBlue.withValues(alpha: 0.2),
             valueColor: AlwaysStoppedAnimation<Color>(
               _isAppReady 
                 ? AppColors.accentBlue 
-                : AppColors.accentBlue.withOpacity(0.8),
+                : AppColors.accentBlue.withValues(alpha: 0.8),
             ),
           ),
         ),
@@ -437,12 +437,12 @@ class _SplashScreen extends State<SplashScreen>
             // Premium green glow effect
             boxShadow: [
               BoxShadow(
-                color: AppColors.accentBlue.withOpacity(_glowAnimation.value * 0.6),
+                color: AppColors.accentBlue.withValues(alpha: _glowAnimation.value * 0.6),
                 blurRadius: 40 * _glowAnimation.value,
                 spreadRadius: 10 * _glowAnimation.value,
               ),
               BoxShadow(
-                color: AppColors.accentTeal.withOpacity(_glowAnimation.value * 0.4),
+                color: AppColors.accentTeal.withValues(alpha: _glowAnimation.value * 0.4),
                 blurRadius: 80 * _glowAnimation.value,
                 spreadRadius: 20 * _glowAnimation.value,
               ),
@@ -456,7 +456,7 @@ class _SplashScreen extends State<SplashScreen>
               // Subtle inner shadow for depth
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -504,7 +504,7 @@ class _SplashScreen extends State<SplashScreen>
             letterSpacing: 4.0,
             shadows: [
               Shadow(
-                color: AppColors.accentBlue.withOpacity(0.5),
+                color: AppColors.accentBlue.withValues(alpha: 0.5),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),

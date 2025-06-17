@@ -7,11 +7,16 @@ import 'dart:io' show Platform, File;
 
 import '../providers/call_provider.dart';
 import '../../shared/widgets/call_ui_components.dart';
+import '../../../core/services/service_locator.dart';
+import '../../../core/services/logger/logger_service.dart';
 
 /// Call screen with consistent UI styling matching the fullscreen photo viewer
 /// Uses shared CallUIComponents for consistent positioning and styling
 class CallScreen extends StatelessWidget {
-  const CallScreen({super.key});
+  static const String _tag = 'CALL_SCREEN';
+  final LoggerService _logger = serviceLocator<LoggerService>();
+  
+  CallScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -121,12 +126,12 @@ class CallScreen extends StatelessWidget {
   }
 
   Widget _buildPhoto(BuildContext context, String? photoUrl, String displayName) {
-    print('🖼️ _buildPhoto called with photoUrl: $photoUrl');
+    _logger.d(_tag, '_buildPhoto called with photoUrl: $photoUrl');
     
     if (photoUrl != null && photoUrl.isNotEmpty) {
       // Check if it's a local file path
       final isLocalFile = photoUrl.startsWith('file://') || photoUrl.startsWith('/');
-      print('📁 Is local file: $isLocalFile for URL: $photoUrl');
+      _logger.d(_tag, 'Is local file: $isLocalFile for URL: $photoUrl');
       
       if (isLocalFile) {
         // Handle local file paths
@@ -134,16 +139,16 @@ class CallScreen extends StatelessWidget {
             ? photoUrl.replaceFirst('file://', '') 
             : photoUrl;
         
-        print('📂 Processing local file path: $localPath');
+        _logger.d(_tag, 'Processing local file path: $localPath');
         
         // Check if file exists
         final file = File(localPath);
         if (!file.existsSync()) {
-          print('❌ Local file does not exist: $localPath');
+          _logger.w(_tag, 'Local file does not exist: $localPath');
           return _buildFallbackPhoto(context, displayName);
         }
         
-        print('✅ Local file exists, loading: $localPath');
+        _logger.d(_tag, 'Local file exists, loading: $localPath');
             
         return SizedBox(
           width: double.infinity,
@@ -154,12 +159,12 @@ class CallScreen extends StatelessWidget {
             width: double.infinity,
             height: double.infinity,
             errorBuilder: (context, error, stackTrace) {
-              print('❌ Error loading local file: $localPath - $error');
+              _logger.e(_tag, 'Error loading local file: $localPath - $error');
               return _buildFallbackPhoto(context, displayName);
             },
             frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
               if (wasSynchronouslyLoaded || frame != null) {
-                print('✅ Local file loaded successfully: $localPath');
+                _logger.d(_tag, 'Local file loaded successfully: $localPath');
                 return child;
               }
               return Center(
@@ -178,7 +183,7 @@ class CallScreen extends StatelessWidget {
         );
       } else {
         // Handle network URLs
-        print('🌐 Processing network URL: $photoUrl');
+        _logger.d(_tag, 'Processing network URL: $photoUrl');
         return SizedBox(
           width: double.infinity,
           height: double.infinity,
@@ -199,7 +204,7 @@ class CallScreen extends StatelessWidget {
                     ),
             ),
             errorWidget: (context, url, error) {
-              print('❌ Error loading network image: $photoUrl - $error');
+              _logger.e(_tag, 'Error loading network image: $photoUrl - $error');
               return _buildFallbackPhoto(context, displayName);
             },
           ),
@@ -207,7 +212,7 @@ class CallScreen extends StatelessWidget {
       }
     }
 
-    print('⚠️ No photo URL provided, using fallback');
+    _logger.w(_tag, 'No photo URL provided, using fallback');
     return _buildFallbackPhoto(context, displayName);
   }
 

@@ -20,7 +20,7 @@ class AnimatedLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
       child: Stack(
@@ -35,12 +35,12 @@ class AnimatedLogo extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.blue.withOpacity(0.3 * glowIntensity),
+                    color: Colors.blue.withValues(alpha: 0.3 * glowIntensity),
                     blurRadius: 30 * glowIntensity,
                     spreadRadius: 5 * glowIntensity,
                   ),
                   BoxShadow(
-                    color: Colors.white.withOpacity(0.1 * glowIntensity),
+                    color: Colors.white.withValues(alpha: 0.1 * glowIntensity),
                     blurRadius: 60 * glowIntensity,
                     spreadRadius: 10 * glowIntensity,
                   ),
@@ -57,13 +57,13 @@ class AnimatedLogo extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  Colors.white.withOpacity(0.1),
-                  Colors.white.withOpacity(0.05),
+                  Colors.white.withValues(alpha: 0.1),
+                  Colors.white.withValues(alpha: 0.05),
                   Colors.transparent,
                 ],
               ),
               border: Border.all(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 width: 1,
               ),
             ),
@@ -75,8 +75,8 @@ class AnimatedLogo extends StatelessWidget {
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        Colors.white.withOpacity(0.15),
-                        Colors.white.withOpacity(0.05),
+                        Colors.white.withValues(alpha: 0.15),
+                        Colors.white.withValues(alpha: 0.05),
                       ],
                     ),
                   ),
@@ -98,7 +98,7 @@ class AnimatedLogo extends StatelessWidget {
               gradient: RadialGradient(
                 center: const Alignment(-0.3, -0.3),
                 colors: [
-                  Colors.white.withOpacity(0.2 * glowIntensity),
+                  Colors.white.withValues(alpha: 0.2 * glowIntensity),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.7],

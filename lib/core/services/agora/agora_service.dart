@@ -1,7 +1,13 @@
 import 'package:flutter/services.dart';
 
+import '../logger/logger_service.dart';
+import '../service_locator.dart';
+
 class AgoraService {
   static const MethodChannel _channel = MethodChannel('com.duckbuck.app/agora_channel');
+  
+  // Get logger service from service locator
+  static final LoggerService _logger = serviceLocator<LoggerService>();
   
   // Event listener for call state changes
   static Function()? _onCallEnded;
@@ -232,7 +238,7 @@ class AgoraService {
       final bool result = await _channel.invokeMethod('joinChannel', methodChannelParams);
       return result;
     } catch (e) {
-      print('❌ AgoraService: Exception in joinChannel: $e');
+      _logger.e('AgoraService', 'Exception in joinChannel: $e');
       return false;
     }
   }

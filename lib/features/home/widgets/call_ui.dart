@@ -184,7 +184,7 @@ class CallUI {
             SizedBox(height: screenHeight * 0.02),
             
             // Enhanced waiting indicator with better spacing and overflow protection
-            Container(
+            SizedBox(
               height: screenHeight * 0.025,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,

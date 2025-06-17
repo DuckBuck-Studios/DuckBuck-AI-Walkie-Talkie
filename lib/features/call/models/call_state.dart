@@ -72,8 +72,8 @@ class CallState {
 
 /// Role of the call participant
 enum CallRole {
-  INITIATOR,  // User who started the call
-  RECEIVER    // User who received the call
+  initiator,  // User who started the call
+  receiver    // User who received the call
 }
 
 /// UI state for call loading progression (used by initiator)

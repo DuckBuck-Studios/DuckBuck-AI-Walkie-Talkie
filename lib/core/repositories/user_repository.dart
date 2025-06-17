@@ -1,9 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
+import 'dart:io';
 import '../services/auth/auth_service_interface.dart';
 import '../models/user_model.dart';
 import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
+import '../services/firebase/firebase_storage_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
@@ -679,6 +681,59 @@ class UserRepository {
         parameters: {
           'reason': e.toString(),
           'error_code': e is FirebaseAuthException ? e.code : 'unknown',
+        },
+      );
+      
+      rethrow;
+    }
+  }
+
+  /// Upload user profile photo and update profile
+  /// Returns the download URL of the uploaded photo
+  Future<String> uploadProfilePhoto({
+    required String userId,
+    required File imageFile,
+  }) async {
+    try {
+      _logger.i(_tag, 'Uploading profile photo for user: $userId');
+      
+      // Log photo upload attempt
+      await _analytics.logEvent(
+        name: 'profile_photo_upload_start',
+        parameters: {
+          'user_id': userId,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      );
+      
+      // Get Firebase storage service to upload the image
+      final storageService = serviceLocator<FirebaseStorageService>();
+      final photoURL = await storageService.uploadProfileImage(
+        userId: userId,
+        imageFile: imageFile,
+      );
+      
+      _logger.i(_tag, 'Profile photo uploaded successfully: $photoURL');
+      
+      // Log successful photo upload
+      await _analytics.logEvent(
+        name: 'profile_photo_upload_success',
+        parameters: {
+          'user_id': userId,
+          'photo_url_length': photoURL.length,
+        },
+      );
+      
+      return photoURL;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to upload profile photo: ${e.toString()}');
+      
+      // Log photo upload failure
+      await _analytics.logEvent(
+        name: 'profile_photo_upload_failure',
+        parameters: {
+          'user_id': userId,
+          'error': e.toString(),
         },
       );
       

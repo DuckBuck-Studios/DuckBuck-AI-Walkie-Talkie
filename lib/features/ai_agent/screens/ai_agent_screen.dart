@@ -107,7 +107,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withOpacity(0.3),
+                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withValues(alpha: 0.3),
                       width: 2,
                     ),
                   ),
@@ -122,7 +122,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withOpacity(0.5),
+                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withValues(alpha: 0.5),
                       width: 2,
                     ),
                   ),
@@ -137,7 +137,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withOpacity(0.7),
+                      color: (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary).withValues(alpha: 0.7),
                       width: 2,
                     ),
                   ),
@@ -241,7 +241,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
+        color: Colors.black.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
@@ -256,7 +256,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
             onPressed: () async {
               await provider.toggleMicrophone();
             },
-            backgroundColor: provider.isMicrophoneMuted ? Colors.red : Colors.white.withOpacity(0.2),
+            backgroundColor: provider.isMicrophoneMuted ? Colors.red : Colors.white.withValues(alpha: 0.2),
             iconColor: Colors.white,
           ),
           
@@ -280,7 +280,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
             onPressed: () async {
               await provider.toggleSpeaker();
             },
-            backgroundColor: provider.isSpeakerEnabled ? Colors.blue : Colors.white.withOpacity(0.2),
+            backgroundColor: provider.isSpeakerEnabled ? Colors.blue : Colors.white.withValues(alpha: 0.2),
             iconColor: Colors.white,
           ),
         ],
@@ -305,7 +305,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),

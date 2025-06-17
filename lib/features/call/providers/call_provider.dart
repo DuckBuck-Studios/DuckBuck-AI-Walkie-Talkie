@@ -16,7 +16,7 @@ class CallProvider with ChangeNotifier {
   bool _isSpeakerOn = true; // Speaker is on by default for calls
   
   // Initiator-specific state
-  CallRole _currentRole = CallRole.RECEIVER; // Default to receiver
+  CallRole _currentRole = CallRole.receiver; // Default to receiver
   String? _channelId;
   int? _myUid;
   bool _waitingForFriend = false;
@@ -37,7 +37,7 @@ class CallProvider with ChangeNotifier {
   
   /// Check if currently in an active call (friend has joined for initiator, or just in call for receiver)
   bool get isActiveCall {
-    if (_currentRole == CallRole.INITIATOR) {
+    if (_currentRole == CallRole.initiator) {
       final result = isInCall && _friendJoined && !_waitingForFriend;
       _logger.d(_tag, 'isActiveCall check (INITIATOR): isInCall=$isInCall, friendJoined=$_friendJoined, waitingForFriend=$_waitingForFriend => result=$result');
       return result;
@@ -48,7 +48,7 @@ class CallProvider with ChangeNotifier {
   }
   
   /// Check if currently waiting for friend to join (initiator only)
-  bool get isWaitingForFriend => _currentRole == CallRole.INITIATOR && isInCall && _waitingForFriend;
+  bool get isWaitingForFriend => _currentRole == CallRole.initiator && isInCall && _waitingForFriend;
 
   // Protected setters for subclasses
   @protected
@@ -97,7 +97,7 @@ class CallProvider with ChangeNotifier {
       HapticFeedback.lightImpact();
 
       // Set initiator state
-      _currentRole = CallRole.INITIATOR;
+      _currentRole = CallRole.initiator;
       _channelId = channelId;
       _myUid = uid;
       _waitingForFriend = true;
@@ -317,7 +317,7 @@ class CallProvider with ChangeNotifier {
     // Haptic feedback when call UI appears for receiver
     HapticFeedback.lightImpact();
     
-    _currentRole = CallRole.RECEIVER;
+    _currentRole = CallRole.receiver;
     _currentCall = callState;
     _isInCall = true;
     _isMuted = isMuted; // Use the actual mute state from Kotlin (always starts muted)
@@ -341,7 +341,7 @@ class CallProvider with ChangeNotifier {
     try {
       _logger.i(_tag, 'Ending call...');
       
-      if (_currentRole == CallRole.INITIATOR) {
+      if (_currentRole == CallRole.initiator) {
         _logger.i(_tag, 'Ending call as initiator...');
         
         // Leave the channel
@@ -475,7 +475,7 @@ class CallProvider with ChangeNotifier {
     _isSpeakerOn = true;
     
     // Clear initiator-specific state
-    _currentRole = CallRole.RECEIVER; // Reset to default
+    _currentRole = CallRole.receiver; // Reset to default
     _channelId = null;
     _myUid = null;
     _waitingForFriend = false;

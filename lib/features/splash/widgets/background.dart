@@ -57,7 +57,7 @@ class _PremiumBackgroundState extends State<Background>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     
-    return Container(
+    return SizedBox(
       width: size.width,
       height: size.height,
       child: Stack(
@@ -85,9 +85,9 @@ class _PremiumBackgroundState extends State<Background>
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
                 colors: [
-                  Colors.blue.withOpacity(0.03),
+                  Colors.blue.withValues(alpha: 0.03),
                   Colors.transparent,
-                  Colors.indigo.withOpacity(0.02),
+                  Colors.indigo.withValues(alpha: 0.02),
                 ],
                 stops: const [0.0, 0.5, 1.0],
               ),
@@ -117,7 +117,7 @@ class _PremiumBackgroundState extends State<Background>
                 radius: 1.2,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.3),
+                  Colors.black.withValues(alpha: 0.3),
                 ],
                 stops: const [0.6, 1.0],
               ),
@@ -174,8 +174,8 @@ class ParticlePainter extends CustomPainter {
       // Create gradient for each particle
       final gradient = RadialGradient(
         colors: [
-          Colors.white.withOpacity(particle.opacity),
-          Colors.blue.withOpacity(particle.opacity * 0.5),
+          Colors.white.withValues(alpha: particle.opacity),
+          Colors.blue.withValues(alpha: particle.opacity * 0.5),
           Colors.transparent,
         ],
         stops: const [0.0, 0.7, 1.0],

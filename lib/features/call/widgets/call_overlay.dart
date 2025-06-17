@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../providers/call_provider.dart';
 import '../models/call_state.dart';
 import '../screens/call_screen.dart';
@@ -29,7 +28,7 @@ class CallOverlay extends StatelessWidget {
             // Initiator calls should stay in the fullscreen photo viewer
             if (!callProvider.isInCall || 
                 callProvider.currentCall == null ||
-                callProvider.currentRole == CallRole.INITIATOR) {
+                callProvider.currentRole == CallRole.initiator) {
               return const SizedBox.shrink();
             }
             
@@ -39,7 +38,7 @@ class CallOverlay extends StatelessWidget {
                 width: double.infinity,
                 height: double.infinity,
                 color: Colors.black,
-                child: const CallScreen(),
+                child: CallScreen(),
               ),
             );
           },

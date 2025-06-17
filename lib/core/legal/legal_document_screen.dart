@@ -136,8 +136,8 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen>
           ),
           leading: CupertinoButton(
             padding: EdgeInsets.zero,
-            child: const Icon(CupertinoIcons.back, color: AppColors.textPrimary),
             onPressed: _handleBackPress,
+            child: const Icon(CupertinoIcons.back, color: AppColors.textPrimary),
           ),
         ),
         child: _buildBody(context, useCupertinoStyle: true),

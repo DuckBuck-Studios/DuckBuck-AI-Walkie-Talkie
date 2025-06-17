@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
 import '../../../core/services/agora/agora_token_service.dart';
-import '../../../core/services/agora/agora_service.dart';
 import '../../../core/services/notifications/notifications_service.dart';
 import '../../call/providers/call_provider.dart';
 
@@ -40,26 +39,14 @@ class CallConnectionHandler {
       final tokenResponse = await _getAgoraToken(friendData.relationshipId);
       if (tokenResponse == null) return;
       
-      // PART 3: Initialize Agora engine
-      final engineInitialized = await _initializeAgoraEngine();
-      if (!engineInitialized) return;
-      
-      // PART 4: Send FCM invitation to friend
+      // PART 3: Send FCM invitation to friend
       await _sendFCMInvitation(friendData);
       
-      // PART 5: Start the call using provider
-      final callStarted = await _startCallWithProvider(friendData, tokenResponse);
-      
-      if (!callStarted) {
-        _logger.w(_tag, '❌ Call failed to start - friend did not join');
-        // TODO: Show error message to user
-      } else {
-        _logger.i(_tag, '✅ Call started successfully!');
-      }
+      // PART 4: Start the call using provider
+      await _startCallWithProvider(friendData, tokenResponse);
       
     } catch (e) {
       _logger.e(_tag, 'Failed to initialize walkie-talkie circuit: $e');
-      // TODO: Show error message to user
     }
   }
   
@@ -107,35 +94,10 @@ class CallConnectionHandler {
       _logger.d(_tag, '   - Channel: ${tokenResponse.channelId}');
       _logger.d(_tag, '   - Backend assigned UID: ${tokenResponse.uid}');
       
-      // Validate channel matches
-      if (relationshipId != tokenResponse.channelId) {
-        _logger.e(_tag, '❌ CHANNEL MISMATCH: Token generated for different channel!');
-        throw Exception('Channel mismatch: requested $relationshipId, got ${tokenResponse.channelId}');
-      }
-      
       return tokenResponse;
     } catch (e) {
       _logger.e(_tag, 'PART 2 - Failed to fetch Agora token: $e');
       return null;
-    }
-  }
-  
-  /// Initialize Agora engine
-  Future<bool> _initializeAgoraEngine() async {
-    try {
-      _logger.i(_tag, 'PART 3 - Initializing Agora engine...');
-      final engineInitialized = await AgoraService.initializeEngine();
-      
-      if (!engineInitialized) {
-        _logger.e(_tag, 'PART 3 - Failed to initialize Agora engine');
-        throw Exception('Failed to initialize Agora engine');
-      }
-      
-      _logger.i(_tag, 'PART 3 - Agora engine initialized successfully');
-      return true;
-    } catch (e) {
-      _logger.e(_tag, 'PART 3 - Error initializing Agora engine: $e');
-      return false;
     }
   }
   
@@ -162,28 +124,20 @@ class CallConnectionHandler {
   }
   
   /// Start call using CallProvider
-  Future<bool> _startCallWithProvider(FriendData friendData, dynamic tokenResponse) async {
+  Future<void> _startCallWithProvider(FriendData friendData, dynamic tokenResponse) async {
     try {
-      _logger.i(_tag, 'PART 5 - Starting call using CallProvider...');
+      _logger.i(_tag, 'PART 4 - Starting call using CallProvider...');
       
-      final callStarted = await callProvider.startCall(
+      await callProvider.startCall(
         friendName: friendData.friendName,
         channelId: friendData.relationshipId,
         uid: tokenResponse.uid,
         token: tokenResponse.token,
         friendPhotoUrl: friendData.friendPhotoUrl,
       );
-       if (!callStarted) {
-        _logger.w(_tag, '❌ Call failed - friend did not join or timed out');
-        // The call provider will handle the UI state transition
-        // based on the timeout and friend join status
-      }
 
-      return callStarted;
     } catch (e) {
-      _logger.e(_tag, 'PART 5 - Error starting call with provider: $e');
-      // The call provider will handle showing the error state
-      return false;
+      _logger.e(_tag, 'PART 4 - Error starting call with provider: $e');
     }
   }
 }
