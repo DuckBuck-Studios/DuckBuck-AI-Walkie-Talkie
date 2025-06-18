@@ -34,16 +34,7 @@ class FriendsListWidget extends StatelessWidget {
           return _buildErrorState(context, relationshipProvider);
         }
 
-        // Handle empty state
-        if (relationshipProvider.friends.isEmpty) {
-          return EmptyStateWidget(
-            icon: Platform.isIOS ? CupertinoIcons.person_2 : Icons.people_outline,
-            title: 'No Friends Yet',
-            message: 'Add friends to start connecting with them.',
-          );
-        }
-
-        // Build friends list
+        // Build friends list (even if empty)
         return _buildFriendsList(context, relationshipProvider);
       },
     );

@@ -60,46 +60,14 @@ class _FriendsScreenState extends State<FriendsScreen>
     super.dispose();
   }
 
-  /// Helper method to build Friends tab with User ID card inside
-  Widget _buildFriendsTabWithUserID() {
-    return Column(
-      key: const ValueKey('friends'),
-      children: [
-        // User UID Card at the top of scrollable content
-        Consumer<RelationshipProvider>(
-          builder: (context, provider, child) {
-            return UserUidCard(
-              uid: provider.currentUserUid,
-            );
-          },
-        ),
-        // Friends list below
-        const Expanded(
-          child: FriendsListWidget(),
-        ),
-      ],
-    );
+  /// Helper method to build Friends tab without User ID card
+  Widget _buildFriendsTab() {
+    return const FriendsListWidget();
   }
 
-  /// Helper method to build Requests tab with User ID card inside
-  Widget _buildRequestsTabWithUserID() {
-    return Column(
-      key: const ValueKey('requests'),
-      children: [
-        // User UID Card at the top of scrollable content
-        Consumer<RelationshipProvider>(
-          builder: (context, provider, child) {
-            return UserUidCard(
-              uid: provider.currentUserUid,
-            );
-          },
-        ),
-        // Friend requests list below
-        const Expanded(
-          child: FriendRequestsWidget(),
-        ),
-      ],
-    );
+  /// Helper method to build Requests tab without User ID card
+  Widget _buildRequestsTab() {
+    return const FriendRequestsWidget();
   }
 
   /// Shows search user bottom sheet for finding friends
@@ -237,7 +205,16 @@ class _FriendsScreenState extends State<FriendsScreen>
                   ),
                 ),
                 
-                // Content based on selected segment (User ID card now inside)
+                // User UID Card - stays constant outside tab switching
+                Consumer<RelationshipProvider>(
+                  builder: (context, provider, child) {
+                    return UserUidCard(
+                      uid: provider.currentUserUid,
+                    );
+                  },
+                ),
+                
+                // Content based on selected segment
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -257,8 +234,8 @@ class _FriendsScreenState extends State<FriendsScreen>
                       );
                     },
                     child: _selectedSegment == 0 
-                        ? _buildFriendsTabWithUserID()
-                        : _buildRequestsTabWithUserID(),
+                        ? _buildFriendsTab()
+                        : _buildRequestsTab(),
                   ),
                 ),
               ],
@@ -472,7 +449,16 @@ class _FriendsScreenState extends State<FriendsScreen>
             ),
           ),
           
-          // Content based on selected segment (User ID card now inside)
+          // User UID Card - stays constant outside tab switching
+          Consumer<RelationshipProvider>(
+            builder: (context, provider, child) {
+              return UserUidCard(
+                uid: provider.currentUserUid,
+              );
+            },
+          ),
+          
+          // Content based on selected segment
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
@@ -492,8 +478,8 @@ class _FriendsScreenState extends State<FriendsScreen>
                 );
               },
               child: _selectedSegment == 0
-                  ? _buildFriendsTabWithUserID()
-                  : _buildRequestsTabWithUserID(),
+                  ? _buildFriendsTab()
+                  : _buildRequestsTab(),
             ),
           ),
         ],

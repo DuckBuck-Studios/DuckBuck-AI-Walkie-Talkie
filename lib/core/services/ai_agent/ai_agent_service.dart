@@ -515,4 +515,51 @@ class AiAgentService implements AiAgentServiceInterface {
 
     _logger.d(_tag, 'Disposed time stream resources for user: $uid');
   }
+
+  @override
+  Future<bool> joinAgoraChannelOnly({
+    required String uid,
+  }) async {
+    try {
+      _logger.i(_tag, 'Joining Agora channel only for user: $uid');
+      
+      // Step 1: Create channel name using Firebase UID
+      final channelName = 'ai_$uid';
+      _logger.i(_tag, 'Using channel name: $channelName');
+      
+      // Step 2: Get Agora token (backend assigns UID)
+      _logger.i(_tag, 'Getting Agora token for channel: $channelName');
+      final tokenResponse = await _agoraTokenService.generateToken(
+        uid: 0, // Let backend assign UID
+        channelId: channelName,
+      );
+      
+      _logger.i(_tag, 'Received Agora token with UID: ${tokenResponse.uid}');
+      
+      // Step 3: Initialize Agora engine
+      final engineInitialized = await AgoraService.initializeEngine();
+      if (!engineInitialized) {
+        _logger.e(_tag, 'Failed to initialize Agora engine');
+        return false;
+      }
+      
+      // Step 4: Join Agora channel with the UID from backend
+      final agoraJoined = await AgoraService.joinChannel(
+        token: tokenResponse.token,
+        channelName: channelName,
+        uid: tokenResponse.uid,
+      );
+      
+      if (!agoraJoined) {
+        _logger.e(_tag, 'Failed to join Agora channel');
+        return false;
+      }
+      
+      _logger.i(_tag, 'Successfully joined Agora channel: $channelName with UID: ${tokenResponse.uid}');
+      return true;
+    } catch (e) {
+      _logger.e(_tag, 'Error in joinAgoraChannelOnly: $e');
+      return false;
+    }
+  }
 }

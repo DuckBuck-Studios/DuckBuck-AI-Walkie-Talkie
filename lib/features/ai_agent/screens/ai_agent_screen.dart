@@ -49,11 +49,70 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
   Widget build(BuildContext context) {
     return Consumer<AiAgentProvider>(
       builder: (context, provider, child) {
-        return Platform.isIOS 
-            ? _buildCupertinoScreen(context, provider)
-            : _buildMaterialScreen(context, provider);
+        // Block navigation when AI agent is active
+        return PopScope(
+          canPop: !provider.isAgentRunning,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && provider.isAgentRunning) {
+              // Show dialog when user tries to go back during active call
+              _showCallActiveDialog(context);
+            }
+          },
+          child: Platform.isIOS 
+              ? _buildCupertinoScreen(context, provider)
+              : _buildMaterialScreen(context, provider),
+        );
       },
     );
+  }
+
+  /// Show dialog when user tries to navigate back during active call
+  void _showCallActiveDialog(BuildContext context) {
+    if (Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('AI Call Active'),
+          content: const Text('Please end the AI call before going back.'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              child: const Text('End Call'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleStopAgent();
+              },
+            ),
+          ],
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('AI Call Active'),
+          content: const Text('Please end the AI call before going back.'),
+          actions: [
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('End Call'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleStopAgent();
+              },
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildCupertinoScreen(BuildContext context, AiAgentProvider provider) {

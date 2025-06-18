@@ -104,7 +104,7 @@ class AiAgentProvider extends ChangeNotifier {
     }
   }
 
-  /// Start AI agent with full Agora setup
+  /// Start AI agent with immediate UI update after channel join
   Future<bool> startAgent() async {
     if (_currentUid == null) {
       _setError('User not initialized');
@@ -122,37 +122,39 @@ class AiAgentProvider extends ChangeNotifier {
     }
 
     try {
-      _logger.i(_tag, 'Starting AI agent with full setup');
+      _logger.i(_tag, 'Starting AI agent with immediate UI update');
       _setState(AiAgentState.starting);
       
-      // Use the service to handle all Agora and backend logic
-      final responseData = await _repository.joinAgentWithFullSetup(uid: _currentUid!);
+      // Join Agora channel first and update UI immediately
+      final agoraJoined = await _repository.joinAgoraChannelOnly(uid: _currentUid!);
       
-      if (responseData != null) {
-        // Parse the real response from backend to get the actual agent_id
-        final response = AiAgentResponse.fromJson(responseData);
+      if (agoraJoined) {
+        // Create temporary session immediately after Agora join
+        _currentSession = AiAgentSession(
+          agentData: AiAgentData(
+            agentId: 'temp_${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
+            agentName: 'AI Assistant',
+            channelName: 'ai_$_currentUid',
+            status: 'connecting',
+            createTs: DateTime.now().millisecondsSinceEpoch,
+          ),
+          startTime: DateTime.now(),
+          uid: _currentUid!,
+        );
         
-        if (response.success && response.data != null) {
-          // Create session with the real agent data from backend
-          _currentSession = AiAgentSession(
-            agentData: response.data!,
-            startTime: DateTime.now(),
-            uid: _currentUid!,
-          );
-          
-          _setState(AiAgentState.running);
-          _startUsageTracking();
-          _setAutoStopTimer();
-          
-          _logger.i(_tag, 'AI agent started successfully with real agent ID: ${response.data!.agentId}');
-          return true;
-        } else {
-          _setError(response.message);
-          _setState(AiAgentState.idle);
-          return false;
-        }
+        // Update UI immediately to show running state
+        _setState(AiAgentState.running);
+        _startUsageTracking();
+        _setAutoStopTimer();
+        
+        _logger.i(_tag, 'UI updated immediately after Agora channel join');
+        
+        // Start backend AI agent connection in background
+        _connectAiAgentInBackground();
+        
+        return true;
       } else {
-        _setError('Failed to start AI agent');
+        _setError('Failed to join Agora channel');
         _setState(AiAgentState.idle);
         return false;
       }
@@ -165,6 +167,43 @@ class AiAgentProvider extends ChangeNotifier {
       }
       _setState(AiAgentState.idle);
       return false;
+    }
+  }
+
+  /// Connect AI agent in background after UI is already updated
+  Future<void> _connectAiAgentInBackground() async {
+    try {
+      _logger.i(_tag, 'Connecting AI agent in background');
+      
+      // Get the actual backend response
+      final responseData = await _repository.joinAiAgentOnly(
+        uid: _currentUid!,
+        channelName: 'ai_$_currentUid',
+        remainingTimeSeconds: _remainingTimeSeconds,
+      );
+      
+      if (responseData != null && _currentSession != null) {
+        // Parse the real response from backend
+        final response = AiAgentResponse.fromJson(responseData);
+        
+        if (response.success && response.data != null) {
+          // Update session with real agent data from backend
+          _currentSession = AiAgentSession(
+            agentData: response.data!,
+            startTime: _currentSession!.startTime, // Keep original start time
+            uid: _currentUid!,
+          );
+          
+          _logger.i(_tag, 'AI agent connected successfully with real agent ID: ${response.data!.agentId}');
+          notifyListeners(); // Update UI with real agent data
+        } else {
+          _logger.w(_tag, 'Backend AI agent connection failed: ${response.message}');
+          // Don't stop the session, user can still use audio features
+        }
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error connecting AI agent in background: $e');
+      // Don't stop the session on background error
     }
   }
 

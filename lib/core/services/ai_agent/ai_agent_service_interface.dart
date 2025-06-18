@@ -75,4 +75,10 @@ abstract class AiAgentServiceInterface {
   
   /// Dispose all stream controllers and subscriptions
   void dispose();
+
+  /// Join only Agora channel without backend AI agent connection
+  /// Returns true if successful, false otherwise
+  Future<bool> joinAgoraChannelOnly({
+    required String uid,
+  });
 }

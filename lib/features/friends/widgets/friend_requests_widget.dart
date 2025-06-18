@@ -35,16 +35,7 @@ class FriendRequestsWidget extends StatelessWidget {
           return _buildErrorState(context, relationshipProvider);
         }
 
-        // Handle empty state
-        if (relationshipProvider.pendingRequests.isEmpty) {
-          return EmptyStateWidget(
-            icon: Platform.isIOS ? CupertinoIcons.person_badge_plus : Icons.person_add_outlined,
-            title: 'No Friend Requests',
-            message: 'When someone sends you a friend request,\nit will appear here.',
-          );
-        }
-
-        // Build requests list
+        // Build requests list (even if empty)
         return _buildRequestsList(context, relationshipProvider);
       },
     );

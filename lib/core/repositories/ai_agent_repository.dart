@@ -326,4 +326,79 @@ class AiAgentRepository {
   bool isSpeakerEnabled() {
     return _aiAgentService.isSpeakerEnabled();
   }
+
+  /// Join only Agora channel without backend AI agent connection
+  /// Returns true if Agora channel join is successful
+  Future<bool> joinAgoraChannelOnly({
+    required String uid,
+  }) async {
+    try {
+      _logger.i(_tag, 'Joining Agora channel only for user: $uid');
+
+      // Get current user data to check remaining time
+      final userData = await _userService.getUserData(uid);
+      if (userData == null) {
+        _logger.e(_tag, 'User data not found for uid: $uid');
+        return false;
+      }
+
+      final remainingTime = userData.agentRemainingTime;
+      
+      // Check if user has remaining time
+      if (!_aiAgentService.hasRemainingTime(remainingTime)) {
+        _logger.w(_tag, 'User $uid has no remaining AI agent time');
+        return false;
+      }
+
+      // Join Agora channel only (without backend AI agent)
+      final success = await _aiAgentService.joinAgoraChannelOnly(uid: uid);
+      
+      if (success) {
+        _logger.i(_tag, 'Agora channel joined successfully for user: $uid');
+      } else {
+        _logger.e(_tag, 'Failed to join Agora channel for user: $uid');
+      }
+      
+      return success;
+    } catch (e) {
+      _logger.e(_tag, 'Error in joinAgoraChannelOnly: $e');
+      return false;
+    }
+  }
+
+  /// Join only the backend AI agent (assumes Agora channel is already joined)
+  /// Returns the agent response data if successful, null otherwise
+  Future<Map<String, dynamic>?> joinAiAgentOnly({
+    required String uid,
+    required String channelName,
+    required int remainingTimeSeconds,
+  }) async {
+    try {
+      _logger.i(_tag, 'Joining AI agent only for user: $uid, channel: $channelName');
+
+      // Check if user has remaining time
+      if (!_aiAgentService.hasRemainingTime(remainingTimeSeconds)) {
+        _logger.w(_tag, 'User $uid has no remaining AI agent time');
+        return null;
+      }
+
+      // Join AI agent to backend only
+      final responseData = await _aiAgentService.joinAgent(
+        uid: uid,
+        channelName: channelName,
+        remainingTimeSeconds: remainingTimeSeconds,
+      );
+
+      if (responseData != null) {
+        _logger.i(_tag, 'AI agent joined backend successfully for user: $uid');
+      } else {
+        _logger.e(_tag, 'Failed to join AI agent to backend for user: $uid');
+      }
+      
+      return responseData;
+    } catch (e) {
+      _logger.e(_tag, 'Error in joinAiAgentOnly: $e');
+      return null;
+    }
+  }
 }
