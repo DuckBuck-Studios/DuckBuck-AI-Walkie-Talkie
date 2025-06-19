@@ -166,7 +166,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             child: SingleChildScrollView(
               child: Container(
                 constraints: BoxConstraints(
-                  minHeight: screenHeight * 0.4,
+                  minHeight: screenHeight * 0.5,
                 ),
                 child: _buildContent(),
               ),
@@ -310,7 +310,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             child: SingleChildScrollView(
               child: Container(
                 constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height * 0.4,
+                  minHeight: MediaQuery.of(context).size.height * 0.5,
                 ),
                 child: _buildContent(),
               ),
@@ -463,6 +463,10 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
 
   /// Builds error state
   Widget _buildErrorState() {
+    final isException = _searchError?.startsWith('Search failed:') ?? false;
+    final errorTitle = isException ? 'Search Error' : 'User Not Found';
+    final errorMessage = _searchError ?? 'Please check the User ID and try again.';
+    
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -476,7 +480,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              'User Not Found',
+              errorTitle,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -484,12 +488,24 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              _searchError ?? 'Please check the User ID and try again.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 14,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.errorRed.withAlpha(13), // 0.05 * 255 = ~13
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.errorRed.withAlpha(51), // 0.2 * 255 = ~51
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                errorMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -575,56 +591,69 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     final photoUrl = user['photoURL'];
     final userId = user['uid'] ?? user['id'];
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.whiteOpacity08,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.borderColor.withAlpha(77), // 0.3 * 255 = ~77
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Add some spacing from top to center the content better
+          SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+          
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: AppColors.whiteOpacity08,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.borderColor.withAlpha(77), // 0.3 * 255 = ~77
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(13), // 0.05 * 255 = ~13
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-              child: Column(
-                children: [
-                  _buildAvatar(name, photoUrl),
-                  const SizedBox(height: 20),
-                  Text(
-                    name,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.whiteOpacity15,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      'ID: $userId',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
-          ],
-        ),
+            child: Column(
+              children: [
+                _buildAvatar(name, photoUrl),
+                const SizedBox(height: 24),
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.whiteOpacity15,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'ID: $userId',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Add bottom spacing to maintain center position
+          SizedBox(height: MediaQuery.of(context).size.height * 0.08),
+        ],
       ),
     );
   }
@@ -739,6 +768,10 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
 
   /// Builds request error state
   Widget _buildRequestErrorState() {
+    final isException = _requestErrorMessage?.startsWith('Request failed:') ?? false;
+    final errorTitle = isException ? 'Request Error' : 'Request Failed';
+    final errorMessage = _requestErrorMessage ?? 'Failed to send friend request';
+    
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -760,7 +793,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Request Failed',
+              errorTitle,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -768,12 +801,24 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              _requestErrorMessage ?? 'Failed to send friend request',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 15,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.errorRed.withAlpha(13), // 0.05 * 255 = ~13
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.errorRed.withAlpha(51), // 0.2 * 255 = ~51
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                errorMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
               ),
             ),
             const SizedBox(height: 32),
@@ -995,22 +1040,32 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
       _searchResult = null;
     });
 
-    final provider = Provider.of<RelationshipProvider>(context, listen: false);
-    final result = await provider.searchUserByUid(trimmedUid);
+    try {
+      final provider = Provider.of<RelationshipProvider>(context, listen: false);
+      final result = await provider.searchUserByUid(trimmedUid);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isSearching = false;
-      if (result != null) {
-        _searchResult = result;
-        // Clear the search field after successful search
-        _searchController.clear();
-      } else {
-        // Use provider's error if available, otherwise show user not found
-        _searchError = provider.error ?? 'No user found with ID "$trimmedUid"';
-      }
-    });
+      setState(() {
+        _isSearching = false;
+        if (result != null) {
+          _searchResult = result;
+          // Clear the search field after successful search
+          _searchController.clear();
+        } else {
+          // Use provider's error if available, otherwise show user not found
+          _searchError = provider.error ?? 'No user found with ID "$trimmedUid"';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isSearching = false;
+        // Show the actual exception message to help with debugging
+        _searchError = 'Search failed: ${e.toString()}';
+      });
+    }
   }
 
   /// Sends friend request
@@ -1021,20 +1076,30 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
       _requestSuccessMessage = null;
     });
 
-    final provider = Provider.of<RelationshipProvider>(context, listen: false);
-    final success = await provider.sendFriendRequest(userId);
+    try {
+      final provider = Provider.of<RelationshipProvider>(context, listen: false);
+      final success = await provider.sendFriendRequest(userId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isSendingRequest = false;
-      if (success) {
-        _requestSuccessMessage = 'Friend request sent successfully! They will be notified of your request.';
-      } else {
-        // Use the provider's error message directly since it comes from RelationshipException
-        _requestErrorMessage = provider.error ?? 'Failed to send friend request';
-      }
-    });
+      setState(() {
+        _isSendingRequest = false;
+        if (success) {
+          _requestSuccessMessage = 'Friend request sent successfully! They will be notified of your request.';
+        } else {
+          // Use the provider's error message directly since it comes from RelationshipException
+          _requestErrorMessage = provider.error ?? 'Failed to send friend request';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isSendingRequest = false;
+        // Show the actual exception message to help with debugging
+        _requestErrorMessage = 'Request failed: ${e.toString()}';
+      });
+    }
   }
 
   /// Clears search
