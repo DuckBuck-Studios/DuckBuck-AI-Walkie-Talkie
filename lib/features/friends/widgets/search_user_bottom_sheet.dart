@@ -63,10 +63,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
   @override
   void initState() {
     super.initState();
-    // Auto-focus search field when sheet opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _searchFocusNode.requestFocus();
-    });
+    // Don't auto-focus search field - user must tap to open keyboard
     
     // Add listener to search controller to update button state
     _searchController.addListener(() {
@@ -724,41 +721,6 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                 color: AppColors.textSecondary,
                 fontSize: 15,
               ),
-            ),
-            const SizedBox(height: 32),
-            // Search for another user button
-            SizedBox(
-              width: double.infinity,
-              child: Platform.isIOS
-                  ? CupertinoButton(
-                      onPressed: _resetToSearch,
-                      color: AppColors.accentBlue,
-                      child: Text(
-                        'Search Another User',
-                        style: TextStyle(
-                          color: AppColors.primaryBlack,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: _resetToSearch,
-                      icon: Icon(Icons.search, color: AppColors.primaryBlack),
-                      label: Text(
-                        'Search Another User',
-                        style: TextStyle(
-                          color: AppColors.primaryBlack,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accentBlue,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
             ),
           ],
         ),
