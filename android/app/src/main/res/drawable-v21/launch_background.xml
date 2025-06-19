@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Splash screen with black background and centered logo -->
+<!-- Splash screen with proper padding to prevent any edge cutting for API 21+ -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     
     <!-- Black background -->
     <item android:drawable="@android:color/black" />
 
-    <!-- Centered logo - bigger size -->
+    <!-- Logo with generous padding to ensure no cutting on any device -->
     <item 
-        android:drawable="@drawable/splash_logo"
-        android:gravity="center"
-        android:width="180dp"
-        android:height="180dp" />
-        
+        android:top="80dp"
+        android:bottom="80dp"
+        android:left="80dp"
+        android:right="80dp">
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center"
+            android:filter="true"
+            android:antialias="true" />
+    </item>
+
 </layer-list>

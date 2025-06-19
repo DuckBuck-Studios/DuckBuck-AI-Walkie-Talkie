@@ -225,8 +225,7 @@ class AgoraService(private val context: Context) {
                 config.mEventHandler = rtcEventHandler
                 // Set area code for better performance based on region
                 config.mAreaCode = RtcEngineConfig.AreaCode.AREA_CODE_GLOB
-                // Set audio scenario to AI dialogue for enhanced AI conversation quality
-                config.mAudioScenario = Constants.AUDIO_SCENARIO_CHATROOM
+                // Audio scenario will be set dynamically in joinChannel method based on call type
                 
                 // Create engine with better error handling
                 AppLogger.d(TAG, "Creating Agora RTC Engine with config: appId=${APP_ID.substring(0, 4)}...")
@@ -307,7 +306,7 @@ class AgoraService(private val context: Context) {
     /**
      * Join a channel
      */
-    fun joinChannel(channelName: String, token: String? = null, uid: Int = 0): Boolean {
+    fun joinChannel(channelName: String, token: String? = null, uid: Int = 0, isAiAgent: Boolean = false): Boolean {
         if (rtcEngine == null) {
             AppLogger.e(TAG, "RTC Engine not initialized")
             return false
@@ -325,6 +324,22 @@ class AgoraService(private val context: Context) {
             AppLogger.d(TAG, "   - Token: ${if (token != null) "${token.substring(0, 20)}..." else "null"}")
             AppLogger.d(TAG, "   - UID: $uid")
             AppLogger.d(TAG, "   - Token length: ${token?.length ?: 0}")
+            AppLogger.d(TAG, "   - AI Agent Mode: $isAiAgent")
+            
+            // Set audio scenario based on call type
+            if (isAiAgent) {
+                AppLogger.i(TAG, "🎧 Setting AI agent audio scenario: AUDIO_SCENARIO_AI_CLIENT")
+                rtcEngine?.setAudioProfile(
+                    Constants.AUDIO_PROFILE_SPEECH_STANDARD,
+                    Constants.AUDIO_SCENARIO_AI_CLIENT
+                )
+            } else {
+                AppLogger.i(TAG, "🗣️ Setting normal call audio scenario: AUDIO_SCENARIO_CHATROOM")
+                rtcEngine?.setAudioProfile(
+                    Constants.AUDIO_PROFILE_SPEECH_STANDARD,
+                    Constants.AUDIO_SCENARIO_CHATROOM
+                )
+            }
             
             // Apply enhanced audio configuration before joining
             AppLogger.d(TAG, "Applying enhanced audio configuration before channel join")

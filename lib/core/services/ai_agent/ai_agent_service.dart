@@ -63,11 +63,12 @@ class AiAgentService implements AiAgentServiceInterface {
         return null;
       }
       
-      // Step 4: Join Agora channel with the UID from backend
+      // Step 4: Join Agora channel with the UID from backend and AI agent flag
       final agoraJoined = await AgoraService.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,
         uid: tokenResponse.uid,
+        isAiAgent: true, // Enable AI agent audio scenario
       );
       
       if (!agoraJoined) {
@@ -543,11 +544,12 @@ class AiAgentService implements AiAgentServiceInterface {
         return false;
       }
       
-      // Step 4: Join Agora channel with the UID from backend
+      // Step 4: Join Agora channel with the UID from backend and AI agent flag
       final agoraJoined = await AgoraService.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,
         uid: tokenResponse.uid,
+        isAiAgent: true, // Enable AI agent audio scenario
       );
       
       if (!agoraJoined) {

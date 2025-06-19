@@ -121,12 +121,13 @@ class AgoraMethodChannelHandler(private val context: android.content.Context) {
             val channelName = call.argument<String>("channelName")
             val token = call.argument<String?>("token")
             val uid = call.argument<Int>("uid") ?: 0
+            val isAiAgent = call.argument<Boolean>("isAiAgent") ?: false
             
-            AppLogger.d(TAG, "Flutter requested: joinChannel - $channelName")
+            AppLogger.d(TAG, "Flutter requested: joinChannel - $channelName (AI Agent: $isAiAgent)")
             
             if (channelName != null) {
                 val agoraService = AgoraServiceManager.getValidatedAgoraService()
-                val success = agoraService?.joinChannel(channelName, token, uid) ?: false
+                val success = agoraService?.joinChannel(channelName, token, uid, isAiAgent) ?: false
                 result.success(success)
             } else {
                 result.error("INVALID_ARGUMENT", "Channel name is required", null)

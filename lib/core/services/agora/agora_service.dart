@@ -227,12 +227,14 @@ class AgoraService {
     required String channelName,
     String? token,
     int uid = 0,
+    bool isAiAgent = false,
   }) async {
     try {
       final methodChannelParams = {
         'channelName': channelName,
         'token': token,
         'uid': uid,
+        'isAiAgent': isAiAgent,
       };
       
       final bool result = await _channel.invokeMethod('joinChannel', methodChannelParams);
