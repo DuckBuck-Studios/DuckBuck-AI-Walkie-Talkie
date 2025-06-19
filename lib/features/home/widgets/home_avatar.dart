@@ -19,7 +19,7 @@ class HomeAvatar extends StatelessWidget {
       return CircleAvatar(
         radius: radius,
         backgroundImage: CachedNetworkImageProvider(photoURL!),
-        onBackgroundImageError: (_, __) {
+        onBackgroundImageError: (_, _) {
           // Fallback to initials if image fails to load
         },
         child: photoURL!.isEmpty ? _buildInitialsAvatar() : null,

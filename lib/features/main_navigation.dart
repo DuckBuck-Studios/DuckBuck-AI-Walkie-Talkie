@@ -154,10 +154,17 @@ class _MainNavigationState extends State<MainNavigation> {
               ),
             ),
           ),
-          // Fullscreen overlay
+          // Fullscreen overlay - truly fullscreen without any constraints
           if (_fullscreenOverlay != null)
-            Positioned.fill(
-              child: _fullscreenOverlay!,
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Material(
+                type: MaterialType.transparency,
+                child: _fullscreenOverlay!,
+              ),
             ),
         ],
       ),

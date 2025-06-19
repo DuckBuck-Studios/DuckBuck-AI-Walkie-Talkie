@@ -157,7 +157,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         child: Consumer<RelationshipProvider>(
                           builder: (context, provider, child) {
-                            final requestsCount = provider.pendingRequests.length;
+                            final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -246,28 +246,28 @@ class _FriendsScreenState extends State<FriendsScreen>
           if (_selectedSegment == 0)
             Positioned(
               right: 20,
-              bottom: 110, // Moved up to avoid floating nav bar (was 30)
+              bottom: 140, // Moved up more (was 110)
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: _showSearchBottomSheet,
                 child: Container(
-                  width: 56,
-                  height: 56,
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     color: CupertinoColors.activeBlue.resolveFrom(context),
-                    borderRadius: BorderRadius.circular(28),
+                    shape: BoxShape.circle, // Make it perfectly circular
                     boxShadow: [
                       BoxShadow(
                         color: CupertinoColors.activeBlue.resolveFrom(context).withAlpha(77), // 0.3 * 255 = ~77
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
                   child: const Icon(
                     CupertinoIcons.person_add,
                     color: CupertinoColors.white,
-                    size: 24,
+                    size: 26,
                   ),
                 ),
               ),
@@ -398,7 +398,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                       ),
                       child: Consumer<RelationshipProvider>(
                         builder: (context, provider, child) {
-                          final requestsCount = provider.pendingRequests.length;
+                          final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
                           return Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
@@ -487,13 +487,20 @@ class _FriendsScreenState extends State<FriendsScreen>
       // Conditional floating action button - only show in Friends section
       floatingActionButton: _selectedSegment == 0
           ? Padding(
-              padding: const EdgeInsets.only(bottom: 80), // Add padding to avoid floating nav bar
-              child: FloatingActionButton(
-                onPressed: _showSearchBottomSheet,
-                backgroundColor: theme.colorScheme.primary,
-                child: Icon(
-                  Icons.person_add,
-                  color: theme.colorScheme.onPrimary,
+              padding: const EdgeInsets.only(bottom: 100), // Moved up more (was 80)
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: FloatingActionButton(
+                  onPressed: _showSearchBottomSheet,
+                  backgroundColor: theme.colorScheme.primary,
+                  elevation: 8,
+                  shape: const CircleBorder(), // Ensure perfect circle
+                  child: Icon(
+                    Icons.person_add,
+                    color: theme.colorScheme.onPrimary,
+                    size: 26,
+                  ),
                 ),
               ),
             )

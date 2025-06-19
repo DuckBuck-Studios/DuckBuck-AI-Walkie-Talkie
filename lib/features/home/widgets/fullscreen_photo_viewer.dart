@@ -39,13 +39,19 @@ class FullscreenPhotoViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
+    return MediaQuery.removePadding(
+      context: context,
+      removeTop: true,
+      removeBottom: true,
+      removeLeft: true,
+      removeRight: true,
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
           // Fullscreen photo with Hero animation and entrance animation
           Hero(
             tag: 'friend_photo_$displayName',
@@ -116,6 +122,7 @@ class FullscreenPhotoViewer extends StatelessWidget {
           )
           .fadeIn(duration: 400.ms),
         ],
+      ),
       ),
     )
     .animate()

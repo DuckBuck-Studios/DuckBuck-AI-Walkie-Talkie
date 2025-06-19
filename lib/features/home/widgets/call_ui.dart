@@ -411,10 +411,11 @@ class CallUI {
     Widget container = Container(
       constraints: BoxConstraints(
         maxWidth: screenWidth * 0.90,
+        minHeight: screenHeight * 0.06, // Minimum height instead of fixed height
       ),
-      height: screenHeight * 0.08, // Fixed height container
       padding: EdgeInsets.symmetric(
         horizontal: screenWidth * 0.04,
+        vertical: screenHeight * 0.01, // Add vertical padding for better spacing
       ),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.8),
@@ -440,12 +441,9 @@ class CallUI {
         ? _buildConnectingContent(context, connectingMessage, screenWidth)
         : Align(
             alignment: Alignment.center,
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _buildNormalInstructionContent(context, onLongPress, screenWidth, screenHeight),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _buildNormalInstructionContent(context, onLongPress, screenWidth, screenHeight),
             ),
           ),
     );
@@ -539,13 +537,13 @@ class CallUI {
       
       // Better spacing between instructions
       if (onLongPress != null) ...[
-        SizedBox(height: screenHeight * 0.008),
+        SizedBox(height: screenHeight * 0.005), // Reduced spacing
         
         // Hold instruction
         _buildAnimatedText(
           context,
           text: 'Hold to start walkie-talkie',
-          fontSize: screenWidth * 0.032,
+          fontSize: screenWidth * 0.030, // Slightly smaller text
           color: Colors.green,
           delay: 400.ms,
         ),

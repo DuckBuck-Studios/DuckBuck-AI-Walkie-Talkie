@@ -327,40 +327,40 @@ class HomeFriendsSection extends StatelessWidget {
     
     if (isIOS) {
       return CupertinoListTile(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Match AI padding
         leading: Hero(
           tag: 'friend_photo_${friendProfile['displayName'] ?? 'Unknown User'}',
           child: HomeAvatar(
             photoURL: friendProfile['photoURL'],
             displayName: friendProfile['displayName'] ?? 'Unknown User',
-            radius: 18,
+            radius: 24, // Match AI avatar size
           ),
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
           style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 16,
+            fontWeight: FontWeight.w600, // Match AI font weight
+            fontSize: 17, // Match AI font size
           ),
         ),
         onTap: onTap,
       );
     } else {
       return ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Match AI padding, remove dense
         leading: Hero(
           tag: 'friend_photo_${friendProfile['displayName'] ?? 'Unknown User'}',
           child: HomeAvatar(
             photoURL: friendProfile['photoURL'],
             displayName: friendProfile['displayName'] ?? 'Unknown User',
-            radius: 18,
+            radius: 24, // Match AI avatar size
           ),
         ),
         title: Text(
           friendProfile['displayName'] ?? 'Unknown User',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600, // Match AI font weight
+            fontSize: 17, // Match AI font size
           ),
         ),
         onTap: onTap,
