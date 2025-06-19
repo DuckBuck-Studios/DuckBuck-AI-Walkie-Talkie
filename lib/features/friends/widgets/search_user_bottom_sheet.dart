@@ -13,7 +13,13 @@ import 'dart:io' show Platform;
 /// - Platform-specific design (iOS/Android)
 /// - Loading states and error handling
 /// - Input validation and debouncing
-/// - Search and Cancel buttons at the bottom
+/// - Dynamic single button (Cancel/Search/Send Request)
+/// 
+/// Button behavior:
+/// - Shows "Cancel" when search field is empty
+/// - Shows "Search" when user types something
+/// - Shows "Send Friend Request" when user is found
+/// - After successful search, clears field and shows "Cancel"
 /// 
 /// This widget provides a complete user search and friend request flow
 /// with proper UX patterns and error handling.
@@ -60,6 +66,11 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     // Auto-focus search field when sheet opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
+    });
+    
+    // Add listener to search controller to update button state
+    _searchController.addListener(() {
+      setState(() {}); // Rebuild to update button text
     });
   }
 
@@ -127,7 +138,14 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
               focusNode: _searchFocusNode,
               placeholder: 'Enter User ID',
               onChanged: _onSearchChanged,
-              onSubmitted: (value) => _performSearch(value),
+              onSubmitted: (value) {
+                if (value.trim().isNotEmpty) {
+                  _performSearch(value);
+                } else {
+                  // Just dismiss keyboard if nothing entered
+                  _searchFocusNode.unfocus();
+                }
+              },
               style: TextStyle(color: AppColors.textPrimary),
               decoration: BoxDecoration(
                 color: AppColors.whiteOpacity10,
@@ -169,42 +187,21 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             ),
             child: SafeArea(
               top: false,
-              child: _shouldShowBottomButtons() ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Primary action button (Search or Send Friend Request)
-                  SizedBox(
-                    width: double.infinity,
-                    child: CupertinoButton.filled(
-                      onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
-                      child: _isSearching || _isSendingRequest
-                          ? const CupertinoActivityIndicator(color: AppColors.primaryBlack, radius: 12)
-                          : Text(
-                              _getPrimaryButtonText(),
-                              style: TextStyle(
-                                color: AppColors.primaryBlack,
-                                fontWeight: FontWeight.w600,
-                                fontSize: screenWidth * 0.04,
-                              ),
-                            ),
-                    ),
-                  ),
-                  SizedBox(height: screenHeight * 0.015),
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    child: CupertinoButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: screenWidth * 0.04,
+              child: _shouldShowBottomButtons() ? SizedBox(
+                width: double.infinity,
+                child: CupertinoButton.filled(
+                  onPressed: _isSearching || _isSendingRequest ? null : _handleSingleButtonAction,
+                  child: _isSearching || _isSendingRequest
+                      ? const CupertinoActivityIndicator(color: AppColors.primaryBlack, radius: 12)
+                      : Text(
+                          _getSingleButtonText(),
+                          style: TextStyle(
+                            color: AppColors.primaryBlack,
+                            fontWeight: FontWeight.w600,
+                            fontSize: screenWidth * 0.04,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ) : SizedBox(
                 width: double.infinity,
                 child: CupertinoButton(
@@ -295,7 +292,14 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                 fillColor: AppColors.whiteOpacity10,
               ),
               onChanged: _onSearchChanged,
-              onSubmitted: _performSearch,
+              onSubmitted: (value) {
+                if (value.trim().isNotEmpty) {
+                  _performSearch(value);
+                } else {
+                  // Just dismiss keyboard if nothing entered
+                  _searchFocusNode.unfocus();
+                }
+              },
             ),
           ),
           
@@ -327,64 +331,35 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
             ),
             child: SafeArea(
               top: false,
-              child: _shouldShowBottomButtons() ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Primary action button (Search or Send Friend Request)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accentBlue,
-                        foregroundColor: AppColors.primaryBlack,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isSearching || _isSendingRequest
-                          ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlack),
-                              ),
-                            )
-                          : Text(
-                              _getPrimaryButtonText(),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryBlack,
-                              ),
-                            ),
+              child: _shouldShowBottomButtons() ? SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSearching || _isSendingRequest ? null : _handleSingleButtonAction,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accentBlue,
+                    foregroundColor: AppColors.primaryBlack,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: AppColors.textSecondary),
-                        foregroundColor: AppColors.textSecondary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  child: _isSearching || _isSendingRequest
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlack),
+                          ),
+                        )
+                      : Text(
+                          _getSingleButtonText(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryBlack,
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ) : SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
@@ -1029,6 +1004,8 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
       _isSearching = false;
       if (result != null) {
         _searchResult = result;
+        // Clear the search field after successful search
+        _searchController.clear();
       } else {
         // Use provider's error if available, otherwise show user not found
         _searchError = provider.error ?? 'No user found with ID "$trimmedUid"';
@@ -1071,24 +1048,33 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     });
   }
 
-  /// Handles the primary action (Search or Send Friend Request)
-  Future<void> _handlePrimaryAction() async {
+  /// Handles the single button action (Cancel/Search/Send Friend Request)
+  Future<void> _handleSingleButtonAction() async {
+    final searchText = _searchController.text.trim();
+    
     if (_searchResult != null) {
       // If we have a search result, send friend request
       final userId = _searchResult!['uid'] ?? _searchResult!['id'];
       if (userId != null) {
         await _sendFriendRequest(userId);
       }
+    } else if (searchText.isEmpty) {
+      // If no input, close the bottom sheet (Cancel behavior)
+      Navigator.pop(context);
     } else {
-      // If no search result, perform search
-      await _performSearch(_searchController.text);
+      // If there's input, perform search
+      await _performSearch(searchText);
     }
   }
 
-  /// Gets the text for the primary button based on current state
-  String _getPrimaryButtonText() {
+  /// Gets the text for the single button based on current state
+  String _getSingleButtonText() {
+    final searchText = _searchController.text.trim();
+    
     if (_searchResult != null) {
       return 'Send Friend Request';
+    } else if (searchText.isEmpty) {
+      return 'Cancel';
     } else {
       return 'Search';
     }
@@ -1099,7 +1085,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     return _requestSuccessMessage == null && _requestErrorMessage == null;
   }
 
-  /// Resets to search state
+  /// Resets to search state and clear the search field
   void _resetToSearch() {
     setState(() {
       _searchResult = null;
