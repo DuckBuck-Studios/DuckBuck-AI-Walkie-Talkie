@@ -83,7 +83,6 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
   Widget _buildCupertinoBottomSheet(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
     
     return Container(
       height: screenHeight * 0.9,
@@ -144,12 +143,19 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
           
           SizedBox(height: screenHeight * 0.03),
           
-          // Content
+          // Content - wrapped in SingleChildScrollView to prevent overflow
           Expanded(
-            child: _buildContent(),
+            child: SingleChildScrollView(
+              child: Container(
+                constraints: BoxConstraints(
+                  minHeight: screenHeight * 0.4,
+                ),
+                child: _buildContent(),
+              ),
+            ),
           ),
           
-          // Bottom buttons - Search/Send Request and Cancel
+          // Fixed bottom buttons - positioned at bottom regardless of keyboard
           Container(
             padding: EdgeInsets.all(screenWidth * 0.04),
             decoration: BoxDecoration(
@@ -161,55 +167,53 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
                 ),
               ),
             ),
-            child: Padding(
-              padding: EdgeInsets.only(bottom: bottomPadding),
-              child: SafeArea(
-                top: false,
-                child: _shouldShowBottomButtons() ? Column(
-                  children: [
-                    // Primary action button (Search or Send Friend Request)
-                    SizedBox(
-                      width: double.infinity,
-                      child: CupertinoButton.filled(
-                        onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
-                        child: _isSearching || _isSendingRequest
-                            ? const CupertinoActivityIndicator(color: AppColors.primaryBlack, radius: 12)
-                            : Text(
-                                _getPrimaryButtonText(),
-                                style: TextStyle(
-                                  color: AppColors.primaryBlack,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: screenWidth * 0.04,
-                                ),
+            child: SafeArea(
+              top: false,
+              child: _shouldShowBottomButtons() ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Primary action button (Search or Send Friend Request)
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton.filled(
+                      onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
+                      child: _isSearching || _isSendingRequest
+                          ? const CupertinoActivityIndicator(color: AppColors.primaryBlack, radius: 12)
+                          : Text(
+                              _getPrimaryButtonText(),
+                              style: TextStyle(
+                                color: AppColors.primaryBlack,
+                                fontWeight: FontWeight.w600,
+                                fontSize: screenWidth * 0.04,
                               ),
-                      ),
+                            ),
                     ),
-                    SizedBox(height: screenHeight * 0.015),
-                    // Cancel button
-                    SizedBox(
-                      width: double.infinity,
-                      child: CupertinoButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: screenWidth * 0.04,
-                          ),
+                  ),
+                  SizedBox(height: screenHeight * 0.015),
+                  // Cancel button
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: screenWidth * 0.04,
                         ),
                       ),
                     ),
-                  ],
-                ) : SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'Close',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: screenWidth * 0.04,
-                      ),
+                  ),
+                ],
+              ) : SizedBox(
+                width: double.infinity,
+                child: CupertinoButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Close',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: screenWidth * 0.04,
                     ),
                   ),
                 ),
@@ -223,185 +227,188 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
 
   /// Builds Android-style bottom sheet
   Widget _buildMaterialBottomSheet(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
       decoration: BoxDecoration(
         color: AppColors.backgroundBlack,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.whiteOpacity30,
-                borderRadius: BorderRadius.circular(2),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.whiteOpacity30,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Search Friends',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
             ),
-            
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Search Friends',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Search field only
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: TextStyle(color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Enter User ID',
+                hintStyle: TextStyle(color: AppColors.textSecondary),
+                prefixIcon: Icon(Icons.search, color: AppColors.accentBlue),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: AppColors.textSecondary),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.accentBlue, width: 2),
+                ),
+                filled: true,
+                fillColor: AppColors.whiteOpacity10,
+              ),
+              onChanged: _onSearchChanged,
+              onSubmitted: _performSearch,
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Content - wrapped in SingleChildScrollView to prevent overflow
+          Expanded(
+            child: SingleChildScrollView(
+              child: Container(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height * 0.4,
+                ),
+                child: _buildContent(),
+              ),
+            ),
+          ),
+          
+          // Fixed bottom buttons - positioned at bottom regardless of keyboard
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundBlack,
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.whiteOpacity20,
+                  width: 1,
                 ),
               ),
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Search field only
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Enter User ID',
-                  hintStyle: TextStyle(color: AppColors.textSecondary),
-                  prefixIcon: Icon(Icons.search, color: AppColors.accentBlue),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(Icons.clear, color: AppColors.textSecondary),
-                          onPressed: _clearSearch,
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.borderColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.accentBlue, width: 2),
-                  ),
-                  filled: true,
-                  fillColor: AppColors.whiteOpacity10,
-                ),
-                onChanged: _onSearchChanged,
-                onSubmitted: _performSearch,
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Content
-            Expanded(
-              child: _buildContent(),
-            ),
-            
-            // Bottom buttons - Search/Send Request and Cancel
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundBlack,
-                border: Border(
-                  top: BorderSide(
-                    color: AppColors.whiteOpacity20,
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: SafeArea(
-                top: false,
-                child: _shouldShowBottomButtons() ? Column(
-                  children: [
-                    // Primary action button (Search or Send Friend Request)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accentBlue,
-                          foregroundColor: AppColors.primaryBlack,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+            child: SafeArea(
+              top: false,
+              child: _shouldShowBottomButtons() ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Primary action button (Search or Send Friend Request)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSearching || _isSendingRequest ? null : _handlePrimaryAction,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentBlue,
+                        foregroundColor: AppColors.primaryBlack,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: _isSearching || _isSendingRequest
-                            ? SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlack),
-                                ),
-                              )
-                            : Text(
-                                _getPrimaryButtonText(),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primaryBlack,
-                                ),
+                      ),
+                      child: _isSearching || _isSendingRequest
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlack),
                               ),
-                      ),
+                            )
+                          : Text(
+                              _getPrimaryButtonText(),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryBlack,
+                              ),
+                            ),
                     ),
-                    const SizedBox(height: 12),
-                    // Cancel button
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: AppColors.textSecondary),
-                          foregroundColor: AppColors.textSecondary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Cancel button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: AppColors.textSecondary),
+                        foregroundColor: AppColors.textSecondary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textSecondary,
-                          ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
-                  ],
-                ) : SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: AppColors.textSecondary),
-                      foregroundColor: AppColors.textSecondary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                  ),
+                ],
+              ) : SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: AppColors.textSecondary),
+                    foregroundColor: AppColors.textSecondary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      'Close',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textSecondary,
-                      ),
+                  ),
+                  child: Text(
+                    'Close',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
