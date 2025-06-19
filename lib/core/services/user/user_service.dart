@@ -75,8 +75,12 @@ class UserService implements UserServiceInterface {
       // Convert user to map with only relevant fields based on auth method
       final userMap = user.toMap();
       
+      // For new users, ensure they get the default 1 hour of AI agent time
+      // Override the agentRemainingTime from fromFirebaseUser() which is 0
+      userMap['agentRemainingTime'] = 3600; // 1 hour default for new users
+      
       // Log which auth method is being used
-      _logger.i(_tag, 'Creating new user with auth method: $authMethod');
+      _logger.i(_tag, 'Creating new user with auth method: $authMethod (agentRemainingTime: 1 hour)');
       
       await _databaseService.setDocument(
         collection: _userCollection,
@@ -106,6 +110,10 @@ class UserService implements UserServiceInterface {
       // Get user map with only relevant fields based on auth method in metadata
       final userMap = user.toMap();
       
+      // CRITICAL: Remove agentRemainingTime to prevent overwriting existing premium time
+      // This preserves the user's actual remaining AI agent time during login updates
+      userMap.remove('agentRemainingTime');
+      
       // Keep FCM token data - no longer exclude it
       // userMap.remove('fcmTokenData'); // REMOVED: Now we want to save FCM token data
       
@@ -121,7 +129,7 @@ class UserService implements UserServiceInterface {
       );
       
       final authMethod = user.metadata?['authMethod'] as String? ?? 'unknown';
-      _logger.i(_tag, 'Updated user data with auth method: $authMethod');
+      _logger.i(_tag, 'Updated user data with auth method: $authMethod (agentRemainingTime preserved)');
     } catch (e) {
       _logger.e(_tag, 'Failed to update user data: ${e.toString()}');
       throw AuthException(

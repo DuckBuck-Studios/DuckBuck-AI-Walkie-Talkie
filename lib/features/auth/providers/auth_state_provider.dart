@@ -82,10 +82,24 @@ class AuthStateProvider extends ChangeNotifier {
       }
     });
 
-    // Load current user immediately if available
-    _currentUser = _userRepository.currentUser;
+    // Load current user immediately if available (but load complete data in background)
+    _currentUser = _userRepository.currentUser; // This might have agentRemainingTime: 0
     if (_currentUser != null) {
       // Note: FCM token registration is now handled by Kotlin/Android side
+      
+      // Load complete user data in background and update _currentUser
+      Future(() async {
+        try {
+          final completeUser = await _userRepository.getCurrentUser();
+          if (completeUser != null && completeUser.uid == _currentUser?.uid) {
+            _currentUser = completeUser;
+            _logger.i(_tag, 'Updated current user with complete data (agentRemainingTime: ${completeUser.agentRemainingTime}s)');
+            notifyListeners(); // Notify UI of the complete data update
+          }
+        } catch (e) {
+          _logger.e(_tag, 'Failed to load complete user data: $e');
+        }
+      });
       
       // Update login status in local database and start monitoring (async but don't await to avoid blocking initialization)
       Future(() async {
@@ -361,8 +375,8 @@ class AuthStateProvider extends ChangeNotifier {
         photoURL: photoURL,
       );
 
-      // Force refresh the current user
-      _currentUser = _userRepository.currentUser;
+      // Force refresh the current user with complete data
+      _currentUser = await _userRepository.getCurrentUser();
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;

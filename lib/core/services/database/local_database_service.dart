@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
   // Database configuration
   static const String _databaseName = 'duckbuck_local.db';
-  static const int _databaseVersion = 5; // Incremented for relationship tables
+  static const int _databaseVersion = 6; // Incremented for agent_remaining_time column
 
   // Table names
   static const String _usersTable = 'users';
@@ -88,6 +88,7 @@ class LocalDatabaseService {
           photo_url TEXT,
           photo_data TEXT,
           phone_number TEXT,
+          agent_remaining_time INTEGER NOT NULL DEFAULT 3600,
           is_logged_in INTEGER NOT NULL DEFAULT 0,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
@@ -270,6 +271,16 @@ class LocalDatabaseService {
         _logger.w(_tag, 'Failed to add relationship tables, might already exist: ${e.toString()}');
       }
     }
+
+    if (oldVersion < 6) {
+      // Add agent_remaining_time column for version 6
+      try {
+        await db.execute('ALTER TABLE $_usersTable ADD COLUMN agent_remaining_time INTEGER NOT NULL DEFAULT 3600');
+        _logger.i(_tag, 'Added agent_remaining_time column for version 6');
+      } catch (e) {
+        _logger.w(_tag, 'Failed to add agent_remaining_time column, might already exist: ${e.toString()}');
+      }
+    }
   }
 
   /// Save user data to local database
@@ -293,6 +304,7 @@ class LocalDatabaseService {
         'photo_url': user.photoURL,
         'photo_data': cachedPhotoPath, // Store local file path
         'phone_number': user.phoneNumber,
+        'agent_remaining_time': user.agentRemainingTime, // Save AI agent remaining time
         'is_logged_in': 1,
         'created_at': now,
         'updated_at': now,
@@ -560,6 +572,7 @@ class LocalDatabaseService {
       displayName: data['display_name'],
       photoURL: photoURL,
       phoneNumber: data['phone_number'],
+      agentRemainingTime: data['agent_remaining_time'] as int? ?? 3600, // Load AI agent remaining time
       isEmailVerified: false, // Not stored locally, will be fetched from Firebase when needed
       isNewUser: false, // Not stored locally, will be determined by business logic
       metadata: null, // Not stored locally

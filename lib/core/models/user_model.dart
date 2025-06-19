@@ -29,6 +29,9 @@ class UserModel {
   });
 
   /// Creates a UserModel from Firebase User
+  /// Note: This factory only creates a basic model from Firebase auth data.
+  /// For existing users, the actual agentRemainingTime should be loaded from Firestore
+  /// and updated using copyWith() method to preserve premium features.
   factory UserModel.fromFirebaseUser(firebase.User user) {
     // Get provider ID for metadata
     String? providerId = user.providerData.isNotEmpty ? user.providerData.first.providerId : null;
@@ -52,7 +55,9 @@ class UserModel {
       phoneNumber: user.phoneNumber,
       // No more specific email verification since we don't have email/password auth
       isEmailVerified: false,
-      agentRemainingTime: 3600, // Default 1 hour for new users
+      // DO NOT set default time here - this will be loaded from Firestore for existing users
+      // Only new users should get the default time, which is handled by the service layer
+      agentRemainingTime: 0, // Temporary value - will be updated from Firestore
       metadata: {
         'creationTime': user.metadata.creationTime?.millisecondsSinceEpoch,
         'lastSignInTime': user.metadata.lastSignInTime?.millisecondsSinceEpoch,

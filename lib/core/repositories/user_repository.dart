@@ -43,9 +43,13 @@ class UserRepository {
 
   /// Get the current authenticated user
   /// First tries to get from local database, then falls back to Firebase
+  /// WARNING: This is a synchronous getter that may not have complete Firestore data
+  /// Use getCurrentUser() async method instead for complete user data with agentRemainingTime
   UserModel? get currentUser {
     final firebaseUser = authService.currentUser;
     if (firebaseUser == null) return null;
+    // This only creates a basic model - agentRemainingTime will be 0 
+    // Real data should be loaded from Firestore via getCurrentUser()
     return UserModel.fromFirebaseUser(firebaseUser);
   }
   
@@ -71,9 +75,23 @@ class UserRepository {
         return null;
       }
       
-      // Create user from Firebase and cache it
+      // First, try to get complete user data from Firestore (with real agentRemainingTime)
+      try {
+        final firestoreUser = await _userService.getUserData(firebaseUser.uid);
+        if (firestoreUser != null) {
+          // Save complete data to local database and return it
+          await localDb.saveUser(firestoreUser);
+          await localDb.setUserLoggedIn(firestoreUser.uid, true);
+          _logger.i(_tag, 'User data loaded from Firestore with agentRemainingTime: ${firestoreUser.agentRemainingTime}s');
+          return firestoreUser;
+        }
+      } catch (e) {
+        _logger.w(_tag, 'Failed to load complete user data from Firestore: $e');
+      }
+      
+      // Final fallback: create user from Firebase Auth (WARNING: agentRemainingTime will be 0)
       final user = UserModel.fromFirebaseUser(firebaseUser);
-      _logger.i(_tag, 'Created user from Firebase, caching to local database');
+      _logger.w(_tag, 'Created basic user from Firebase Auth - agentRemainingTime will be 0 until Firestore data loads');
       
       // Save to local database and return cached version
       await localDb.saveUser(user);
@@ -91,9 +109,25 @@ class UserRepository {
   }
 
   /// Stream of auth state changes converted to UserModel
+  /// WARNING: This stream provides basic Firebase Auth data only
+  /// For complete user data with agentRemainingTime, use getUserReactiveStream() instead
   Stream<UserModel?> get userStream {
-    return authService.authStateChanges.map((firebaseUser) {
+    return authService.authStateChanges.asyncMap((firebaseUser) async {
       if (firebaseUser == null) return null;
+      
+      // Try to get complete user data from Firestore first
+      try {
+        final firestoreUser = await _userService.getUserData(firebaseUser.uid);
+        if (firestoreUser != null) {
+          _logger.d(_tag, 'User stream: Loaded complete data from Firestore');
+          return firestoreUser;
+        }
+      } catch (e) {
+        _logger.w(_tag, 'User stream: Failed to load Firestore data: $e');
+      }
+      
+      // Fallback to basic Firebase Auth data (agentRemainingTime will be 0)
+      _logger.w(_tag, 'User stream: Using basic Firebase Auth data - agentRemainingTime will be 0');
       return UserModel.fromFirebaseUser(firebaseUser);
     });
   }
@@ -804,18 +838,19 @@ class UserRepository {
   /// Update existing user record in Firestore
   Future<void> _updateUserData(UserModel user) async {
     try {
-      // First retrieve the current user data to get the fcmTokenData
+      // First retrieve the current user data to preserve important fields
       final currentData = await _userService.getUserData(user.uid);
       
-      // Create an updated user with preserved FCM data
+      // Create an updated user with preserved FCM data AND agentRemainingTime
       final updatedUser = user.copyWith(
         fcmTokenData: currentData?.fcmTokenData,
+        agentRemainingTime: currentData?.agentRemainingTime, // Preserve AI agent time
       );
       
       await _userService.updateUserData(updatedUser);
       
       final authMethod = user.metadata?['authMethod'] as String? ?? 'unknown';
-      _logger.i(_tag, 'Updated user data with auth method: $authMethod');
+      _logger.i(_tag, 'Updated user data with auth method: $authMethod (preserved agentRemainingTime: ${currentData?.agentRemainingTime ?? 0}s)');
     } catch (e) {
       _logger.e(_tag, 'Failed to update user data: ${e.toString()}');
       rethrow;
