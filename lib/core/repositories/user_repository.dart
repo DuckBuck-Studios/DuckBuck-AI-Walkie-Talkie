@@ -20,7 +20,6 @@ class UserRepository {
   final LoggerService _logger;
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
-  final NotificationsService _notificationsService;
   
   // Stream subscriptions for cleanup
   StreamSubscription<UserModel?>? _userDocumentSubscription;
@@ -33,12 +32,10 @@ class UserRepository {
     UserServiceInterface? userService,
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
-    NotificationsService? notificationsService,
     LoggerService? logger,
   }) : _userService = userService ?? serviceLocator<UserServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _notificationsService = notificationsService ?? serviceLocator<NotificationsService>(),
        _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Get the current authenticated user
@@ -208,24 +205,9 @@ class UserRepository {
       // Only send login notification for returning users, not for new users
       // New users will get welcome email after profile completion
       if (!isNewToFirestore) {
-        // Capture user data for background email sending
-        final userEmail = user.email ?? '';
-        final userName = user.displayName ?? 'User';
-        final userMetadata = user.metadata;
-        final loginTime = DateTime.now().toString();
-        
-        // Fire and forget email sending in the background using the centralized email service
-        Future(() {
-          _notificationsService.sendLoginNotificationEmail(
-            email: userEmail,
-            username: userName,
-            loginTime: loginTime,
-            metadata: userMetadata,
-          );
-          _logger.i(_tag, 'Login notification sent to $userEmail');
-        });
+        _logger.i(_tag, 'Returning Google user - login completed');
       } else {
-        _logger.i(_tag, 'Skipping welcome email for new Google user - will send after profile completion');
+        _logger.i(_tag, 'New Google user - profile completion required');
       }
       
       // Set user ID in Crashlytics
@@ -318,24 +300,9 @@ class UserRepository {
       // Only send login notification for returning users, not for new users
       // New users will get welcome email after profile completion
       if (!isNewToFirestore) {
-        // Capture user data for background email sending
-        final userEmail = user.email ?? '';
-        final userName = user.displayName ?? 'User';
-        final userMetadata = user.metadata;
-        final loginTime = DateTime.now().toString();
-        
-        // Fire and forget email sending in the background using the centralized email service
-        Future(() {
-          _notificationsService.sendLoginNotificationEmail(
-            email: userEmail,
-            username: userName,
-            loginTime: loginTime,
-            metadata: userMetadata,
-          );
-          _logger.i(_tag, 'Login notification sent to $userEmail');
-        });
+        _logger.i(_tag, 'Returning Apple user - login completed');
       } else {
-        _logger.i(_tag, 'Skipping welcome email for new Apple user - will send after profile completion');
+        _logger.i(_tag, 'New Apple user - profile completion required');
       }
       
       // Set user ID in Crashlytics

@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/services/service_locator.dart';
-import '../../../core/services/notifications/notifications_service.dart';
 import '../../../core/services/logger/logger_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/repositories/user_repository.dart';
@@ -13,10 +12,7 @@ import '../../main_navigation.dart';
 import '../widgets/profile_completion/profile_step_indicator.dart';
 import '../widgets/profile_completion/profile_photo_section.dart';
 import '../widgets/profile_completion/profile_name_section.dart';
-
-/// Refactored Profile Completion Screen using repository pattern
-/// This screen now uses UserRepository directly instead of services
-/// and is split into modular widgets for better maintainability
+  
 class ProfileCompletionScreen extends StatefulWidget {
   const ProfileCompletionScreen({super.key});
 
@@ -356,9 +352,6 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
         await _userRepository.markUserOnboardingComplete(currentUser.uid);
       }
       
-      // Send welcome email for new social auth users without blocking the UI flow
-      await _sendWelcomeEmailIfNeeded(updatingName);
-
       // Hide loading indicator
       setState(() {
         _isLoading = false;
@@ -396,38 +389,6 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
       userId: user.uid,
       imageFile: _selectedImage!,
     );
-  }
-
-  /// Send welcome email for new social auth users if needed
-  Future<void> _sendWelcomeEmailIfNeeded(bool updatingName) async {
-    final user = await _userRepository.getCurrentUser();
-    if (user != null && user.metadata != null && 
-        (user.metadata!['authMethod'] == 'google' || user.metadata!['authMethod'] == 'apple')) {
-      
-      // Get updated user name (preferring the manually entered name)
-      final userName = updatingName ? _nameController.text.trim() : (user.displayName ?? 'User');
-      final userEmail = user.email ?? '';
-      final userMetadata = user.metadata;
-      
-      // Fire and forget email sending in the background using the centralized email service
-      Future(() {
-        try {
-          // Get service locator instance to access notifications service
-          final notificationsService = serviceLocator<NotificationsService>();
-          
-          // Send welcome email with updated user info (fire-and-forget)
-          notificationsService.sendWelcomeEmail(
-            email: userEmail,
-            username: userName,
-            metadata: userMetadata,
-          );
-          
-          _logger.i('ProfileCompletion', 'Welcome email sent to $userEmail with name: $userName');
-        } catch (e) {
-          _logger.e('ProfileCompletion', 'Error sending welcome email: $e');
-        }
-      });
-    }
   }
 
   /// Navigate to home screen with premium transition
@@ -636,14 +597,19 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                               
                               // Current step UI content with smooth transitions
                               Flexible(
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 600),
+                                child: Container(
+                                  width: double.infinity,
+                                  constraints: BoxConstraints(
+                                    maxWidth: MediaQuery.of(context).size.width - 48,
+                                  ),
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 600),
                                   switchInCurve: Curves.easeOutExpo,
                                   switchOutCurve: Curves.easeInExpo,
                                   transitionBuilder: (Widget child, Animation<double> animation) {
-                                    // Right to left slide transition
+                                    // Right to left slide transition with overflow clipping
                                     final slideAnimation = Tween<Offset>(
-                                      begin: const Offset(1.0, 0.0), // Start from right
+                                      begin: const Offset(0.3, 0.0), // Reduced slide distance
                                       end: Offset.zero, // End at center
                                     ).animate(CurvedAnimation(
                                       parent: animation,
@@ -659,21 +625,27 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                       curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
                                     ));
                                     
-                                    return SlideTransition(
-                                      position: slideAnimation,
-                                      child: FadeTransition(
-                                        opacity: fadeAnimation,
-                                        child: child,
+                                    return ClipRect(
+                                      child: SlideTransition(
+                                        position: slideAnimation,
+                                        child: FadeTransition(
+                                          opacity: fadeAnimation,
+                                          child: child,
+                                        ),
                                       ),
                                     );
                                   },
                                   layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
-                                    return Stack(
-                                      alignment: Alignment.centerLeft,
-                                      children: <Widget>[
-                                        ...previousChildren,
-                                        if (currentChild != null) currentChild,
-                                      ],
+                                    return SizedBox(
+                                      width: MediaQuery.of(context).size.width - 48, // Account for padding
+                                      child: Stack(
+                                        alignment: Alignment.centerLeft,
+                                        clipBehavior: Clip.hardEdge, // Prevent overflow
+                                        children: <Widget>[
+                                          ...previousChildren,
+                                          if (currentChild != null) currentChild,
+                                        ],
+                                      ),
                                     );
                                   },
                                   child: _currentStep == 0
@@ -716,6 +688,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                           });
                                         },
                                       ),
+                                  ),
                                 ),
                               ),
                               

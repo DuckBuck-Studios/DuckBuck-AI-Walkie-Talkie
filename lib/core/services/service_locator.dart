@@ -91,7 +91,6 @@ Future<void> setupServiceLocator() async {
       userService: serviceLocator<UserServiceInterface>(),
       analytics: serviceLocator<FirebaseAnalyticsService>(),
       crashlytics: serviceLocator<FirebaseCrashlyticsService>(),
-      notificationsService: serviceLocator<NotificationsService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );

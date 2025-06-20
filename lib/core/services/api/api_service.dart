@@ -239,128 +239,13 @@ class ApiService {
     }
   }
 
-  /// Checks if the user authenticated with Google or Apple
-  /// Returns true if the user signed in with Google or Apple
-  bool _isGoogleOrAppleUser(Map<String, dynamic>? metadata) {
-    if (metadata == null || !metadata.containsKey('authMethod')) {
-      return false;
-    }
-    
-    final authMethod = metadata['authMethod'] as String?;
-    return authMethod == 'google' || authMethod == 'apple';
-  }
 
-  /// Send welcome email to a new user (only for Google or Apple sign-ins)
-  /// Fire-and-forget method - doesn't throw exceptions, just logs results
-  Future<bool> sendWelcomeEmail({
-    required String email,
-    required String username,
-    required Map<String, dynamic>? metadata,
-  }) async {
-    // Skip sending emails for users who didn't sign in with Google or Apple
-    if (!_isGoogleOrAppleUser(metadata)) {
-      _logger.i(_tag, 'Skipping welcome email for non-Google/Apple user: $email');
-      return true;
-    }
-    
-    try {
-      // Get the Firebase ID token for authentication
-      final idToken = await _getValidToken();
-      
-      if (idToken == null) {
-        _logger.e(_tag, 'Failed to get Firebase ID token for welcome email');
-        return false;
-      }
-      
-      final response = await _dio.post(
-        '/api/users/send-welcome-email',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'x-api-key': _apiKey,
-          },
-        ),
-        data: {
-          'email': email,
-          'username': username,
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        _logger.i(_tag, 'Welcome email sent successfully to $email');
-        return true;
-      } else {
-        _logger.w(_tag, 'Failed to send welcome email. Status: ${response.statusCode}');
-        return false;
-      }
-    } on DioException catch (e) {
-      _logger.e(_tag, 'Dio error sending welcome email: ${e.message}');
-      return false;
-    } catch (e) {
-      _logger.e(_tag, 'Error sending welcome email: $e');
-      return false;
-    }
-  }
-  
-  /// Send login notification email to a user (only for Google or Apple sign-ins)
-  /// Fire-and-forget method - doesn't throw exceptions, just logs results
-  Future<bool> sendLoginNotificationEmail({
-    required String email,
-    required String username,
-    required String loginTime,
-    required Map<String, dynamic>? metadata,
-  }) async {
-    // Skip sending emails for users who didn't sign in with Google or Apple
-    if (!_isGoogleOrAppleUser(metadata)) {
-      _logger.i(_tag, 'Skipping login notification for non-Google/Apple user: $email');
-      return true;
-    }
-    
-    try {
-      // Get the Firebase ID token for authentication
-      final idToken = await _getValidToken();
-      
-      if (idToken == null) {
-        _logger.e(_tag, 'Failed to get Firebase ID token for login notification email');
-        return false;
-      }
-      
-      final response = await _dio.post(
-        '/api/users/send-login-notification',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'x-api-key': _apiKey,
-          },
-        ),
-        data: {
-          'email': email,
-          'username': username,
-          'loginTime': loginTime,
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        _logger.i(_tag, 'Login notification email sent successfully to $email');
-        return true;
-      } else {
-        _logger.w(_tag, 'Failed to send login notification email. Status: ${response.statusCode}');
-        return false;
-      }
-    } on DioException catch (e) {
-      _logger.e(_tag, 'Dio error sending login notification email: ${e.message}');
-      return false;
-    } catch (e) {
-      _logger.e(_tag, 'Error sending login notification email: $e');
-      return false;
-    }
-  }
   
   /// Send push notification to a user
   /// Fire-and-forget method - doesn't throw exceptions, just logs results
   Future<bool> sendNotification({
     required String recipientUid,
-    String? title,  // Make title optional
+    String? title,  
     required String body,
     Map<String, dynamic>? data,
   }) async {
