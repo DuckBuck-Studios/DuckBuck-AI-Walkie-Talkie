@@ -20,112 +20,114 @@ class ProfileNameSection extends StatelessWidget {
     required this.contentSlideAnimation,
     required this.isIOS,
     this.onNameChanged,
-  });
-
-  @override
+  });  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Section Header
-          AnimatedBuilder(
-            animation: contentAnimationController,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, contentSlideAnimation.value),
-                child: Opacity(
-                  opacity: contentAnimationController.value,
-                  child: Column(
-                    children: [
-                      // Section title with gradient text
-                      ShaderMask(
-                        shaderCallback: (bounds) => LinearGradient(
-                          colors: [
-                            Colors.white,
-                            Colors.purple.shade300,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: Text(
-                          'Step 2: Display Name',
-                          style: TextStyle(
-                            fontSize: isIOS ? 22 : 24,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            color: Colors.white,
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(), // Disable scrolling
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min, // Take minimum space needed
+          children: [
+            // Section Header
+            AnimatedBuilder(
+              animation: contentAnimationController,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, contentSlideAnimation.value),
+                  child: Opacity(
+                    opacity: contentAnimationController.value,
+                    child: Column(
+                      children: [
+                        // Section title with gradient text
+                        ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [
+                              Colors.white,
+                              Colors.purple.shade300,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds),
+                          child: Text(
+                            'Step 2: Display Name',
+                            style: TextStyle(
+                              fontSize: isIOS ? 22 : 24,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Section subtitle
-                      Text(
-                        'Choose how you\'d like to be displayed to other users',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: isIOS ? 16 : 17,
-                          letterSpacing: 0.3,
-                          height: 1.4,
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Section subtitle
+                        Text(
+                          'Choose how you\'d like to be displayed to other users',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: isIOS ? 16 : 17,
+                            letterSpacing: 0.3,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-          
-          const SizedBox(height: 32),
-          
-          // Display name input component
-          AnimatedBuilder(
-            animation: contentAnimationController,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, contentSlideAnimation.value),
-                child: Opacity(
+                );
+              },
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Display name input component
+            AnimatedBuilder(
+              animation: contentAnimationController,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, contentSlideAnimation.value),
+                  child: Opacity(
+                    opacity: contentAnimationController.value,
+                    child: _buildNameInput(context), // Pass context
+                  ),
+                );
+              },
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Progress indicator for name step
+            AnimatedBuilder(
+              animation: contentAnimationController,
+              builder: (context, child) {
+                return Opacity(
                   opacity: contentAnimationController.value,
-                  child: _buildNameInput(),
-                ),
-              );
-            },
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Progress indicator for name step
-          AnimatedBuilder(
-            animation: contentAnimationController,
-            builder: (context, child) {
-              return Opacity(
-                opacity: contentAnimationController.value,
-                child: _buildNameStepProgress(),
-              );
-            },
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Name requirements hint
-          AnimatedBuilder(
-            animation: contentAnimationController,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, contentSlideAnimation.value * 0.5),
-                child: Opacity(
-                  opacity: contentAnimationController.value * 0.8,
-                  child: _buildNameRequirements(),
-                ),
-              );
-            },
-          ),
-        ],
+                  child: _buildNameStepProgress(),
+                );
+              },
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Name requirements hint
+            AnimatedBuilder(
+              animation: contentAnimationController,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, contentSlideAnimation.value * 0.5),
+                  child: Opacity(
+                    opacity: contentAnimationController.value * 0.8,
+                    child: _buildNameRequirements(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -228,7 +230,7 @@ class ProfileNameSection extends StatelessWidget {
   }
 
   /// Build name input field
-  Widget _buildNameInput() {
+  Widget _buildNameInput(BuildContext context) {
     return Form(
       key: formKey,
       child: Container(
@@ -259,6 +261,11 @@ class ProfileNameSection extends StatelessWidget {
                 controller: nameController,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 placeholder: 'Enter your display name',
+                textInputAction: TextInputAction.done, // Add Done button
+                onEditingComplete: () {
+                  // Dismiss keyboard when Done is pressed
+                  FocusScope.of(context).unfocus();
+                },
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -285,6 +292,11 @@ class ProfileNameSection extends StatelessWidget {
               )
             : TextFormField(
                 controller: nameController,
+                textInputAction: TextInputAction.done, // Add Done button
+                onEditingComplete: () {
+                  // Dismiss keyboard when Done is pressed
+                  FocusScope.of(context).unfocus();
+                },
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
