@@ -42,14 +42,6 @@ class ProfileStepIndicator extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: currentStep == 0 ? AppColors.accentBlue : Colors.grey.shade600,
-                  boxShadow: currentStep == 0 ? [
-                    BoxShadow(
-                      color: AppColors.accentBlue.withValues(alpha: 0.4),
-                      blurRadius: 8.0.clamp(0.0, double.infinity),
-                      spreadRadius: 2.0.clamp(0.0, double.infinity),
-                      offset: Offset.zero,
-                    ),
-                  ] : null,
                 ),
               )
               .animate()
@@ -115,13 +107,6 @@ class ProfileStepIndicator extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: currentStep == 1 ? AppColors.accentBlue : Colors.grey.shade600,
-                  boxShadow: currentStep == 1 ? [
-                    BoxShadow(
-                      color: AppColors.accentBlue.withValues(alpha: 0.4),
-                      blurRadius: 8.0.clamp(0.0, double.infinity),
-                      spreadRadius: 2.0.clamp(0.0, double.infinity),
-                    ),
-                  ] : null,
                 ),
               )
               .animate()
