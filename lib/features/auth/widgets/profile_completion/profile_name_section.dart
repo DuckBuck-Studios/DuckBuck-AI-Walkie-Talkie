@@ -31,12 +31,15 @@ class ProfileNameSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min, // Take minimum space needed
           children: [
-            // Section Header
+            // Section Header with right-to-left slide animation
             AnimatedBuilder(
               animation: contentAnimationController,
               builder: (context, child) {
                 return Transform.translate(
-                  offset: Offset(0, contentSlideAnimation.value),
+                  offset: Offset(
+                    (1.0 - contentAnimationController.value) * 100, // Slide from right
+                    contentSlideAnimation.value,
+                  ),
                   child: Opacity(
                     opacity: contentAnimationController.value,
                     child: Column(
@@ -84,12 +87,15 @@ class ProfileNameSection extends StatelessWidget {
             
             const SizedBox(height: 32),
             
-            // Display name input component
+            // Display name input component with right-to-left slide animation
             AnimatedBuilder(
               animation: contentAnimationController,
               builder: (context, child) {
                 return Transform.translate(
-                  offset: Offset(0, contentSlideAnimation.value),
+                  offset: Offset(
+                    (1.0 - contentAnimationController.value) * 80, // Slide from right, less distance
+                    contentSlideAnimation.value,
+                  ),
                   child: Opacity(
                     opacity: contentAnimationController.value,
                     child: _buildNameInput(context), // Pass context
@@ -100,25 +106,34 @@ class ProfileNameSection extends StatelessWidget {
             
             const SizedBox(height: 24),
             
-            // Progress indicator for name step
+            // Progress indicator with right-to-left slide animation
             AnimatedBuilder(
               animation: contentAnimationController,
               builder: (context, child) {
-                return Opacity(
-                  opacity: contentAnimationController.value,
-                  child: _buildNameStepProgress(),
+                return Transform.translate(
+                  offset: Offset(
+                    (1.0 - contentAnimationController.value) * 60, // Slide from right, even less distance
+                    0,
+                  ),
+                  child: Opacity(
+                    opacity: contentAnimationController.value,
+                    child: _buildNameStepProgress(),
+                  ),
                 );
               },
             ),
             
             const SizedBox(height: 16),
             
-            // Name requirements hint
+            // Name requirements hint with right-to-left slide animation
             AnimatedBuilder(
               animation: contentAnimationController,
               builder: (context, child) {
                 return Transform.translate(
-                  offset: Offset(0, contentSlideAnimation.value * 0.5),
+                  offset: Offset(
+                    (1.0 - contentAnimationController.value) * 40, // Slide from right, minimal distance
+                    contentSlideAnimation.value * 0.5,
+                  ),
                   child: Opacity(
                     opacity: contentAnimationController.value * 0.8,
                     child: _buildNameRequirements(),

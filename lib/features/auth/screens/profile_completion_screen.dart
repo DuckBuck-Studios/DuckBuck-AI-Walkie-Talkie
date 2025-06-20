@@ -609,7 +609,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                   transitionBuilder: (Widget child, Animation<double> animation) {
                                     // Right to left slide transition with overflow clipping
                                     final slideAnimation = Tween<Offset>(
-                                      begin: const Offset(0.3, 0.0), // Reduced slide distance
+                                      begin: const Offset(1.0, 0.0), // Full slide distance from right
                                       end: Offset.zero, // End at center
                                     ).animate(CurvedAnimation(
                                       parent: animation,
@@ -622,7 +622,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                       end: 1.0,
                                     ).animate(CurvedAnimation(
                                       parent: animation,
-                                      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                                      curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
                                     ));
                                     
                                     return ClipRect(

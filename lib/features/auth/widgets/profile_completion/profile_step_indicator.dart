@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-
 import '../../../../core/theme/app_colors.dart';
 
 /// Step indicator widget showing progress through profile completion
@@ -19,16 +18,22 @@ class ProfileStepIndicator extends StatelessWidget {
     return AnimatedBuilder(
       animation: stepTransitionController,
       builder: (context, child) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.1),
-              width: 1,
-            ),
+        return Transform.translate(
+          // Add subtle right-to-left slide during step transition
+          offset: Offset(
+            (1.0 - stepTransitionController.value) * 20, // Slide from right during transition
+            0,
           ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.1),
+                width: 1,
+              ),
+            ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -115,8 +120,9 @@ class ProfileStepIndicator extends StatelessWidget {
                 curve: Curves.elasticOut,
               ),
             ],
-          ),
-        );
+          ), // Close Container child Row
+        ), // Close Container
+      ); // Close Transform.translate
       },
     );
   }
