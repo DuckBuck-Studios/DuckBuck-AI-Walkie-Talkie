@@ -257,7 +257,9 @@ class AgoraService(private val context: Context) {
                 )
                 
                 // Set default audio route to speaker
+                AppLogger.d(TAG, "Setting initial audio route to speakerphone: $isSpeakerOn")
                 rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
+                AppLogger.d(TAG, "Initial speaker state set to: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
                 
                 // Give the engine sufficient time to complete internal initialization
                 // This prevents timing issues where joinChannel is called immediately after creation
@@ -466,23 +468,34 @@ class AgoraService(private val context: Context) {
         }
         
         return try {
+            // Log current state before toggle
+            AppLogger.d(TAG, "Current speaker state before toggle: $isSpeakerOn")
+            
             isSpeakerOn = !isSpeakerOn
+            
+            AppLogger.d(TAG, "Toggling speaker to: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
+            
             val result = rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
             
             if (result == 0) {
-                AppLogger.d(TAG, "Speaker ${if (isSpeakerOn) "enabled" else "disabled"}")
+                AppLogger.d(TAG, "✅ Speaker toggle successful - Now using: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
                 eventListener?.onSpeakerToggled(isSpeakerOn)
+                
+                // Verify the state change took effect
+                AppLogger.d(TAG, "New speaker state after toggle: $isSpeakerOn")
                 true
             } else {
-                AppLogger.e(TAG, "Failed to toggle speaker. Error code: $result")
+                AppLogger.e(TAG, "❌ Failed to toggle speaker. Agora error code: $result")
                 // Revert the state if operation failed
                 isSpeakerOn = !isSpeakerOn
+                AppLogger.d(TAG, "Reverted speaker state to: $isSpeakerOn")
                 false
             }
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Exception while toggling speaker", e)
+            AppLogger.e(TAG, "❌ Exception while toggling speaker", e)
             // Revert the state if operation failed
             isSpeakerOn = !isSpeakerOn
+            AppLogger.d(TAG, "Reverted speaker state due to exception: $isSpeakerOn")
             false
         }
     }
@@ -542,7 +555,10 @@ class AgoraService(private val context: Context) {
     /**
      * Get current speaker status
      */
-    fun isSpeakerEnabled(): Boolean = isSpeakerOn
+    fun isSpeakerEnabled(): Boolean {
+        AppLogger.d(TAG, "Current speaker status queried: $isSpeakerOn")
+        return isSpeakerOn
+    }
     
     /**
      * Get current channel name

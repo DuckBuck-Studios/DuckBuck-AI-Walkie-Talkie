@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_colors.dart';
 import '../components/auth_bottom_sheet.dart';
+import '../../main_navigation.dart';
 
 class OnboardingSignupScreen extends StatefulWidget {
   const OnboardingSignupScreen({super.key, required this.onComplete});
@@ -84,8 +85,105 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
     // Simulate a short processing time (can be removed in production)
     await Future.delayed(const Duration(milliseconds: 300));
     
-    // Complete onboarding process
-    widget.onComplete();
+    // Navigate to home screen with premium celebration transition
+    if (mounted) {
+      _navigateToHome();
+    }
+  }
+
+  /// Navigate to home screen with premium celebration transition
+  void _navigateToHome() {
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => 
+          const MainNavigation(),
+        transitionDuration: const Duration(milliseconds: 1200),
+        reverseTransitionDuration: const Duration(milliseconds: 800),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          // Premium "onboarding completion" to "home" celebration transition
+          return Stack(
+            children: [
+              // Celebration gradient background
+              AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.center,
+                        radius: 2.0 * animation.value,
+                        colors: [
+                          Colors.green.shade400.withValues(alpha: animation.value * 0.3),
+                          Colors.blue.shade600.withValues(alpha: animation.value * 0.2),
+                          Colors.purple.shade800.withValues(alpha: animation.value * 0.1),
+                          Colors.black,
+                        ],
+                        stops: [0.0, 0.3, 0.7, 1.0],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              // Floating particles effect
+              ...List.generate(12, (index) {
+                final delay = (index * 0.05);
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, _) {
+                    final animationWithDelay = Curves.easeOutExpo.transform(
+                      (animation.value - delay).clamp(0.0, 1.0),
+                    );
+                    return Positioned(
+                      left: 50.0 + (index * 30) * animationWithDelay,
+                      top: 100.0 + (index % 3 * 150) * animationWithDelay,
+                      child: Opacity(
+                        opacity: animationWithDelay * (1 - animationWithDelay),
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: [
+                              Colors.blue.shade300,
+                              Colors.purple.shade300,
+                              Colors.green.shade300,
+                            ][index % 3],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }),
+              
+              // Main content with celebration scale and slide
+              Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001)
+                  ..scale(
+                    0.7 + (animation.value * 0.3), // Scale from 70% to 100%
+                  )
+                  ..translate(
+                    0.0,
+                    (1 - animation.value) * 150, // Slide up from bottom
+                    0.0,
+                  ),
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                  ),
+                  child: child,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override

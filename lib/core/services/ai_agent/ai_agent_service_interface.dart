@@ -24,6 +24,12 @@ abstract class AiAgentServiceInterface {
   
   /// Get current speaker status
   bool isSpeakerEnabled();
+
+  /// Get current microphone status (async)
+  Future<bool> isMicrophoneMutedAsync();
+  
+  /// Get current speaker status (async)
+  Future<bool> isSpeakerEnabledAsync();
   
   /// Join AI agent to a channel (backend only)
   /// Returns the agent response data if successful, null if user has no remaining time

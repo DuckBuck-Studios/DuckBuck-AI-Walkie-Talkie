@@ -318,11 +318,31 @@ class AiAgentRepository {
   }
 
   /// Get current microphone status
+  Future<bool> isMicrophoneMutedAsync() async {
+    try {
+      return await _aiAgentService.isMicrophoneMutedAsync();
+    } catch (e) {
+      _logger.e(_tag, 'Error getting microphone status: $e');
+      return false; // Default to not muted
+    }
+  }
+
+  /// Get current speaker status  
+  Future<bool> isSpeakerEnabledAsync() async {
+    try {
+      return await _aiAgentService.isSpeakerEnabledAsync();
+    } catch (e) {
+      _logger.e(_tag, 'Error getting speaker status: $e');
+      return true; // Default to enabled
+    }
+  }
+
+  /// Get current microphone status (sync - deprecated, use async version)
   bool isMicrophoneMuted() {
     return _aiAgentService.isMicrophoneMuted();
   }
 
-  /// Get current speaker status
+  /// Get current speaker status (sync - deprecated, use async version)
   bool isSpeakerEnabled() {
     return _aiAgentService.isSpeakerEnabled();
   }

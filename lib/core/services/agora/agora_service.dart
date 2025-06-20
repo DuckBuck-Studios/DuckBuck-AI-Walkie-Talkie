@@ -67,9 +67,12 @@ class AgoraService {
   /// Turn speaker on
   static Future<bool> turnSpeakerOn() async {
     try {
+      print('AgoraService: Calling turnSpeakerOn');
       final bool result = await _channel.invokeMethod('turnSpeakerOn');
+      print('AgoraService: turnSpeakerOn result: $result');
       return result;
     } catch (e) {
+      print('AgoraService: Error in turnSpeakerOn: $e');
       return false;
     }
   }
@@ -77,9 +80,12 @@ class AgoraService {
   /// Turn speaker off
   static Future<bool> turnSpeakerOff() async {
     try {
+      print('AgoraService: Calling turnSpeakerOff');
       final bool result = await _channel.invokeMethod('turnSpeakerOff');
+      print('AgoraService: turnSpeakerOff result: $result');
       return result;
     } catch (e) {
+      print('AgoraService: Error in turnSpeakerOff: $e');
       return false;
     }
   }
@@ -102,12 +108,26 @@ class AgoraService {
   static Future<bool> toggleSpeaker() async {
     try {
       final bool currentlyEnabled = await isSpeakerEnabled();
+      print('AgoraService: Current speaker state: $currentlyEnabled');
+      
+      bool result;
       if (currentlyEnabled) {
-        return await turnSpeakerOff();
+        print('AgoraService: Turning speaker OFF (to earpiece)');
+        result = await turnSpeakerOff();
       } else {
-        return await turnSpeakerOn();
+        print('AgoraService: Turning speaker ON (to speaker)');
+        result = await turnSpeakerOn();
       }
+      
+      print('AgoraService: Toggle result: $result');
+      
+      // Verify the new state after toggle
+      final newState = await isSpeakerEnabled();
+      print('AgoraService: New speaker state after toggle: $newState');
+      
+      return result;
     } catch (e) {
+      print('AgoraService: Error in toggleSpeaker: $e');
       return false;
     }
   }
@@ -146,8 +166,10 @@ class AgoraService {
   static Future<bool> isSpeakerEnabled() async {
     try {
       final bool result = await _channel.invokeMethod('isSpeakerEnabled');
+      print('AgoraService: isSpeakerEnabled result: $result');
       return result;
     } catch (e) {
+      print('AgoraService: Error in isSpeakerEnabled: $e');
       return false; // Default to disabled on error
     }
   }

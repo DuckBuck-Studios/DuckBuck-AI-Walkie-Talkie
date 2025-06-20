@@ -153,18 +153,34 @@ class AiAgentService implements AiAgentServiceInterface {
 
   @override
   bool isMicrophoneMuted() {
-    // Note: This is a sync method but the underlying service is async
-    // For UI purposes, we'll assume false by default
-    // The provider should handle the async state properly
-    return false; // Default state
+    // Sync method - deprecated but kept for compatibility
+    return false; // Default to not muted for sync calls
   }
 
   @override
   bool isSpeakerEnabled() {
-    // Note: This is a sync method but the underlying service is async
-    // For UI purposes, we'll assume true by default
-    // The provider should handle the async state properly
-    return true; // Default state
+    // Sync method - deprecated but kept for compatibility
+    return true; // Default to enabled for sync calls
+  }
+
+  @override
+  Future<bool> isMicrophoneMutedAsync() async {
+    try {
+      return await AgoraService.isMicrophoneMuted();
+    } catch (e) {
+      _logger.e(_tag, 'Error getting microphone status: $e');
+      return false; // Default to not muted
+    }
+  }
+
+  @override
+  Future<bool> isSpeakerEnabledAsync() async {
+    try {
+      return await AgoraService.isSpeakerEnabled();
+    } catch (e) {
+      _logger.e(_tag, 'Error getting speaker status: $e');
+      return true; // Default to enabled
+    }
   }
 
   /// Dispose all stream controllers and subscriptions

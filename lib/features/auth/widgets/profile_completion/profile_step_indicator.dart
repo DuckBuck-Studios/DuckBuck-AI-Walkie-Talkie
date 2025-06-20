@@ -45,8 +45,9 @@ class ProfileStepIndicator extends StatelessWidget {
                   boxShadow: currentStep == 0 ? [
                     BoxShadow(
                       color: AppColors.accentBlue.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      spreadRadius: 2,
+                      blurRadius: 8.0,
+                      spreadRadius: 2.0,
+                      offset: Offset.zero,
                     ),
                   ] : null,
                 ),

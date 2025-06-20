@@ -10,11 +10,9 @@ import '../../../core/services/logger/logger_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../main_navigation.dart';
-import '../widgets/profile_completion/profile_photo_selector.dart';
-import '../widgets/profile_completion/display_name_input.dart';
-import '../widgets/profile_completion/profile_photo_actions.dart';
 import '../widgets/profile_completion/profile_step_indicator.dart';
-import '../widgets/profile_completion/complete_profile_button.dart';
+import '../widgets/profile_completion/profile_photo_section.dart';
+import '../widgets/profile_completion/profile_name_section.dart';
 
 /// Refactored Profile Completion Screen using repository pattern
 /// This screen now uses UserRepository directly instead of services
@@ -172,6 +170,12 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
   // Move to the next step with premium animation
   void _nextStep() async {
     if (_currentStep == 0) {
+      if (_selectedImage == null) {
+        // Show photo selection options
+        _showPhotoSelectionOptions();
+        return;
+      }
+      
       // Add sophisticated haptic feedback sequence
       HapticFeedback.mediumImpact();
       await Future.delayed(const Duration(milliseconds: 50));
@@ -193,6 +197,97 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
     } else if (_currentStep == 1) {
       // Complete profile
       _completeProfile();
+    }
+  }
+
+  /// Show photo selection options (camera or gallery)
+  void _showPhotoSelectionOptions() {
+    final isIOS = Platform.isIOS;
+    
+    if (isIOS) {
+      showCupertinoModalPopup(
+        context: context,
+        builder: (BuildContext context) => CupertinoActionSheet(
+          title: const Text('Select Profile Photo'),
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _onImageSelected(ImageSource.camera);
+              },
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(CupertinoIcons.camera, size: 20),
+                  SizedBox(width: 8),
+                  Text('Take Photo'),
+                ],
+              ),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _onImageSelected(ImageSource.gallery);
+              },
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(CupertinoIcons.photo, size: 20),
+                  SizedBox(width: 8),
+                  Text('Choose from Gallery'),
+                ],
+              ),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ),
+      );
+    } else {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: AppColors.backgroundBlack,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (BuildContext context) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Select Profile Photo',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.white),
+                title: const Text('Take Photo', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _onImageSelected(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.white),
+                title: const Text('Choose from Gallery', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _onImageSelected(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -539,11 +634,50 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                               
                               const SizedBox(height: 32),
                               
-                              // Current step UI content
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 400),
-                                child: _currentStep == 0
-                                    ? ProfilePhotoSelector(
+                              // Current step UI content with smooth transitions
+                              Flexible(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 600),
+                                  switchInCurve: Curves.easeOutExpo,
+                                  switchOutCurve: Curves.easeInExpo,
+                                  transitionBuilder: (Widget child, Animation<double> animation) {
+                                    // Right to left slide transition
+                                    final slideAnimation = Tween<Offset>(
+                                      begin: const Offset(1.0, 0.0), // Start from right
+                                      end: Offset.zero, // End at center
+                                    ).animate(CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeOutExpo,
+                                    ));
+                                    
+                                    // Fade transition for smooth overlay
+                                    final fadeAnimation = Tween<double>(
+                                      begin: 0.0,
+                                      end: 1.0,
+                                    ).animate(CurvedAnimation(
+                                      parent: animation,
+                                      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                                    ));
+                                    
+                                    return SlideTransition(
+                                      position: slideAnimation,
+                                      child: FadeTransition(
+                                        opacity: fadeAnimation,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+                                    return Stack(
+                                      alignment: Alignment.centerLeft,
+                                      children: <Widget>[
+                                        ...previousChildren,
+                                        if (currentChild != null) currentChild,
+                                      ],
+                                    );
+                                  },
+                                  child: _currentStep == 0
+                                    ? ProfilePhotoSection(
                                         key: const Key('photo_step'),
                                         selectedImage: _selectedImage,
                                         onImageSelected: (file) {
@@ -564,15 +698,25 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                         photoFadeAnimation: _photoFadeAnimation,
                                         photoShimmerAnimation: _photoShimmerAnimation,
                                         isIOS: isIOS,
+                                        onEditPhoto: () {
+                                          // Show photo selection options when edit icon is tapped
+                                          _showPhotoSelectionOptions();
+                                        },
                                       )
-                                    : DisplayNameInput(
+                                    : ProfileNameSection(
                                         key: const Key('name_step'),
                                         nameController: _nameController,
                                         formKey: _formKey,
                                         contentAnimationController: _contentAnimationController,
                                         contentSlideAnimation: _contentSlideAnimation,
                                         isIOS: isIOS,
+                                        onNameChanged: () {
+                                          setState(() {
+                                            // Trigger rebuild to update progress indicators
+                                          });
+                                        },
                                       ),
+                                ),
                               ),
                               
                               // Add bottom padding to ensure content doesn't get cut off
@@ -618,32 +762,100 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                   AppColors.backgroundBlack,
                 ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, -10),
-                  spreadRadius: 5,
-                ),
-              ],
             ),
             child: SafeArea(
               top: false,
-              child: _currentStep == 0 
-                  ? ProfilePhotoActions(
-                      selectedImage: _selectedImage,
-                      onImagePicked: _onImageSelected,
-                      onContinue: _nextStep,
-                      isIOS: isIOS,
-                    )
-                  : CompleteProfileButton(
-                      onPressed: _completeProfile,
-                      isIOS: isIOS,
-                    ),
+              child: _buildUnifiedActionButton(isIOS),
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Build unified action button that handles both steps
+  Widget _buildUnifiedActionButton(bool isIOS) {
+    String buttonText;
+    IconData buttonIcon;
+    Color buttonColor1, buttonColor2;
+    
+    if (_currentStep == 0) {
+      if (_selectedImage == null) {
+        buttonText = 'Select Photo';
+        buttonIcon = isIOS ? CupertinoIcons.camera : Icons.camera_alt;
+        buttonColor1 = AppColors.accentBlue;
+        buttonColor2 = AppColors.accentBlue.withValues(alpha: 0.8);
+      } else {
+        buttonText = 'Continue';
+        buttonIcon = isIOS ? CupertinoIcons.arrow_right : Icons.arrow_forward;
+        buttonColor1 = Colors.green.shade600;
+        buttonColor2 = Colors.green.shade700;
+      }
+    } else {
+      buttonText = 'Complete Profile';
+      buttonIcon = isIOS ? CupertinoIcons.checkmark : Icons.check;
+      buttonColor1 = Colors.purple.shade600;
+      buttonColor2 = Colors.blue.shade600;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [buttonColor1, buttonColor2],
+        ),
+      ),
+      child: isIOS
+          ? CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              onPressed: () {
+                HapticFeedback.heavyImpact();
+                _nextStep();
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(buttonIcon, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    buttonText,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                minimumSize: const Size(double.infinity, 56),
+              ),
+              icon: Icon(buttonIcon, size: 20, color: Colors.white),
+              label: Text(
+                buttonText.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.0,
+                  color: Colors.white,
+                ),
+              ),
+              onPressed: () {
+                HapticFeedback.heavyImpact();
+                _nextStep();
+              },
+            ),
     );
   }
 

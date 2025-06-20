@@ -142,12 +142,16 @@ class AiAgentProvider extends ChangeNotifier {
           uid: _currentUid!,
         );
         
-        // Update UI immediately to show running state
-        _setState(AiAgentState.running);
+        // Stay in starting state until backend connects
+        // _setState(AiAgentState.running); // Remove this line
+        
+        // Initialize audio states (this will work even in starting state)
+        await _initializeAudioStates();
+        
         _startUsageTracking();
         _setAutoStopTimer();
         
-        _logger.i(_tag, 'UI updated immediately after Agora channel join');
+        _logger.i(_tag, 'Agora channel joined, connecting to backend AI agent...');
         
         // Start backend AI agent connection in background
         _connectAiAgentInBackground();
@@ -194,16 +198,28 @@ class AiAgentProvider extends ChangeNotifier {
             uid: _currentUid!,
           );
           
+          // NOW set the state to running since backend is connected
+          _setState(AiAgentState.running);
+          
           _logger.i(_tag, 'AI agent connected successfully with real agent ID: ${response.data!.agentId}');
           notifyListeners(); // Update UI with real agent data
         } else {
           _logger.w(_tag, 'Backend AI agent connection failed: ${response.message}');
-          // Don't stop the session, user can still use audio features
+          // Set error state but don't stop the session since Agora is still connected
+          _setState(AiAgentState.error);
+          _setError('AI Agent connection failed, but you can still use audio features');
         }
+      } else {
+        _logger.w(_tag, 'Backend AI agent connection returned null response');
+        // Set error state but don't stop the session
+        _setState(AiAgentState.error);
+        _setError('AI Agent connection failed, but you can still use audio features');
       }
     } catch (e) {
       _logger.e(_tag, 'Error connecting AI agent in background: $e');
-      // Don't stop the session on background error
+      // Set error state but don't stop the session on background error
+      _setState(AiAgentState.error);
+      _setError('AI Agent connection failed, but you can still use audio features');
     }
   }
 
@@ -267,13 +283,18 @@ class AiAgentProvider extends ChangeNotifier {
 
   /// Toggle microphone mute/unmute
   Future<bool> toggleMicrophone() async {
-    if (!isAgentRunning) return false;
+    // Allow toggling during starting, running, or error states (when we have a session)
+    if (_currentSession == null) return false;
     
     try {
       final success = await _repository.toggleMicrophone();
       if (success) {
-        _isMicrophoneMuted = !_isMicrophoneMuted;
+        // Get the actual current state from the repository after toggle using async method
+        _isMicrophoneMuted = await _repository.isMicrophoneMutedAsync();
+        _logger.i(_tag, 'Microphone toggled successfully. New state: muted=$_isMicrophoneMuted');
         notifyListeners();
+      } else {
+        _logger.w(_tag, 'Failed to toggle microphone');
       }
       return success;
     } catch (e) {
@@ -284,13 +305,26 @@ class AiAgentProvider extends ChangeNotifier {
 
   /// Toggle speaker on/off
   Future<bool> toggleSpeaker() async {
-    if (!isAgentRunning) return false;
+    // Allow toggling during starting, running, or error states (when we have a session)
+    if (_currentSession == null) return false;
     
     try {
+      _logger.i(_tag, 'Toggle speaker called. Current state: $_isSpeakerEnabled');
+      
+      // Get the current state before toggle
+      final currentStateBefore = await _repository.isSpeakerEnabledAsync();
+      _logger.i(_tag, 'Speaker state before toggle: $currentStateBefore');
+      
       final success = await _repository.toggleSpeaker();
+      _logger.i(_tag, 'Toggle speaker result: $success');
+      
       if (success) {
-        _isSpeakerEnabled = !_isSpeakerEnabled;
+        // Get the actual current state from the repository after toggle using async method
+        _isSpeakerEnabled = await _repository.isSpeakerEnabledAsync();
+        _logger.i(_tag, 'Speaker toggled successfully. New state: $_isSpeakerEnabled');
         notifyListeners();
+      } else {
+        _logger.w(_tag, 'Failed to toggle speaker');
       }
       return success;
     } catch (e) {
@@ -422,6 +456,29 @@ class AiAgentProvider extends ChangeNotifier {
       _isAiSpeaking = speaking;
       // Don't call notifyListeners here to avoid extra rebuilds
       // The timer already calls notifyListeners
+    }
+  }
+
+  /// Initialize audio states when starting agent
+  Future<void> _initializeAudioStates() async {
+    try {
+      _logger.d(_tag, 'Initializing audio states');
+      // Sync with actual Agora states using async methods
+      _isMicrophoneMuted = await _repository.isMicrophoneMutedAsync();
+      _isSpeakerEnabled = await _repository.isSpeakerEnabledAsync();
+      _logger.i(_tag, 'Audio states initialized - mic muted: $_isMicrophoneMuted, speaker enabled: $_isSpeakerEnabled');
+      
+      // Debug: Print the actual states
+      print('AI Agent Provider: Initial mic state: $_isMicrophoneMuted');
+      print('AI Agent Provider: Initial speaker state: $_isSpeakerEnabled');
+      
+      notifyListeners();
+    } catch (e) {
+      _logger.e(_tag, 'Error initializing audio states: $e');
+      // Use default states on error
+      _isMicrophoneMuted = false;
+      _isSpeakerEnabled = true;
+      print('AI Agent Provider: Using default states due to error');
     }
   }
 

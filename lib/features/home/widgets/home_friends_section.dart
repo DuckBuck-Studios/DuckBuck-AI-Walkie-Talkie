@@ -82,7 +82,7 @@ class HomeFriendsSection extends StatelessWidget {
                     backgroundColor: CupertinoColors.systemGrey6.resolveFrom(context),
                     child: ClipOval(
                       child: Image.asset(
-                        'assets/logo.png',
+                        'assets/icon-ico.png',
                         width: 48,
                         height: 48,
                         fit: BoxFit.cover,
@@ -131,7 +131,7 @@ class HomeFriendsSection extends StatelessWidget {
                   backgroundColor: CupertinoColors.systemGrey6.resolveFrom(context),
                   child: ClipOval(
                     child: Image.asset(
-                      'assets/logo.png',
+                      'assets/icon-ico.png',
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
@@ -231,7 +231,7 @@ class HomeFriendsSection extends StatelessWidget {
                   backgroundColor: theme.colorScheme.surfaceContainerHigh,
                   child: ClipOval(
                     child: Image.asset(
-                      'assets/logo.png',
+                      'assets/icon-ico.png',
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
@@ -286,7 +286,7 @@ class HomeFriendsSection extends StatelessWidget {
                       backgroundColor: theme.colorScheme.surfaceContainerHigh,
                       child: ClipOval(
                         child: Image.asset(
-                          'assets/logo.png',
+                          'assets/icon-ico.png',
                           width: 48,
                           height: 48,
                           fit: BoxFit.cover,
