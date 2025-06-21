@@ -12,7 +12,8 @@ class UserModel {
   final Map<String, dynamic>? metadata;
   final Map<String, dynamic>? fcmTokenData;
   final bool isNewUser;
-  final int agentRemainingTime; // Time in seconds, default 1 hour (3600 seconds)  
+  final int agentRemainingTime; // Time in seconds, default 1 hour (3600 seconds)
+  final bool deleted; // Indicates if the user account has been marked as deleted  
 
   /// Creates a new UserModel instance
   UserModel({
@@ -24,8 +25,9 @@ class UserModel {
     this.isEmailVerified = false,
     this.metadata,
     this.fcmTokenData,
-    this.isNewUser = false, // Default to false
-    this.agentRemainingTime = 3600, // Default to 1 hour (3600 seconds)
+    this.isNewUser = false,  
+    this.agentRemainingTime = 3600,      
+    this.deleted = false, // Default to false
   });
 
   /// Creates a UserModel from Firebase User
@@ -58,6 +60,7 @@ class UserModel {
       // DO NOT set default time here - this will be loaded from Firestore for existing users
       // Only new users should get the default time, which is handled by the service layer
       agentRemainingTime: 0, // Temporary value - will be updated from Firestore
+      deleted: false, // Default to false for new users
       metadata: {
         'creationTime': user.metadata.creationTime?.millisecondsSinceEpoch,
         'lastSignInTime': user.metadata.lastSignInTime?.millisecondsSinceEpoch,
@@ -78,6 +81,7 @@ class UserModel {
       'fcmTokenData': fcmTokenData,
       'isNewUser': isNewUser, // Include isNewUser field
       'agentRemainingTime': agentRemainingTime, // Include agent remaining time
+      'deleted': deleted, // Include deleted field
     };
     
     // Get auth method from metadata if available
@@ -114,6 +118,7 @@ class UserModel {
       isNewUser: map['isNewUser'] ?? false,
       isEmailVerified: map['isEmailVerified'] ?? false,
       agentRemainingTime: map['agentRemainingTime'] ?? 3600, // Default to 1 hour if not present
+      deleted: map['deleted'] ?? false, // Default to false if not present
       metadata: map['metadata'],
       fcmTokenData: map['fcmTokenData'],
     );
@@ -129,6 +134,7 @@ class UserModel {
     Map<String, dynamic>? metadata,
     Map<String, dynamic>? fcmTokenData,
     int? agentRemainingTime,
+    bool? deleted,
   }) {
     return UserModel(
       uid: uid,
@@ -140,6 +146,7 @@ class UserModel {
       metadata: metadata ?? this.metadata,
       fcmTokenData: fcmTokenData ?? this.fcmTokenData,
       agentRemainingTime: agentRemainingTime ?? this.agentRemainingTime,
+      deleted: deleted ?? this.deleted,
     );
   }
 }

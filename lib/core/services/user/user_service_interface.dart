@@ -26,4 +26,7 @@ abstract class UserServiceInterface {
   
   /// Get a stream of user document changes
   Stream<UserModel?> getUserDataStream(String uid);
+  
+  /// Mark user account as deleted
+  Future<void> deleteUserAccount(String uid);
 }

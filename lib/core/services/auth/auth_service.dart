@@ -12,7 +12,6 @@ import 'dart:convert';
 import '../logger/logger_service.dart';
 import '../../constants/auth_constants.dart';
 import '../service_locator.dart';
-import '../api/api_service.dart';
 import '../notifications/notifications_service.dart';
 
 /// Firebase implementation of the auth service interface
@@ -421,33 +420,6 @@ class AuthService implements AuthServiceInterface {
 
   // Password reset and account deletion methods removed
 
-  @override
-  Future<void> updateProfile({String? displayName, String? photoURL}) async {
-    try {
-      final user = currentUser;
-      if (user == null) {
-        throw AuthException(
-          AuthErrorCodes.notLoggedIn,
-          'No user is currently logged in',
-        );
-      }
-      
-      await user.updateDisplayName(displayName);
-      await user.updatePhotoURL(photoURL);
-    } on FirebaseAuthException catch (e) {
-      throw _handleException(e);
-    } catch (e) {
-      if (e is AuthException) {
-        rethrow;
-      }
-      throw AuthException(
-        AuthErrorCodes.unknown,
-        'Failed to update profile',
-        e,
-      );
-    }
-  }
-
   // Email update functionality removed
 
   /// Generates a cryptographically secure random nonce for Apple Sign In
@@ -486,94 +458,5 @@ class AuthService implements AuthServiceInterface {
     }
   }
 
-  @override
-  Future<void> deleteUserAccount() async {
-    // This is a blocking operation that will not return until the backend confirms deletion
-    String? uid;
-    User? user;
-    
-    try {
-      user = _firebaseAuth.currentUser;
-      if (user == null) {
-        throw AuthException(
-          AuthErrorCodes.notLoggedIn,
-          'No user is currently signed in',
-        );
-      }
-      
-      _logger.i(_tag, 'Starting user account deletion process for UID: $uid');
-      
-      // Get user ID before deleting
-      uid = user.uid;
-      
-      // Get API service from service locator for backend deletion request
-      final apiService = serviceLocator<ApiService>();
-      
-      _logger.i(_tag, 'Making API call to delete user data from backend for UID: $uid');
-      
-      // Get Firebase ID token for authorization
-      final idToken = await refreshIdToken(forceRefresh: true);
-      if (idToken == null) {
-        throw AuthException(
-          AuthErrorCodes.tokenRefreshFailed,
-          'Failed to get authentication token for account deletion',
-        );
-      }
-      
-      // Call the backend API to delete user data and wait for confirmation
-      // This is a blocking call that ensures the backend has completed deletion
-      final backendDeletionSuccess = await apiService.deleteUser(
-        uid: uid,
-        idToken: idToken,
-      );
-      
-      // Verify the backend deletion was successful before proceeding
-      if (!backendDeletionSuccess) {
-        _logger.e(_tag, 'Backend user deletion failed, stopping the deletion process');
-        throw AuthException(
-          AuthErrorCodes.unknown,
-          'Failed to delete user data from backend services',
-        );
-      }
-      
-      _logger.i(_tag, 'Backend confirmed successful user deletion');
-      
-      // Delete the Firebase user directly without token removal or signOut
-      // No need to remove FCM token as the backend should have cleaned up all user data
-      
-      // Try to delete the user from Firebase Auth, but handle the case where
-      // the backend may have already deleted the Firebase Auth user
-      try {
-        await user.delete();
-        _logger.i(_tag, 'Firebase user deleted successfully');
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'user-not-found') {
-          // This is expected - the backend already deleted the Firebase Auth user
-          _logger.i(_tag, 'Firebase user was already deleted by backend - this is expected');
-        } else {
-          // Some other Firebase Auth error occurred
-          _logger.e(_tag, 'Unexpected Firebase Auth error during user deletion: ${e.code} - ${e.message}');
-          throw AuthErrorMessages.handleError(e);
-        }
-      }
-      
-      _logger.i(_tag, 'Account deletion completed successfully');
-      debugPrint('💥 DELETE: Account deletion completed successfully');
-      
-    } catch (e) {
-      _logger.e(_tag, 'Error during account deletion: ${e.toString()}');
-      
-      if (e is FirebaseAuthException) {
-        throw AuthErrorMessages.handleError(e);
-      } else if (e is AuthException) {
-        rethrow;
-      } else {
-        throw AuthException(
-          AuthErrorCodes.unknown, 
-          'Failed to delete account: ${e.toString()}',
-          e,
-        );
-      }
-    }
-  }
+
 }

@@ -645,11 +645,14 @@ class UserRepository {
         },
       );
       
-      // Update auth profile
-      await authService.updateProfile(
-        displayName: displayName,
-        photoURL: photoURL,
-      );
+      // Update Firebase Auth profile directly using auth service
+      final firebaseUser = authService.currentUser;
+      if (firebaseUser != null) {
+        _logger.i(_tag, 'Updating Firebase Auth profile');
+        await firebaseUser.updateDisplayName(displayName);
+        await firebaseUser.updatePhotoURL(photoURL);
+        _logger.i(_tag, 'Firebase Auth profile updated successfully');
+      }
 
       // First retrieve the current Firestore user data to get the fcmTokenData and metadata
       final currentFirestoreData = await getUserData(user.uid);
@@ -947,8 +950,18 @@ class UserRepository {
       uid = user.uid;
       _logger.d(_tag, 'User ID to delete: $uid');
       
-      // Call auth service deleteUserAccount (this handles API call and Firebase user deletion)
-      await authService.deleteUserAccount();
+      // Mark user as deleted in Firestore using user service
+      _logger.i(_tag, 'Marking user as deleted in Firestore for UID: $uid');
+      await _userService.deleteUserAccount(uid);
+      _logger.i(_tag, 'User marked as deleted in Firestore successfully');
+      
+      // Delete Firebase Auth user directly
+      final firebaseUser = authService.currentUser;
+      if (firebaseUser != null) {
+        _logger.i(_tag, 'Deleting Firebase Auth user');
+        await firebaseUser.delete();
+        _logger.i(_tag, 'Firebase Auth user deleted successfully');
+      }
       
       // Clean up local database data for this user
       final localDb = LocalDatabaseService.instance;

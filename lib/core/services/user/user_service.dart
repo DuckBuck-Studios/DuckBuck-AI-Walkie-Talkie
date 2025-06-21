@@ -272,4 +272,31 @@ class UserService implements UserServiceInterface {
       );
     }
   }
+  
+  @override
+  Future<void> deleteUserAccount(String uid) async {
+    try {
+      _logger.i(_tag, 'Marking user $uid as deleted in Firestore');
+      
+      await _databaseService.setDocument(
+        collection: _userCollection,
+        documentId: uid,
+        data: {
+          'deleted': true,
+          'deletedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        merge: true
+      );
+      
+      _logger.i(_tag, 'User $uid successfully marked as deleted');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to mark user as deleted: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to mark user as deleted',
+        e
+      );
+    }
+  }
 }

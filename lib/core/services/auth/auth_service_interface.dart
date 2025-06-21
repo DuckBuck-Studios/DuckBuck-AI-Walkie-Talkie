@@ -39,14 +39,8 @@ abstract class AuthServiceInterface {
     String smsCode,
   );
 
-  /// Update user profile information
-  Future<void> updateProfile({String? displayName, String? photoURL});
-  
   /// Sign out the current user
   Future<void> signOut();
-  
-  /// Delete the current user account and all associated data
-  Future<void> deleteUserAccount();
   
   /// Validate a credential to ensure it's still valid
   /// Useful for sensitive operations that require recent authentication
