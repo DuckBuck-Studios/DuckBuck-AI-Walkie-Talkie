@@ -346,58 +346,6 @@ class ApiService {
     }
   }
 
-  /// Delete user account from backend systems
-  /// BLOCKING method - throws exceptions on failure to ensure proper error handling
-  Future<bool> deleteUser({
-    required String uid,
-    required String idToken,
-  }) async {
-    try {
-      _logger.i(_tag, 'Sending user deletion request to backend for user: $uid');
-      
-      final response = await _dio.delete(
-        '/api/users/delete',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'x-api-key': _apiKey,
-          },
-        ),
-        data: {
-          'uid': uid
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        _logger.i(_tag, 'User deletion completed successfully on backend for user: $uid');
-        return true;
-      } else {
-        _logger.e(_tag, 'Failed to delete user on backend. Status: ${response.statusCode}');
-        throw ApiException(
-          'Failed to delete user account from backend',
-          statusCode: response.statusCode,
-          errorCode: 'DELETE_FAILED',
-        );
-      }
-    } on DioException catch (e) {
-      _logger.e(_tag, 'Dio error deleting user from backend: ${e.message}');
-      throw ApiException(
-        'Failed to delete user account: ${e.message}',
-        statusCode: e.response?.statusCode,
-        errorCode: 'DELETE_DIO_ERROR',
-        originalError: e,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      _logger.e(_tag, 'Error deleting user from backend: $e');
-      throw ApiException(
-        'Failed to delete user account: $e',
-        errorCode: 'DELETE_ERROR',
-        originalError: e,
-      );
-    }
-  }
-  
   /// Join AI agent to a channel
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   /// Returns AiAgentResponse with agent details if successful
