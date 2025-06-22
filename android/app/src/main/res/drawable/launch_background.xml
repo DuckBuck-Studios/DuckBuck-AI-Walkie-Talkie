@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- High-quality splash screen with original logo quality -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <bitmap android:gravity="fill" android:src="@drawable/background"/>
+    
+    <!-- Black background -->
+    <item android:drawable="@android:color/black" />
+    
+    <!-- Original quality logo with minimal padding -->
+    <item 
+        android:top="32dp"
+        android:bottom="32dp"
+        android:left="32dp"
+        android:right="32dp">
+        <bitmap 
+            android:src="@drawable/splash_logo_original"
+            android:gravity="center"
+            android:filter="false"
+            android:dither="false"
+            android:antialias="false"
+            android:tileMode="disabled" />
     </item>
-    <item>
-        <bitmap android:gravity="center" android:src="@drawable/splash"/>
-    </item>
+    
 </layer-list>

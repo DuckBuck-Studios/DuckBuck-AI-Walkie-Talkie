@@ -464,7 +464,7 @@ class _SplashScreen extends State<SplashScreen>
             ),
             child: ClipOval(
               child: Image.asset(
-                'assets/icon-ico.png',
+                'assets/logo.png',
                 fit: BoxFit.contain, // Changed from cover to contain for better quality
                 width: double.infinity,
                 height: double.infinity,
