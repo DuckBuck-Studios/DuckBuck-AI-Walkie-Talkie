@@ -42,4 +42,38 @@ abstract class UserServiceInterface {
   
   /// Upload user profile photo and return the download URL
   Future<String> uploadProfilePhoto(String uid, File imageFile);
+  
+  // AI Agent Time Management Methods (Premium Feature)
+  /// Get user's current remaining AI agent time from Firebase
+  /// This is a protected premium feature - only available for paying users
+  Future<int> getUserAgentRemainingTime(String uid);
+  
+  /// Update user's remaining AI agent time in Firebase
+  /// This is a protected premium feature - only available for paying users
+  Future<void> updateUserAgentTime({
+    required String uid,
+    required int newRemainingTimeSeconds,
+  });
+  
+  /// Decrease user's remaining AI agent time by specified amount
+  /// This is a protected premium feature - only available for paying users
+  Future<int> decreaseUserAgentTime({
+    required String uid,
+    required int timeUsedSeconds,
+  });
+  
+  /// Increase user's remaining AI agent time by specified amount
+  /// This is a protected premium feature - only available for paying users
+  Future<int> increaseUserAgentTime({
+    required String uid,
+    required int additionalTimeSeconds,
+  });
+  
+  /// Reset user's AI agent time to default (1 hour free for new users)
+  /// This is a protected premium feature - only available for paying users
+  Future<void> resetUserAgentTime(String uid);
+  
+  /// Check if user has remaining AI agent time
+  /// This is a protected premium feature - only available for paying users
+  Future<bool> hasUserAgentTime(String uid);
 }

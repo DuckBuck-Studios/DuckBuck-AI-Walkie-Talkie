@@ -1,45 +1,46 @@
 {
   "project_info": {
-    "project_number": "917171712740",
-    "project_id": "duckbuck-studios-test",
-    "storage_bucket": "duckbuck-studios-test.firebasestorage.app"
+    "project_number": "335705236953",
+    "firebase_url": "https://duckbuck-ai-walkie-talkie-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "duckbuck-ai-walkie-talkie",
+    "storage_bucket": "duckbuck-ai-walkie-talkie.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:917171712740:android:1fa676a09409f91283f2f1",
+        "mobilesdk_app_id": "1:335705236953:android:c9cd516554d51fc587a5c8",
         "android_client_info": {
           "package_name": "com.duckbuck.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "917171712740-dfm9bp2iuooovajnb0kslg6jo5pcui8m.apps.googleusercontent.com",
+          "client_id": "335705236953-lrnknfkm8d6aijo293le2na7ps8i0qf4.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.duckbuck.app",
-            "certificate_hash": "30e8ecd074bee838905e831fe4f104b73ca0f355"
+            "certificate_hash": "659ce4388cb13a4df2050f981d051b6c6831c35a"
           }
         },
         {
-          "client_id": "917171712740-vd0erfkbq7q958o27u0kp14mqcggl8da.apps.googleusercontent.com",
+          "client_id": "335705236953-6va6vre00fb1vvmrgi75j30g90bad89s.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAEiTysCNzhhclVl9sLfG296GRlkD2wXwk"
+          "current_key": "AIzaSyCANc0surofm8RWuYpiQMdQ529HKV_7OJI"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "917171712740-vd0erfkbq7q958o27u0kp14mqcggl8da.apps.googleusercontent.com",
+              "client_id": "335705236953-6va6vre00fb1vvmrgi75j30g90bad89s.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "917171712740-cook3clnuhfkf62jsfphsf2uk3idkqq5.apps.googleusercontent.com",
+              "client_id": "335705236953-a31069rr03j0h1f0htlcc4recpksm6sd.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.duckbuck.app"

@@ -39,22 +39,19 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    // Add signing configurations for the custom keystore with the correct password
+    // Add signing configurations for the release keystore
     signingConfigs {
-        create("custom_debug") {
-            keyAlias = "duckbuck_debug"
-            keyPassword = "SrxnS@2005" // Updated to the correct password
-            storeFile = file("duckbuck_debug.jks")
-            storePassword = "SrxnS@2005" // Updated to the correct password
+        getByName("debug") {
+            keyAlias = "release"
+            keyPassword = "SrxnS@2005"
+            storeFile = file("duckbuck_release.jks")
+            storePassword = "SrxnS@2005"
         }
-        
-        // Release signing config with secure keystore
-        // Credentials are externalized using environment variables
         create("release") {
-            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: "release"
-            keyPassword = System.getenv("KEYSTORE_PASSWORD") ?: "SrxnS@2005"
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "duckbuck_release.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "SrxnS@2005"
+            keyAlias = "release"
+            keyPassword = "SrxnS@2005"
+            storeFile = file("duckbuck_release.jks")
+            storePassword = "SrxnS@2005"
         }
     }
 
@@ -71,8 +68,10 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("custom_debug")
-            // ProGuard files removed - will be configured later for production
+            // Use release keystore for debug builds to match Firebase SHA keys
+            signingConfig = signingConfigs.getByName("debug")
+            
+            // Keep debugging enabled for development
             isMinifyEnabled = false
             isShrinkResources = false
             isDebuggable = true

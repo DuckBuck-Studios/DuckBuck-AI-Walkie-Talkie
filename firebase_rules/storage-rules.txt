@@ -1,0 +1,69 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ===========================================
+    // USER PROFILE PHOTOS ONLY
+    // ===========================================
+    match /users/{userId}/profile/{fileName} {
+      // READ: Allow any authenticated user to read profile photos
+      // This enables showing friend photos, search results, etc.
+      allow read: if request.auth != null;
+      
+      // WRITE: Only allow users to upload/update their own profile photos
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidProfilePhoto(request.resource);
+      
+      // DELETE: Only allow users to delete their own profile photos
+      allow delete: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+    
+    // ===========================================
+    // TEMPORARY PROFILE PHOTO UPLOADS
+    // ===========================================
+    match /temp/{userId}/profile/{fileName} {
+      // Allow users to upload to their own temp folder for photo processing
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidProfilePhoto(request.resource);
+        
+      // Allow deletion (cleanup after processing)
+      allow delete: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+    
+    // ===========================================
+    // DENY ALL OTHER PATHS
+    // ===========================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    
+    // ===========================================
+    // HELPER FUNCTIONS
+    // ===========================================
+    
+    // Validate profile photo files - supports all common image formats
+    function isValidProfilePhoto(newResource) {
+      let allowedImageTypes = [
+        'image/jpeg',           // .jpg, .jpeg
+        'image/png',            // .png  
+        'image/webp',           // .webp
+        'image/gif',            // .gif
+        'image/heic',           // .heic (iPhone photos)
+        'image/heif',           // .heif (iPhone photos) 
+        'image/bmp',            // .bmp
+        'image/tiff',           // .tiff, .tif
+        'image/svg+xml',        // .svg
+        'image/avif'            // .avif (modern format)
+      ];
+      
+      return newResource != null &&
+             newResource.size > 0 &&                              // Not empty file
+             newResource.size <= 15 * 1024 * 1024 &&             // 15MB max (for HEIC files)
+             newResource.contentType in allowedImageTypes;        // Valid image type
+    }
+  }
+}

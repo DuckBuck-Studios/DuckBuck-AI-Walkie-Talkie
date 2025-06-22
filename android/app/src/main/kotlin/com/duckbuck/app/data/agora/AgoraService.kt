@@ -256,9 +256,9 @@ class AgoraService(private val context: Context) {
                     Constants.AUDIO_SCENARIO_CHATROOM
                 )
                 
-                // Set default audio route to speaker
+                // Set initial audio route using setEnableSpeakerphone for better control
                 AppLogger.d(TAG, "Setting initial audio route to speakerphone: $isSpeakerOn")
-                rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
+                rtcEngine?.setEnableSpeakerphone(isSpeakerOn)
                 AppLogger.d(TAG, "Initial speaker state set to: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
                 
                 // Give the engine sufficient time to complete internal initialization
@@ -475,7 +475,9 @@ class AgoraService(private val context: Context) {
             
             AppLogger.d(TAG, "Toggling speaker to: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
             
-            val result = rtcEngine?.setDefaultAudioRoutetoSpeakerphone(isSpeakerOn)
+            // Use setEnableSpeakerphone instead of setDefaultAudioRoutetoSpeakerphone
+            // This works during active calls and provides better real-time control
+            val result = rtcEngine?.setEnableSpeakerphone(isSpeakerOn)
             
             if (result == 0) {
                 AppLogger.d(TAG, "✅ Speaker toggle successful - Now using: ${if (isSpeakerOn) "SPEAKER" else "EARPIECE"}")
@@ -504,20 +506,62 @@ class AgoraService(private val context: Context) {
      * Turn speaker on
      */
     fun turnSpeakerOn(): Boolean {
-        if (!isSpeakerOn) {
-            return toggleSpeaker()
+        if (rtcEngine == null) {
+            AppLogger.e(TAG, "RTC Engine not initialized")
+            return false
         }
-        return true // Already on
+        
+        return try {
+            if (!isSpeakerOn) {
+                isSpeakerOn = true
+                val result = rtcEngine?.setEnableSpeakerphone(true)
+                if (result == 0) {
+                    AppLogger.d(TAG, "✅ Speaker turned ON successfully")
+                    eventListener?.onSpeakerToggled(true)
+                    return true
+                } else {
+                    AppLogger.e(TAG, "❌ Failed to turn speaker ON. Error code: $result")
+                    isSpeakerOn = false
+                    return false
+                }
+            }
+            true // Already on
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Exception while turning speaker ON", e)
+            isSpeakerOn = false
+            false
+        }
     }
     
     /**
      * Turn speaker off
      */
     fun turnSpeakerOff(): Boolean {
-        if (isSpeakerOn) {
-            return toggleSpeaker()
+        if (rtcEngine == null) {
+            AppLogger.e(TAG, "RTC Engine not initialized")
+            return false
         }
-        return true // Already off
+        
+        return try {
+            if (isSpeakerOn) {
+                isSpeakerOn = false
+                val result = rtcEngine?.setEnableSpeakerphone(false)
+                if (result == 0) {
+                    AppLogger.d(TAG, "✅ Speaker turned OFF successfully - Now using EARPIECE")
+                    eventListener?.onSpeakerToggled(false)
+                    return true
+                } else {
+                    AppLogger.e(TAG, "❌ Failed to turn speaker OFF. Error code: $result")
+                    isSpeakerOn = true
+                    return false
+                }
+            }
+            true // Already off
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "❌ Exception while turning speaker OFF", e)
+            isSpeakerOn = true
+            false
+        }
     }
     
     /**

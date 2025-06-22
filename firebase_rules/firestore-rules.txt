@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===========================================
+    // USERS COLLECTION RULES
+    // ===========================================
+    match /users/{userId} {
+      // READ: Allow any authenticated user to read user profiles
+      // This enables friend discovery, showing friend profiles, etc.
+      allow read: if request.auth != null;
+      
+      // WRITE: Only allow users to write their own profile
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidUserData(request.resource.data);
+    }
+    
+    // ===========================================
+    // RELATIONSHIPS COLLECTION RULES  
+    // ===========================================
+    match /relationships/{relationshipId} {
+      // READ: Allow users to read relationships they participate in
+      allow read: if request.auth != null 
+        && request.auth.uid in resource.data.participants;
+      
+      // CREATE: Allow sending friend requests and blocking users
+      allow create: if request.auth != null
+        && isValidRelationshipCreate(request.resource.data);
+      
+      // UPDATE: Allow specific relationship updates (accept/reject/block)
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && isValidRelationshipUpdate(resource.data, request.resource.data);
+      
+      // DELETE: Allow specific deletes (cancel request, remove friend, unblock)
+      allow delete: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && isValidRelationshipDelete(resource.data);
+    }
+    
+    // ===========================================
+    // HELPER FUNCTIONS
+    // ===========================================
+    
+    // Validate user data updates based on actual UserModel.toMap() method
+    function isValidUserData(data) {
+      let allowedFields = ['uid', 'displayName', 'photoURL', 'email', 'phoneNumber', 
+                          'metadata', 'fcmTokenData', 'agentRemainingTime', 
+                          'deleted', 'updatedAt', 'createdAt', 'isNewUser', 'isEmailVerified',
+                          'lastLoggedIn', 'onboardingCompletedAt', 'deletedAt'];
+      
+      return // Only check uid if it's present (for partial updates with merge: true)
+             (!('uid' in data.keys()) || data.uid == request.auth.uid) &&
+             data.keys().hasOnly(allowedFields) &&
+             // Validate data types based on UserModel - only if fields are present
+             (!('displayName' in data.keys()) || data.displayName is string) &&
+             (!('photoURL' in data.keys()) || data.photoURL is string) &&
+             (!('email' in data.keys()) || data.email is string) &&
+             (!('phoneNumber' in data.keys()) || data.phoneNumber is string) &&
+             // Validate agentRemainingTime is non-negative integer if present
+             (!('agentRemainingTime' in data.keys()) || (data.agentRemainingTime is int && data.agentRemainingTime >= 0)) &&
+             // Validate boolean fields if present
+             (!('deleted' in data.keys()) || data.deleted is bool) &&
+             (!('isNewUser' in data.keys()) || data.isNewUser is bool) &&
+             (!('isEmailVerified' in data.keys()) || data.isEmailVerified is bool) &&
+             // Validate map fields if present (fcmTokenData can be null when removed)
+             (!('metadata' in data.keys()) || data.metadata is map) &&
+             (!('fcmTokenData' in data.keys()) || data.fcmTokenData is map || data.fcmTokenData == null);
+    }
+    
+    // Validate relationship creation (friend requests and blocking)
+    function isValidRelationshipCreate(data) {
+      let currentUserId = request.auth.uid;
+      let requiredFields = ['participants', 'type', 'status', 'createdAt', 'updatedAt', 'initiatorId'];
+      
+      return data.keys().hasAll(requiredFields) &&
+             data.type == 'friendship' &&
+             (data.status == 'pending' || data.status == 'blocked') &&
+             data.participants is list &&
+             data.participants.size() == 2 &&
+             currentUserId in data.participants &&
+             // FIXED: User should NOT be both participants (prevent self-requests)
+             data.participants[0] != data.participants[1] &&
+             data.initiatorId == currentUserId &&
+             // Ensure participants are sorted alphabetically (matches RelationshipModel.sortParticipants)
+             data.participants[0] < data.participants[1] &&
+             // Validate timestamps (service uses DateTime.now().toIso8601String() OR Timestamp)
+             (data.createdAt is timestamp || data.createdAt is string) &&
+             (data.updatedAt is timestamp || data.updatedAt is string);
+    }
+    
+    // Validate relationship updates (accept/reject requests, update to blocked)
+    function isValidRelationshipUpdate(existingData, newData) {
+      let currentUserId = request.auth.uid;
+      let existingStatus = existingData.status;
+      let newStatus = newData.status;
+      let isInitiator = existingData.initiatorId == currentUserId;
+      let isReceiver = currentUserId in existingData.participants && !isInitiator;
+      
+      // Immutable fields - cannot change participants, type, or createdAt
+      return newData.participants == existingData.participants &&
+             newData.type == existingData.type &&
+             newData.createdAt == existingData.createdAt &&
+             // Must update the updatedAt field
+             (newData.updatedAt is timestamp || newData.updatedAt is string) &&
+             
+             // STATUS TRANSITION RULES BASED ON RelationshipService:
+             (
+               // Accept request: receiver can change pending -> accepted
+               (existingStatus == 'pending' && newStatus == 'accepted' && isReceiver && 
+                newData.initiatorId == existingData.initiatorId &&
+                (newData.acceptedAt is timestamp || newData.acceptedAt is string)) ||
+               
+               // Reject request: receiver can change pending -> declined  
+               (existingStatus == 'pending' && newStatus == 'declined' && isReceiver &&
+                newData.initiatorId == existingData.initiatorId) ||
+               
+               // Block user: any participant can change any status -> blocked
+               // (initiatorId changes to current user when blocking)
+               (newStatus == 'blocked' && newData.initiatorId == currentUserId) ||
+               
+               // Update existing block: blocker can update blocked relationship
+               (existingStatus == 'blocked' && newStatus == 'blocked' && 
+                existingData.initiatorId == currentUserId && newData.initiatorId == currentUserId)
+             );
+    }
+    
+    // Validate relationship deletes (cancel request, remove friend, unblock)
+    function isValidRelationshipDelete(existingData) {
+      let currentUserId = request.auth.uid;
+      let status = existingData.status;
+      let isInitiator = existingData.initiatorId == currentUserId;
+      
+      return (
+        // Cancel friend request: initiator can delete pending requests
+        (status == 'pending' && isInitiator) ||
+        
+        // Remove friend: any participant can delete accepted relationships
+        (status == 'accepted') ||
+        
+        // Unblock user: blocker can delete blocked relationships
+        (status == 'blocked' && isInitiator)
+      );
+    }
+  }
+}

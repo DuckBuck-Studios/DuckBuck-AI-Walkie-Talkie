@@ -6,6 +6,7 @@ import '../firebase/firebase_database_service.dart';
 import '../agora/agora_service.dart';
 import '../agora/agora_token_service.dart';
 import '../auth/auth_service_interface.dart';
+import '../user/user_service_interface.dart';
 import '../../exceptions/ai_agent_exceptions.dart';
 import 'ai_agent_service_interface.dart';
 
@@ -15,6 +16,7 @@ class AiAgentService implements AiAgentServiceInterface {
   final LoggerService _logger;
   final FirebaseDatabaseService _databaseService;
   final AgoraTokenService _agoraTokenService;
+  final UserServiceInterface _userService;
   
   static const String _tag = 'AI_AGENT_SERVICE';
   static const String _userCollection = 'users';
@@ -30,10 +32,12 @@ class AiAgentService implements AiAgentServiceInterface {
     FirebaseDatabaseService? databaseService,
     AgoraTokenService? agoraTokenService,
     AuthServiceInterface? authService,
+    UserServiceInterface? userService,
   }) : _apiService = apiService ?? serviceLocator<ApiService>(),
        _logger = logger ?? serviceLocator<LoggerService>(),
        _databaseService = databaseService ?? serviceLocator<FirebaseDatabaseService>(),
-       _agoraTokenService = agoraTokenService ?? serviceLocator<AgoraTokenService>();
+       _agoraTokenService = agoraTokenService ?? serviceLocator<AgoraTokenService>(),
+       _userService = userService ?? serviceLocator<UserServiceInterface>();
 
   @override
   @override
@@ -359,29 +363,14 @@ class AiAgentService implements AiAgentServiceInterface {
     required int newRemainingTimeSeconds,
   }) async {
     try {
-      if (newRemainingTimeSeconds < 0) {
-        throw AiAgentException(
-          AiAgentErrorCodes.invalidTimeValue,
-          'Time cannot be negative: $newRemainingTimeSeconds',
-        );
-      }
-
-      _logger.i(_tag, 'Updating user $uid agent time to ${formatRemainingTime(newRemainingTimeSeconds)}');
-
-      await _databaseService.setDocument(
-        collection: _userCollection,
-        documentId: uid,
-        data: {
-          'agentRemainingTime': newRemainingTimeSeconds,
-        },
-        merge: true, // Only update the agentRemainingTime field
-        logOperation: false,
+      _logger.i(_tag, 'Updating user $uid agent time to ${formatRemainingTime(newRemainingTimeSeconds)} via UserService');
+      await _userService.updateUserAgentTime(
+        uid: uid,
+        newRemainingTimeSeconds: newRemainingTimeSeconds,
       );
-
-      _logger.i(_tag, 'User agent time updated successfully in Firebase');
+      _logger.i(_tag, 'User agent time updated successfully via UserService');
     } catch (e) {
-      if (e is AiAgentException) rethrow;
-      _logger.e(_tag, 'Error updating user agent time in Firebase: $e');
+      _logger.e(_tag, 'Error updating user agent time via UserService: $e');
       throw AiAgentExceptions.timeUpdateFailed(uid, e);
     }
   }
@@ -393,40 +382,15 @@ class AiAgentService implements AiAgentServiceInterface {
     required int timeUsedSeconds,
   }) async {
     try {
-      if (timeUsedSeconds < 0) {
-        throw AiAgentException(
-          AiAgentErrorCodes.invalidTimeValue,
-          'Time used cannot be negative: $timeUsedSeconds',
-        );
-      }
-
-      _logger.i(_tag, 'Decreasing user $uid agent time by ${formatRemainingTime(timeUsedSeconds)}');
-
-      // Get current user data to calculate new remaining time
-      final userData = await _databaseService.getDocument(
-        collection: _userCollection,
-        documentId: uid,
-      );
-
-      if (userData == null) {
-        throw AiAgentExceptions.userNotFound(uid);
-      }
-
-      final currentRemainingTime = userData['agentRemainingTime'] as int? ?? 0;
-      final newRemainingTime = (currentRemainingTime - timeUsedSeconds).clamp(0, double.infinity).toInt();
-
-      _logger.d(_tag, 'User $uid time: ${formatRemainingTime(currentRemainingTime)} -> ${formatRemainingTime(newRemainingTime)}');
-
-      // Update the remaining time in Firebase
-      await updateUserAgentTime(
+      _logger.i(_tag, 'Decreasing user $uid agent time by ${formatRemainingTime(timeUsedSeconds)} via UserService');
+      final newRemainingTime = await _userService.decreaseUserAgentTime(
         uid: uid,
-        newRemainingTimeSeconds: newRemainingTime,
+        timeUsedSeconds: timeUsedSeconds,
       );
-
+      _logger.d(_tag, 'User $uid time decreased successfully to ${formatRemainingTime(newRemainingTime)}');
       return newRemainingTime;
     } catch (e) {
-      if (e is AiAgentException) rethrow;
-      _logger.e(_tag, 'Error decreasing user agent time: $e');
+      _logger.e(_tag, 'Error decreasing user agent time via UserService: $e');
       throw AiAgentExceptions.timeUpdateFailed(uid, e);
     }
   }
@@ -438,40 +402,15 @@ class AiAgentService implements AiAgentServiceInterface {
     required int additionalTimeSeconds,
   }) async {
     try {
-      if (additionalTimeSeconds < 0) {
-        throw AiAgentException(
-          AiAgentErrorCodes.invalidTimeValue,
-          'Additional time cannot be negative: $additionalTimeSeconds',
-        );
-      }
-
-      _logger.i(_tag, 'Increasing user $uid agent time by ${formatRemainingTime(additionalTimeSeconds)}');
-
-      // Get current user data to calculate new remaining time
-      final userData = await _databaseService.getDocument(
-        collection: _userCollection,
-        documentId: uid,
-      );
-
-      if (userData == null) {
-        throw AiAgentExceptions.userNotFound(uid);
-      }
-
-      final currentRemainingTime = userData['agentRemainingTime'] as int? ?? 0;
-      final newRemainingTime = currentRemainingTime + additionalTimeSeconds;
-
-      _logger.d(_tag, 'User $uid time: ${formatRemainingTime(currentRemainingTime)} -> ${formatRemainingTime(newRemainingTime)}');
-
-      // Update the remaining time in Firebase
-      await updateUserAgentTime(
+      _logger.i(_tag, 'Increasing user $uid agent time by ${formatRemainingTime(additionalTimeSeconds)} via UserService');
+      final newRemainingTime = await _userService.increaseUserAgentTime(
         uid: uid,
-        newRemainingTimeSeconds: newRemainingTime,
+        additionalTimeSeconds: additionalTimeSeconds,
       );
-
+      _logger.d(_tag, 'User $uid time increased successfully to ${formatRemainingTime(newRemainingTime)}');
       return newRemainingTime;
     } catch (e) {
-      if (e is AiAgentException) rethrow;
-      _logger.e(_tag, 'Error increasing user agent time: $e');
+      _logger.e(_tag, 'Error increasing user agent time via UserService: $e');
       throw AiAgentExceptions.timeUpdateFailed(uid, e);
     }
   }
@@ -480,19 +419,9 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<int> getUserRemainingTime(String uid) async {
     try {
-      final userData = await _databaseService.getDocument(
-        collection: _userCollection,
-        documentId: uid,
-      );
-
-      if (userData == null) {
-        _logger.w(_tag, 'User data not found for uid: $uid, returning 0 remaining time');
-        return 0;
-      }
-
-      final remainingTime = userData['agentRemainingTime'] as int? ?? 0;
+      _logger.d(_tag, 'Getting user remaining time via UserService for uid: $uid');
+      final remainingTime = await _userService.getUserAgentRemainingTime(uid);
       _logger.d(_tag, 'User $uid has ${formatRemainingTime(remainingTime)} remaining');
-      
       return remainingTime;
     } catch (e) {
       _logger.e(_tag, 'Error getting user remaining time: $e');
@@ -504,16 +433,11 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<void> resetUserAgentTime(String uid) async {
     try {
-      _logger.i(_tag, 'Resetting user $uid agent time to default (1 hour)');
-      
-      await updateUserAgentTime(
-        uid: uid,
-        newRemainingTimeSeconds: 3600, // 1 hour default
-      );
-      
-      _logger.i(_tag, 'User agent time reset successfully');
+      _logger.i(_tag, 'Resetting user $uid agent time to default (1 hour) via UserService');
+      await _userService.resetUserAgentTime(uid);
+      _logger.i(_tag, 'User agent time reset successfully via UserService');
     } catch (e) {
-      _logger.e(_tag, 'Error resetting user agent time: $e');
+      _logger.e(_tag, 'Error resetting user agent time via UserService: $e');
       rethrow;
     }
   }
