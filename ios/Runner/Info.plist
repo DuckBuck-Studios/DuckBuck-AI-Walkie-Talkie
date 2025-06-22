@@ -85,7 +85,7 @@
 		<key>NSMicrophoneUsageDescription</key>
 		<string>DuckBuck needs access to your microphone for voice calls with your friends.</string>
 		<key>UIStatusBarHidden</key>
-		<true/>
+		<false/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
 	</dict>

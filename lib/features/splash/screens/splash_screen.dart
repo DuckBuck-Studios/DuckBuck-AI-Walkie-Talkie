@@ -464,10 +464,12 @@ class _SplashScreen extends State<SplashScreen>
             ),
             child: ClipOval(
               child: Image.asset(
-                'assets/logo.png',
-                fit: BoxFit.cover,
+                'assets/icon-ico.png',
+                fit: BoxFit.contain, // Changed from cover to contain for better quality
                 width: double.infinity,
                 height: double.infinity,
+                filterQuality: FilterQuality.high, // Added for better quality
+                isAntiAlias: true, // Added for smoother edges
               ),
             ),
           ),

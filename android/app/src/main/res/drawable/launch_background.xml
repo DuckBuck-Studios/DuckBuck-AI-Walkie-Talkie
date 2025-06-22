@@ -1,21 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Splash screen with proper padding to prevent any edge cutting -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    
-    <!-- Black background -->
-    <item android:drawable="@android:color/black" />
-    
-    <!-- Logo with generous padding to ensure no cutting on any device -->
-    <item 
-        android:top="64dp"
-        android:bottom="64dp"
-        android:left="64dp"
-        android:right="64dp">
-        <bitmap 
-            android:src="@drawable/splash_logo"
-            android:gravity="center"
-            android:filter="true"
-            android:antialias="true" />
+    <item>
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
     </item>
-    
+    <item>
+        <bitmap android:gravity="center" android:src="@drawable/splash"/>
+    </item>
 </layer-list>

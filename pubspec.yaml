@@ -54,6 +54,29 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.6
 
+flutter_native_splash:
+  # High-quality splash screen configuration
+  color: "#000000"  # Black background like your current design
+  image: assets/icon-ico.png
+  
+  # Dark mode support
+  color_dark: "#000000"
+  image_dark: assets/icon-ico.png
+  
+  # Android 12+ configuration for highest quality
+  android_12:
+    image: assets/icon-ico.png
+    color: "#000000"
+    icon_background_color: "#000000"  # Black background behind logo
+  
+  # Platform-specific high-quality settings
+  android_gravity: center
+  ios_content_mode: scaleAspectFit
+  web_image_mode: contain
+  
+  # Disable fullscreen to avoid scaling issues
+  fullscreen: false
+
 flutter:
   uses-material-design: true
 
