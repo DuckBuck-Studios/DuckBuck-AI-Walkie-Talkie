@@ -1,15 +1,13 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart' show PhoneAuthCredential;
 import '../services/auth/auth_service_interface.dart';
 import '../models/user_model.dart';
 import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
-import '../services/firebase/firebase_storage_service.dart';
 import '../services/service_locator.dart';
 import '../exceptions/auth_exceptions.dart';
 import '../services/logger/logger_service.dart';
-import '../services/notifications/notifications_service.dart';
 import '../services/user/user_service_interface.dart';
 import '../services/database/local_database_service.dart';
 
@@ -218,12 +216,19 @@ class UserRepository {
       return (user, isNewToFirestore);
     } catch (e) {
       // Log authentication failure
+      final authException = e is AuthException ? e : AuthException(
+        AuthErrorCodes.googleSignInFailed,
+        'Google sign-in failed: ${e.toString()}',
+        e,
+        AuthMethod.google,
+      );
+      
       await _analytics.logAuthFailure(
         authMethod: 'google',
-        reason: e.toString(),
-        errorCode: e is FirebaseAuthException ? e.code : null,
+        reason: authException.message,
+        errorCode: authException.code,
       );
-      rethrow;
+      throw authException;
     }
   }
 
@@ -312,12 +317,19 @@ class UserRepository {
       return (user, isNewToFirestore);
     } catch (e) {
       // Log authentication failure with Apple
+      final authException = e is AuthException ? e : AuthException(
+        AuthErrorCodes.appleSignInFailed,
+        'Apple sign-in failed: ${e.toString()}',
+        e,
+        AuthMethod.apple,
+      );
+      
       await _analytics.logAuthFailure(
         authMethod: 'apple',
-        reason: e.toString(),
-        errorCode: e is FirebaseAuthException ? e.code : null,
+        reason: authException.message,
+        errorCode: authException.code,
       );
-      rethrow;
+      throw authException;
     }
   }
 
@@ -485,12 +497,19 @@ class UserRepository {
       await _analytics.logOtpEntered(isSuccessful: false);
       
       // Log authentication failure
+      final authException = e is AuthException ? e : AuthException(
+        AuthErrorCodes.phoneAuthFailed,
+        'Phone OTP verification failed: ${e.toString()}',
+        e,
+        AuthMethod.phone,
+      );
+      
       await _analytics.logAuthFailure(
         authMethod: 'phone_otp',
-        reason: e.toString(),
-        errorCode: e is FirebaseAuthException ? e.code : null,
+        reason: authException.message,
+        errorCode: authException.code,
       );
-      rethrow;
+      throw authException;
     }
   }
 
@@ -564,42 +583,20 @@ class UserRepository {
       );
 
       return (user, isNewUser);
-    } on FirebaseAuthException catch (e) {
-      // Log authentication failure with specific error code
-      _logger.e(_tag, 'Firebase Auth Exception in phone sign-in: ${e.code} - ${e.message}');
-      
-      await _analytics.logAuthFailure(
-        authMethod: 'phone_manual',
-        reason: e.message ?? e.toString(),
-        errorCode: e.code,
-      );
-      
-      // Map Firebase error code to our own error codes
-      String errorCode;
-      switch (e.code) {
-        case 'invalid-verification-code':
-          errorCode = AuthErrorCodes.invalidVerificationCode;
-          break;
-        case 'invalid-verification-id':
-          errorCode = AuthErrorCodes.invalidVerificationId;
-          break;
-        case 'session-expired':
-          errorCode = AuthErrorCodes.sessionExpired;
-          break;
-        case 'code-expired':
-          errorCode = AuthErrorCodes.smsCodeExpired;
-          break;
-        default:
-          errorCode = AuthErrorCodes.phoneAuthFailed;
+    } catch (e) {
+      if (e is AuthException) {
+        // Log authentication failure with our own error codes
+        _logger.e(_tag, 'Auth Exception in phone sign-in: ${e.code} - ${e.message}');
+        
+        await _analytics.logAuthFailure(
+          authMethod: 'phone_manual',
+          reason: e.message,
+          errorCode: e.code,
+        );
+        
+        rethrow;
       }
       
-      throw AuthException(
-        errorCode,
-        e.message ?? 'Failed to verify phone number',
-        e,
-        AuthMethod.phone,
-      );
-    } catch (e) {
       // Log generic authentication failure
       _logger.e(_tag, 'Unexpected error during phone auth: ${e.toString()}');
       
@@ -608,12 +605,9 @@ class UserRepository {
         reason: e.toString(),
       );
       
-      if (e is AuthException) {
-        rethrow;  
-      }
       throw AuthException(
         AuthErrorCodes.phoneAuthFailed,
-        'Failed to sign in with phone credential',
+        'Failed to sign in with phone credential: ${e.toString()}',
         e,
         AuthMethod.phone,
       );
@@ -684,7 +678,7 @@ class UserRepository {
         name: 'profile_update_failure',
         parameters: {
           'reason': e.toString(),
-          'error_code': e is FirebaseAuthException ? e.code : 'unknown',
+          'error_code': e is AuthException ? e.code : 'unknown',
         },
       );
       
@@ -710,23 +704,10 @@ class UserRepository {
         },
       );
       
-      // Get Firebase storage service to upload the image
-      final storageService = serviceLocator<FirebaseStorageService>();
-      final photoURL = await storageService.uploadProfileImage(
-        userId: userId,
-        imageFile: imageFile,
-      );
+      // Use user service to upload profile photo
+      final photoURL = await _userService.uploadProfilePhoto(userId, imageFile);
       
       _logger.i(_tag, 'Profile photo uploaded successfully: $photoURL');
-      
-      // Log successful photo upload
-      await _analytics.logEvent(
-        name: 'profile_photo_upload_success',
-        parameters: {
-          'user_id': userId,
-          'photo_url_length': photoURL.length,
-        },
-      );
       
       return photoURL;
     } catch (e) {
@@ -781,15 +762,20 @@ class UserRepository {
     try {
       _logger.i(_tag, 'Generating FCM token for authenticated user: $userId');
       
-      // Get notifications service to generate and save FCM token
-      final notificationsService = serviceLocator<NotificationsService>();
-      await notificationsService.generateAndSaveToken(userId);
+      // Use user service to generate and save FCM token
+      await _userService.generateAndSaveFcmToken(userId);
       
       _logger.i(_tag, 'FCM token generation completed for user: $userId');
     } catch (e) {
       // Log error but don't fail the authentication process
       _logger.e(_tag, 'Failed to generate FCM token for user $userId: ${e.toString()}');
     }
+  }
+
+  /// Generate and save FCM token for push notifications
+  /// This is a public method that can be called during profile completion or other scenarios
+  Future<void> generateAndSaveFcmToken(String userId) async {
+    await _generateAndSaveFCMToken(userId);
   }
 
   /// Create user record in Firestore
@@ -950,18 +936,14 @@ class UserRepository {
       uid = user.uid;
       _logger.d(_tag, 'User ID to delete: $uid');
       
-      // Mark user as deleted in Firestore using user service
+      // Mark user as deleted in Firestore using user service (soft delete)
       _logger.i(_tag, 'Marking user as deleted in Firestore for UID: $uid');
       await _userService.deleteUserAccount(uid);
       _logger.i(_tag, 'User marked as deleted in Firestore successfully');
       
-      // Delete Firebase Auth user directly
-      final firebaseUser = authService.currentUser;
-      if (firebaseUser != null) {
-        _logger.i(_tag, 'Deleting Firebase Auth user');
-        await firebaseUser.delete();
-        _logger.i(_tag, 'Firebase Auth user deleted successfully');
-      }
+      // NOTE: We do NOT delete the Firebase Auth user for soft delete functionality
+      // The Firebase Auth user remains active so they can restore their account later
+      _logger.i(_tag, 'Firebase Auth user preserved for potential account restoration');
       
       // Clean up local database data for this user
       final localDb = LocalDatabaseService.instance;

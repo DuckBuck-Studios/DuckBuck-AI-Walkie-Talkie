@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../../core/models/user_model.dart';
+import '../../../core/repositories/auth_repository.dart';
 import '../../../core/repositories/user_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/exceptions/auth_exceptions.dart';
@@ -13,8 +14,9 @@ import '../../friends/providers/relationship_provider.dart';
 ///
 /// This class uses the ChangeNotifier pattern to broadcast authentication state
 /// changes to all listening widgets. It serves as a bridge between the UI and
-/// the UserRepository that handles the actual authentication logic.
+/// the AuthRepository that handles the actual authentication logic.
 class AuthStateProvider extends ChangeNotifier {
+  final AuthRepository _authRepository;
   final UserRepository _userRepository;
   final AuthSecurityManager _securityManager;
   final LoggerService _logger;
@@ -27,10 +29,12 @@ class AuthStateProvider extends ChangeNotifier {
 
   /// Creates a new AuthStateProvider
   AuthStateProvider({
+    AuthRepository? authRepository,
     UserRepository? userRepository,
     AuthSecurityManager? securityManager,
     LoggerService? logger,
-  }) : _userRepository = userRepository ?? serviceLocator<UserRepository>(),
+  }) : _authRepository = authRepository ?? serviceLocator<AuthRepository>(),
+       _userRepository = userRepository ?? serviceLocator<UserRepository>(),
        _securityManager = securityManager ?? serviceLocator<AuthSecurityManager>(),
        _logger = logger ?? serviceLocator<LoggerService>() {
     _init();
@@ -41,15 +45,15 @@ class AuthStateProvider extends ChangeNotifier {
     // Note: Notification service initialization is now handled by Kotlin/Android side
     // _notificationsService.initialize(); - No longer needed
 
-    // Listen for auth changes - properly store subscription for disposal
-    _authSubscription = _userRepository.userStream.listen((user) {
+    // Listen for auth changes using AuthRepository - properly store subscription for disposal
+    _authSubscription = _authRepository.getCurrentUserDataStream().listen((user) {
       // Only notify if user actually changed to avoid excessive rebuilds
       final userChanged = _currentUser?.uid != user?.uid;
       _currentUser = user;
 
       // When user logs in, update login state and start monitoring
       if (user != null) {
-        // Note: FCM token registration is now handled by Kotlin/Android side
+        // Note: FCM token registration is now handled by AuthRepository during sign-in
         
         // Update login status in local database (async but don't await to avoid blocking UI)
         Future(() async {
@@ -82,16 +86,14 @@ class AuthStateProvider extends ChangeNotifier {
       }
     });
 
-    // Load current user immediately if available (but load complete data in background)
-    _currentUser = _userRepository.currentUser; // This might have agentRemainingTime: 0
-    if (_currentUser != null) {
-      // Note: FCM token registration is now handled by Kotlin/Android side
-      
+    // Load current user immediately if available from AuthRepository
+    final currentFirebaseUser = _authRepository.currentUser;
+    if (currentFirebaseUser != null) {
       // Load complete user data in background and update _currentUser
       Future(() async {
         try {
-          final completeUser = await _userRepository.getCurrentUser();
-          if (completeUser != null && completeUser.uid == _currentUser?.uid) {
+          final completeUser = await _authRepository.getCurrentUserData();
+          if (completeUser != null) {
             _currentUser = completeUser;
             _logger.i(_tag, 'Updated current user with complete data (agentRemainingTime: ${completeUser.agentRemainingTime}s)');
             notifyListeners(); // Notify UI of the complete data update
@@ -105,11 +107,11 @@ class AuthStateProvider extends ChangeNotifier {
       Future(() async {
         try {
           final localDb = LocalDatabaseService.instance;
-          await localDb.setUserLoggedIn(_currentUser!.uid, true);
+          await localDb.setUserLoggedIn(currentFirebaseUser.uid, true);
           
           // Start Firebase document monitoring for reactive updates
           await _userRepository.startUserDocumentMonitoring();
-          _logger.i(_tag, 'Started Firebase document monitoring for existing user: ${_currentUser!.uid}');
+          _logger.i(_tag, 'Started Firebase document monitoring for existing user: ${currentFirebaseUser.uid}');
         } catch (e) {
           _logger.e(_tag, 'Failed to update login status or start monitoring during init: $e');
         }
@@ -130,7 +132,8 @@ class AuthStateProvider extends ChangeNotifier {
       return user as UserModel?;
     } catch (e) {
       _logger.e(_tag, 'Error getting cached user: $e');
-      return _currentUser;
+      // Fallback to auth repository
+      return await _authRepository.getCurrentUserData();
     }
   }
 
@@ -151,10 +154,13 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _logger.d(_tag, 'Delegating to user repository...');
-      final (user, isNewUser) = await _userRepository.signInWithGoogle();
+      _logger.d(_tag, 'Delegating to auth repository...');
+      final userModel = await _authRepository.signInWithGoogle();
+      
+      // Check if user is new using auth repository
+      final isNewUser = await _authRepository.isCurrentUserNew();
 
-      _logger.i(_tag, 'Google sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser');
+      _logger.i(_tag, 'Google sign-in successful for user: ${userModel.displayName ?? 'Unknown'}, isNewUser: $isNewUser');
       
       // Start tracking user session
       _securityManager.startUserSession();
@@ -163,7 +169,7 @@ class AuthStateProvider extends ChangeNotifier {
       await _securityManager.ensureValidToken();
       
       _errorMessage = null;
-      return (user, isNewUser);
+      return (userModel, isNewUser);
     } catch (e) {
       _logger.e(_tag, 'Google sign-in failed: ${e.toString()}');
       _errorMessage = e.toString();
@@ -183,10 +189,13 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _logger.d(_tag, 'Delegating to user repository...');
-      final (user, isNewUser) = await _userRepository.signInWithApple();
+      _logger.d(_tag, 'Delegating to auth repository...');
+      final userModel = await _authRepository.signInWithApple();
+      
+      // Check if user is new using auth repository
+      final isNewUser = await _authRepository.isCurrentUserNew();
 
-      _logger.i(_tag, 'Apple sign-in successful for user: ${user.displayName ?? 'Unknown'}, isNewUser: $isNewUser');
+      _logger.i(_tag, 'Apple sign-in successful for user: ${userModel.displayName ?? 'Unknown'}, isNewUser: $isNewUser');
       
       // Start tracking user session
       _securityManager.startUserSession();
@@ -195,7 +204,7 @@ class AuthStateProvider extends ChangeNotifier {
       await _securityManager.ensureValidToken();
       
       _errorMessage = null;
-      return (user, isNewUser);
+      return (userModel, isNewUser);
     } catch (e) {
       _logger.e(_tag, 'Apple sign-in failed: ${e.toString()}');
       _errorMessage = e.toString();
@@ -219,7 +228,7 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _userRepository.verifyPhoneNumber(
+      await _authRepository.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (_) {
           _isLoading = false;
@@ -260,11 +269,10 @@ class AuthStateProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final (user, isNewUser) = await _userRepository.verifyOtpAndSignIn(
-        verificationId: verificationId,
-        smsCode: smsCode,
-        phoneNumber: phoneNumber,
-      );
+      final userModel = await _authRepository.verifyOtpAndSignIn(verificationId, smsCode);
+      
+      // Check if user is new using auth repository
+      final isNewUser = await _authRepository.isCurrentUserNew();
 
       _logger.i(_tag, 'Phone OTP verification successful, isNewUser: $isNewUser');
       
@@ -275,7 +283,7 @@ class AuthStateProvider extends ChangeNotifier {
       await _securityManager.ensureValidToken();
       
       _errorMessage = null;
-      return (user, isNewUser);
+      return (userModel, isNewUser);
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
@@ -295,10 +303,12 @@ class AuthStateProvider extends ChangeNotifier {
 
     try {
       _logger.d(_tag, 'Processing phone auth credential');
-      final (user, isNewUser) = await _userRepository
-          .signInWithPhoneAuthCredential(credential);
+      final userModel = await _authRepository.signInWithPhoneAuthCredential(credential);
+      
+      // Check if user is new using auth repository
+      final isNewUser = await _authRepository.isCurrentUserNew();
 
-      _logger.i(_tag, 'Phone auth successful for user: ${user.phoneNumber ?? 'Unknown'}, isNewUser: $isNewUser');
+      _logger.i(_tag, 'Phone auth successful for user: ${userModel.phoneNumber ?? 'Unknown'}, isNewUser: $isNewUser');
       
       // Start tracking user session
       _securityManager.startUserSession();
@@ -307,7 +317,7 @@ class AuthStateProvider extends ChangeNotifier {
       await _securityManager.ensureValidToken();
       
       _errorMessage = null;
-      return (user, isNewUser);
+      return (userModel, isNewUser);
     } catch (e) {
       _logger.e(_tag, 'Phone auth failed: ${e.toString()}');
       _errorMessage = e.toString();
@@ -345,13 +355,13 @@ class AuthStateProvider extends ChangeNotifier {
         // Continue with signout even if relationship provider stream closure fails
       }
       
-      // Use UserRepository.signOut() for proper architecture flow: UI → Provider → Repository → Service
+      // Use AuthRepository.signOut() for proper clean architecture flow: UI → Provider → Repository → Service
       // This handles Firebase auth logout and FCM token removal
-      _logger.i(_tag, 'Using UserRepository.signOut() for proper layering');
-      await _userRepository.signOut();
+      _logger.i(_tag, 'Using AuthRepository.signOut() for proper layering');
+      await _authRepository.signOut();
       
-      // Note: Local database cleanup is handled by UserRepository.signOut()
-      _logger.i(_tag, 'Local database cleared by UserRepository');
+      // Note: Local database cleanup is handled by the auth flow through user repository if needed
+      _logger.i(_tag, 'Local database cleared by auth repository flow');
       
       _logger.i(_tag, 'User signed out successfully');
     } catch (e) {
@@ -375,8 +385,8 @@ class AuthStateProvider extends ChangeNotifier {
         photoURL: photoURL,
       );
 
-      // Force refresh the current user with complete data
-      _currentUser = await _userRepository.getCurrentUser();
+      // Force refresh the current user with complete data from auth repository
+      _currentUser = await _authRepository.getCurrentUserData();
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
@@ -395,8 +405,8 @@ class AuthStateProvider extends ChangeNotifier {
   /// Validate a user credential for security-sensitive operations
   Future<bool> validateCredential(dynamic credential) async {
     try {
-      // Use repository layer for proper architecture: UI → Provider → Repository → Service
-      return await _userRepository.validateCredential(credential);
+      // Use auth repository layer for proper architecture: UI → Provider → Repository → Service
+      return await _authRepository.validateCredential(credential);
     } catch (e) {
       _errorMessage = e.toString();
       _logger.e(_tag, 'Credential validation failed: ${e.toString()}');
@@ -419,7 +429,7 @@ class AuthStateProvider extends ChangeNotifier {
     }
     
     try {
-      await _userRepository.markUserOnboardingComplete(_currentUser!.uid);
+      await _authRepository.markCurrentUserOnboardingComplete();
       _logger.i(_tag, 'User onboarding marked as complete');
     } catch (e) {
       _logger.e(_tag, 'Error marking onboarding complete: ${e.toString()}');
@@ -429,7 +439,7 @@ class AuthStateProvider extends ChangeNotifier {
 
   /// Delete the current user account and all associated data
   /// 
-  /// This method follows proper architecture by using the UI → Provider → Repository pattern
+  /// This method follows proper clean architecture by using the UI → Provider → Repository pattern
   /// It handles all cleanup including FCM tokens, Firestore data, and Firebase Auth deletion
   Future<void> deleteUserAccount() async {
     _logger.i(_tag, 'Starting user account deletion process...');
@@ -463,12 +473,16 @@ class AuthStateProvider extends ChangeNotifier {
       // Clear the current user state immediately to prevent any further operations
       _currentUser = null;
       
-      // Note: Local database cleanup will be handled by UserRepository.deleteUserAccount()
-      _logger.i(_tag, 'Local database will be cleared by UserRepository');
+      // Note: Local database cleanup will be handled by AuthRepository.deleteCurrentUserAccount()
+      _logger.i(_tag, 'Local database will be cleared by AuthRepository');
       
-      // Delegate the actual deletion to the repository
-      // This handles: FCM token removal, Firestore deletion, backend cleanup, Firebase Auth deletion
-      await _userRepository.deleteUserAccount();
+      // Delegate the actual deletion to the auth repository
+      // This handles: FCM token removal, Firestore deletion, backend cleanup (but NOT Firebase Auth deletion)
+      await _authRepository.deleteCurrentUserAccount();
+      
+      // Sign out from Firebase Auth after soft delete to prevent auto-login on app restart
+      _logger.i(_tag, 'Signing out user from Firebase Auth after account deletion');
+      await _authRepository.signOut();
       
       _logger.i(_tag, 'User account deletion completed successfully');
       _errorMessage = null;

@@ -1,14 +1,19 @@
+import 'dart:io';
 import '../../models/user_model.dart';
 import '../firebase/firebase_database_service.dart';
+import '../firebase/firebase_storage_service.dart';
 import 'user_service_interface.dart';
 import '../logger/logger_service.dart';
+import '../firebase/firebase_analytics_service.dart';
 import '../service_locator.dart';
 import '../../exceptions/auth_exceptions.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 /// Firebase implementation of the UserService interface
 class UserService implements UserServiceInterface {
   final FirebaseDatabaseService _databaseService;
   final LoggerService _logger;
+  final FirebaseAnalyticsService _analytics;
   
   static const String _tag = 'USER_SERVICE';
   static const String _userCollection = 'users';
@@ -17,7 +22,9 @@ class UserService implements UserServiceInterface {
   UserService({
     FirebaseDatabaseService? databaseService,
     LoggerService? logger,
+    FirebaseAnalyticsService? analytics,
   }) : _databaseService = databaseService ?? serviceLocator<FirebaseDatabaseService>(),
+       _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _logger = logger ?? LoggerService();
   
   @override
@@ -297,6 +304,146 @@ class UserService implements UserServiceInterface {
         'Failed to mark user as deleted',
         e
       );
+    }
+  }
+
+  @override
+  Future<void> restoreDeletedAccount(String uid) async {
+    try {
+      _logger.i(_tag, 'Restoring deleted account for user: $uid');
+      
+      // Completely restore the account by setting deleted to false 
+      // and removing all deletion-related timestamps
+      await _databaseService.setDocument(
+        collection: _userCollection,
+        documentId: uid,
+        data: {
+          'deleted': false,
+          'deletedAt': FieldValue.delete(), // Remove deletion timestamp completely
+          'restoredAt': FieldValue.delete(), // Remove any previous restoration timestamp
+          'updatedAt': FieldValue.serverTimestamp(), // Update the last modified time
+        },
+        merge: true
+      );
+      
+      _logger.i(_tag, 'User $uid successfully restored from deleted state with timestamps removed');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to restore deleted account: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to restore deleted account',
+        e
+      );
+    }
+  }
+
+  @override
+  Future<void> removeFcmToken(String uid) async {
+    try {
+      _logger.i(_tag, 'Removing FCM token for user: $uid');
+      
+      // Completely remove the FCM token data field from the user document
+      await _databaseService.setDocument(
+        collection: _userCollection,
+        documentId: uid,
+        data: {
+          'fcmTokenData': FieldValue.delete(), // Completely remove the field
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        merge: true
+      );
+      
+      _logger.i(_tag, 'FCM token successfully removed for user: $uid');
+    } catch (e) {
+      _logger.e(_tag, 'Failed to remove FCM token: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to remove FCM token',
+        e
+      );
+    }
+  }
+
+  @override
+  Future<void> generateAndSaveFcmToken(String uid) async {
+    try {
+      _logger.i(_tag, 'Generating and saving FCM token for user: $uid');
+      
+      final messaging = FirebaseMessaging.instance;
+      final token = await messaging.getToken();
+      
+      if (token != null) {
+        _logger.i(_tag, 'FCM token generated successfully: ${token.substring(0, 20)}...');
+        
+        // Create FCM token data structure without platform field
+        final fcmTokenData = {
+          'token': token,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+          'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        };
+        
+        // Update user document with FCM token data
+        await _databaseService.setDocument(
+          collection: _userCollection,
+          documentId: uid,
+          data: {
+            'fcmTokenData': fcmTokenData,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          merge: true
+        );
+        
+        _logger.i(_tag, 'FCM token saved to Firestore for user: $uid');
+      } else {
+        _logger.w(_tag, 'Failed to generate FCM token for user: $uid');
+      }
+    } catch (e) {
+      _logger.e(_tag, 'Error generating and saving FCM token: ${e.toString()}');
+      throw AuthException(
+        AuthErrorCodes.databaseError,
+        'Failed to generate and save FCM token',
+        e
+      );
+    }
+  }
+
+  @override
+  Future<String> uploadProfilePhoto(String uid, File imageFile) async {
+    _logger.i(_tag, 'Uploading profile photo for user: $uid');
+    
+    try {
+      // Get Firebase storage service to upload the image
+      final storageService = serviceLocator<FirebaseStorageService>();
+      final photoURL = await storageService.uploadProfileImage(
+        userId: uid,
+        imageFile: imageFile,
+      );
+      
+      _logger.i(_tag, 'Profile photo uploaded successfully: $photoURL');
+      
+      // Log successful photo upload
+      await _analytics.logEvent(
+        name: 'profile_photo_upload_success',
+        parameters: {
+          'user_id': uid,
+          'photo_url_length': photoURL.length,
+        },
+      );
+      
+      return photoURL;
+    } catch (e) {
+      _logger.e(_tag, 'Failed to upload profile photo for user $uid: $e');
+      
+      // Log photo upload failure
+      await _analytics.logEvent(
+        name: 'profile_photo_upload_failed',
+        parameters: {
+          'user_id': uid,
+          'error': e.toString(),
+        },
+      );
+      
+      rethrow;
     }
   }
 }

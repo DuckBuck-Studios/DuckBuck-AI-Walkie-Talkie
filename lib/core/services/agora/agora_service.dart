@@ -67,12 +67,12 @@ class AgoraService {
   /// Turn speaker on
   static Future<bool> turnSpeakerOn() async {
     try {
-      print('AgoraService: Calling turnSpeakerOn');
+      _logger.d('AgoraService', 'Calling turnSpeakerOn');
       final bool result = await _channel.invokeMethod('turnSpeakerOn');
-      print('AgoraService: turnSpeakerOn result: $result');
+      _logger.d('AgoraService', 'turnSpeakerOn result: $result');
       return result;
     } catch (e) {
-      print('AgoraService: Error in turnSpeakerOn: $e');
+      _logger.e('AgoraService', 'Error in turnSpeakerOn: $e');
       return false;
     }
   }
@@ -80,12 +80,12 @@ class AgoraService {
   /// Turn speaker off
   static Future<bool> turnSpeakerOff() async {
     try {
-      print('AgoraService: Calling turnSpeakerOff');
+      _logger.d('AgoraService', 'Calling turnSpeakerOff');
       final bool result = await _channel.invokeMethod('turnSpeakerOff');
-      print('AgoraService: turnSpeakerOff result: $result');
+      _logger.d('AgoraService', 'turnSpeakerOff result: $result');
       return result;
     } catch (e) {
-      print('AgoraService: Error in turnSpeakerOff: $e');
+      _logger.e('AgoraService', 'Error in turnSpeakerOff: $e');
       return false;
     }
   }
@@ -108,26 +108,26 @@ class AgoraService {
   static Future<bool> toggleSpeaker() async {
     try {
       final bool currentlyEnabled = await isSpeakerEnabled();
-      print('AgoraService: Current speaker state: $currentlyEnabled');
+      _logger.d('AgoraService', 'Current speaker state: $currentlyEnabled');
       
       bool result;
       if (currentlyEnabled) {
-        print('AgoraService: Turning speaker OFF (to earpiece)');
+        _logger.d('AgoraService', 'Turning speaker OFF (to earpiece)');
         result = await turnSpeakerOff();
       } else {
-        print('AgoraService: Turning speaker ON (to speaker)');
+        _logger.d('AgoraService', 'Turning speaker ON (to speaker)');
         result = await turnSpeakerOn();
       }
       
-      print('AgoraService: Toggle result: $result');
+      _logger.d('AgoraService', 'Toggle result: $result');
       
       // Verify the new state after toggle
       final newState = await isSpeakerEnabled();
-      print('AgoraService: New speaker state after toggle: $newState');
+      _logger.d('AgoraService', 'New speaker state after toggle: $newState');
       
       return result;
     } catch (e) {
-      print('AgoraService: Error in toggleSpeaker: $e');
+      _logger.e('AgoraService', 'Error in toggleSpeaker: $e');
       return false;
     }
   }
@@ -166,10 +166,10 @@ class AgoraService {
   static Future<bool> isSpeakerEnabled() async {
     try {
       final bool result = await _channel.invokeMethod('isSpeakerEnabled');
-      print('AgoraService: isSpeakerEnabled result: $result');
+      _logger.d('AgoraService', 'isSpeakerEnabled result: $result');
       return result;
     } catch (e) {
-      print('AgoraService: Error in isSpeakerEnabled: $e');
+      _logger.e('AgoraService', 'Error in isSpeakerEnabled: $e');
       return false; // Default to disabled on error
     }
   }

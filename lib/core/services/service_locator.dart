@@ -13,6 +13,7 @@ import 'api/api_service.dart';
 import 'user/user_service_interface.dart';
 import 'user/user_service.dart'; 
 import '../repositories/user_repository.dart'; 
+import '../repositories/auth_repository.dart';
 import '../repositories/relationship_repository.dart';
 import '../repositories/ai_agent_repository.dart'; 
 import 'logger/logger_service.dart';
@@ -43,14 +44,23 @@ Future<void> setupServiceLocator() async {
   );
 
   // Register Firebase services
-  serviceLocator.registerLazySingleton<AuthServiceInterface>(
-    () => AuthService(
+  serviceLocator.registerLazySingleton<FirebaseDatabaseService>(
+    () => FirebaseDatabaseService(),
+  );
+
+  // Register user service BEFORE auth service to avoid circular dependency
+  serviceLocator.registerLazySingleton<UserServiceInterface>(
+    () => UserService(
+      databaseService: serviceLocator<FirebaseDatabaseService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );
 
-  serviceLocator.registerLazySingleton<FirebaseDatabaseService>(
-    () => FirebaseDatabaseService(),
+  // Register auth service (no longer depends on user service)
+  serviceLocator.registerLazySingleton<AuthServiceInterface>(
+    () => AuthService(
+      logger: serviceLocator<LoggerService>(),
+    ),
   );
 
   serviceLocator.registerLazySingleton<FirebaseStorageService>(
@@ -85,6 +95,16 @@ Future<void> setupServiceLocator() async {
   );
 
   // Register repositories
+  
+  // Register auth repository
+  serviceLocator.registerLazySingleton<AuthRepository>(
+    () => AuthRepository(
+      authService: serviceLocator<AuthServiceInterface>(),
+      userService: serviceLocator<UserServiceInterface>(),
+      logger: serviceLocator<LoggerService>(),
+    ),
+  );
+
   serviceLocator.registerLazySingleton<UserRepository>(
     () => UserRepository(
       authService: serviceLocator<AuthServiceInterface>(),
@@ -127,15 +147,6 @@ Future<void> setupServiceLocator() async {
   serviceLocator.registerLazySingleton<ApiService>(
     () => ApiService(
       authService: serviceLocator<AuthServiceInterface>(),
-      logger: serviceLocator<LoggerService>(),
-    ),
-  );
-   
-  
-  // Register user service
-  serviceLocator.registerLazySingleton<UserServiceInterface>(
-    () => UserService(
-      databaseService: serviceLocator<FirebaseDatabaseService>(),
       logger: serviceLocator<LoggerService>(),
     ),
   );

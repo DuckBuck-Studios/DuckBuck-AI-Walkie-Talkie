@@ -346,9 +346,19 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
         photoURL: photoURL,
       );
 
-      // Mark user onboarding as complete using UserRepository
+      // Generate and save FCM token for push notifications after profile completion
       final currentUser = _userRepository.currentUser;
       if (currentUser != null) {
+        try {
+          _logger.i('ProfileCompletion', 'Generating FCM token for user: ${currentUser.uid}');
+          await _userRepository.generateAndSaveFcmToken(currentUser.uid);
+          _logger.i('ProfileCompletion', 'FCM token generated and saved successfully');
+        } catch (e) {
+          // Log error but don't fail the profile completion process
+          _logger.e('ProfileCompletion', 'Failed to generate FCM token (non-critical): ${e.toString()}');
+        }
+
+        // Mark user onboarding as complete using UserRepository
         await _userRepository.markUserOnboardingComplete(currentUser.uid);
       }
       

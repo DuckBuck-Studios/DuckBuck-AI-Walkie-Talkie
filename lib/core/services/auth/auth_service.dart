@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -12,9 +11,9 @@ import 'dart:convert';
 import '../logger/logger_service.dart';
 import '../../constants/auth_constants.dart';
 import '../service_locator.dart';
-import '../notifications/notifications_service.dart';
 
 /// Firebase implementation of the auth service interface
+/// This service is a thin wrapper around Firebase Auth and should not contain business logic
 class AuthService implements AuthServiceInterface {
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
@@ -94,7 +93,12 @@ class AuthService implements AuthServiceInterface {
         // Web platform sign-in
         _logger.d(_tag, 'Using web platform Google sign-in flow');
         final authProvider = GoogleAuthProvider();
-        return await _firebaseAuth.signInWithPopup(authProvider);
+        final userCredential = await _firebaseAuth.signInWithPopup(authProvider);
+        
+        // Check if account is marked as deleted
+        // NOTE: Account deletion validation should be handled by the repository layer
+        
+        return userCredential;
       } else {
         // Mobile platform sign-in
         _logger.d(_tag, 'Using mobile platform Google sign-in flow');
@@ -116,13 +120,21 @@ class AuthService implements AuthServiceInterface {
           );
 
           _logger.d(_tag, 'Signing in with Google credential');
-          return await _firebaseAuth.signInWithCredential(credential);
+          final userCredential = await _firebaseAuth.signInWithCredential(credential);
+          
+          // Check if account is marked as deleted
+          // NOTE: Account deletion validation should be handled by the repository layer
+          
+          return userCredential;
         } catch (e) {
           _logger.e(_tag, 'Error during Google sign-in authentication: ${e.toString()}');
           
           if (e is FirebaseAuthException) {
             throw _handleException(e);
           }
+          
+          // Don't convert accountMarkedDeleted exceptions - let them pass through
+          // NOTE: Account deletion handling should be done in repository layer
           
           throw AuthException(
             AuthErrorCodes.googleSignInFailed,
@@ -206,7 +218,12 @@ class AuthService implements AuthServiceInterface {
 
       // Sign in to Firebase with the Apple credentials
       _logger.d(_tag, 'Signing in with Apple credential');
-      return await _firebaseAuth.signInWithCredential(oauthCredential);
+      final userCredential = await _firebaseAuth.signInWithCredential(oauthCredential);
+      
+      // Check if account is marked as deleted
+      // NOTE: Account deletion validation should be handled by the repository layer
+      
+      return userCredential;
     } catch (e) {
       _logger.e(_tag, 'Apple sign-in error: ${e.toString()}');
       
@@ -345,12 +362,23 @@ class AuthService implements AuthServiceInterface {
   ) async {
     try {
       _logger.d(_tag, 'Signing in with phone auth credential');
-      return await _firebaseAuth.signInWithCredential(credential);
+      final userCredential = await _firebaseAuth.signInWithCredential(credential);
+      
+      // Check if account is marked as deleted
+      // NOTE: Account deletion validation should be handled by the repository layer
+      
+      return userCredential;
     } on FirebaseAuthException catch (e) {
       _logger.e(_tag, 'Firebase Auth error during phone sign-in: ${e.code} - ${e.message}');
       throw _handleException(e, method: AuthMethod.phone);
     } catch (e) {
       _logger.e(_tag, 'Unexpected error during phone sign-in', e);
+      
+      // Don't convert accountMarkedDeleted exceptions - let them pass through
+      if (e is AuthException && e.code == AuthErrorCodes.accountMarkedDeleted) {
+        rethrow;
+      }
+      
       throw AuthException(
         AuthErrorCodes.phoneAuthFailed,
         'Failed to sign in with phone credential',
@@ -383,24 +411,7 @@ class AuthService implements AuthServiceInterface {
   @override
   Future<void> signOut() async {
     try {
-      // Get current user ID before signing out
-      final user = _firebaseAuth.currentUser;
-      final uid = user?.uid;
-      
-      if (uid != null) {
-        _logger.i(_tag, 'Removing FCM token before sign out for user: $uid');
-        
-        // Get notifications service to remove FCM token
-        try {
-          // Use the service locator to get the notifications service
-          final notificationsService = serviceLocator<NotificationsService>();
-          await notificationsService.removeToken(uid);
-          _logger.i(_tag, 'FCM token successfully removed');
-        } catch (e) {
-          // Log error but continue with sign out process
-          _logger.e(_tag, 'Failed to remove FCM token: ${e.toString()}');
-        }
-      }
+      _logger.i(_tag, 'Starting Firebase sign out');
       
       // Sign out from Google
       await _googleSignIn.signOut();

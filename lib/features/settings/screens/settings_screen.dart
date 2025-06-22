@@ -91,7 +91,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (context) => CupertinoAlertDialog(
           title: const Text('Delete Account'),
           content: const Text(
-            'This action cannot be undone. All your data will be permanently deleted. '
+            'Your account will be marked as deleted and permanently removed after 90 days. '
+            'You can restore it anytime during this period. '
             'Are you sure you want to delete your account?'
           ),
           actions: [
@@ -117,7 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Delete Account'),
           content: const Text(
-            'This action cannot be undone. All your data will be permanently deleted. '
+            'Your account will be marked as deleted and permanently removed after 90 days. '
+            'You can restore it anytime during this period. '
             'Are you sure you want to delete your account?'
           ),
           actions: [

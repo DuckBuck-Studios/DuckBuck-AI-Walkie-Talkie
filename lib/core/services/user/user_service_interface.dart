@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../../models/user_model.dart';
 
 /// Interface for user data service operations
@@ -29,4 +30,16 @@ abstract class UserServiceInterface {
   
   /// Mark user account as deleted
   Future<void> deleteUserAccount(String uid);
+  
+  /// Restore a deleted user account
+  Future<void> restoreDeletedAccount(String uid);
+  
+  /// Remove FCM token for user (used during sign out)
+  Future<void> removeFcmToken(String uid);
+  
+  /// Generate and save FCM token for user during sign-in
+  Future<void> generateAndSaveFcmToken(String uid);
+  
+  /// Upload user profile photo and return the download URL
+  Future<String> uploadProfilePhoto(String uid, File imageFile);
 }

@@ -11,6 +11,8 @@ import '../providers/auth_state_provider.dart';
 import '../screens/profile_completion_screen.dart';
 import '../../main_navigation.dart';
 import 'bottom_sheet_components/index.dart';
+import '../../../core/exceptions/auth_exceptions.dart';
+import 'deleted_account_dialog.dart';
 
 // Authentication flow states
 enum AuthStage {
@@ -140,58 +142,43 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // New user goes to profile completion with premium transition
+          // New user goes to profile completion with right-to-left slide transition
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) => 
                 const ProfileCompletionScreen(),
-              transitionDuration: const Duration(milliseconds: 1000),
-              reverseTransitionDuration: const Duration(milliseconds: 800),
+              transitionDuration: const Duration(milliseconds: 600),
+              reverseTransitionDuration: const Duration(milliseconds: 400),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                // Premium morph transition from onboarding to profile completion
-                return Stack(
-                  children: [
-                    // Background gradient transition
-                    AnimatedBuilder(
-                      animation: animation,
-                      builder: (context, _) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.8 + (animation.value * 0.2)),
-                                Colors.blue.shade900.withValues(alpha: animation.value * 0.3),
-                                Colors.purple.shade900.withValues(alpha: animation.value * 0.2),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    // Main content with sophisticated 3D transform
-                    Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.002) // Enhanced perspective
-                        ..rotateX((1 - animation.value) * 0.15) // 3D rotation around X-axis
-                        ..rotateY((1 - animation.value) * 0.1) // Slight Y-axis rotation
-                        ..scale(
-                          0.8 + (animation.value * 0.2), // Scale from 80% to 100%
-                        )
-                        ..translate(
-                          (1 - animation.value) * 50, // Horizontal slide
-                          (1 - animation.value) * 100, // Vertical movement
-                          (1 - animation.value) * 200, // Z-depth movement
-                        ),
-                      child: Opacity(
-                        opacity: animation.value,
-                        child: child,
-                      ),
-                    ),
-                  ],
+                // Right-to-left slide transition
+                const begin = Offset(1.0, 0.0); // Start from right
+                const end = Offset.zero; // End at center
+                const curve = Curves.easeOutExpo;
+
+                var slideAnimation = Tween(
+                  begin: begin,
+                  end: end,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: curve,
+                ));
+
+                // Optional fade animation for smoother transition
+                var fadeAnimation = Tween(
+                  begin: 0.0,
+                  end: 1.0,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
+                ));
+
+                return SlideTransition(
+                  position: slideAnimation,
+                  child: FadeTransition(
+                    opacity: fadeAnimation,
+                    child: child,
+                  ),
                 );
               },
             ),
@@ -224,15 +211,20 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         }
       }
     } catch (e) {
-      
       if (mounted) {
         setState(() => _isGoogleLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google sign-in failed: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
+        
+        // Handle deleted account error specifically
+        if (e is AuthException && e.code == AuthErrorCodes.accountMarkedDeleted) {
+          await _handleDeletedAccountError(e);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Google sign-in failed: ${e.toString()}'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
       }
     }
   }
@@ -268,58 +260,43 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          // New user goes to profile completion with premium transition
+          // New user goes to profile completion with right-to-left slide transition
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) => 
                 const ProfileCompletionScreen(),
-              transitionDuration: const Duration(milliseconds: 1000),
-              reverseTransitionDuration: const Duration(milliseconds: 800),
+              transitionDuration: const Duration(milliseconds: 600),
+              reverseTransitionDuration: const Duration(milliseconds: 400),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                // Premium morph transition from onboarding to profile completion
-                return Stack(
-                  children: [
-                    // Background gradient transition
-                    AnimatedBuilder(
-                      animation: animation,
-                      builder: (context, _) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.8 + (animation.value * 0.2)),
-                                Colors.blue.shade900.withValues(alpha: animation.value * 0.3),
-                                Colors.purple.shade900.withValues(alpha: animation.value * 0.2),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    // Main content with sophisticated 3D transform
-                    Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()
-                        ..setEntry(3, 2, 0.002) // Enhanced perspective
-                        ..rotateX((1 - animation.value) * 0.15) // 3D rotation around X-axis
-                        ..rotateY((1 - animation.value) * 0.1) // Slight Y-axis rotation
-                        ..scale(
-                          0.8 + (animation.value * 0.2), // Scale from 80% to 100%
-                        )
-                        ..translate(
-                          (1 - animation.value) * 50, // Horizontal slide
-                          (1 - animation.value) * 100, // Vertical movement
-                          (1 - animation.value) * 200, // Z-depth movement
-                        ),
-                      child: Opacity(
-                        opacity: animation.value,
-                        child: child,
-                      ),
-                    ),
-                  ],
+                // Right-to-left slide transition
+                const begin = Offset(1.0, 0.0); // Start from right
+                const end = Offset.zero; // End at center
+                const curve = Curves.easeOutExpo;
+
+                var slideAnimation = Tween(
+                  begin: begin,
+                  end: end,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: curve,
+                ));
+
+                // Optional fade animation for smoother transition
+                var fadeAnimation = Tween(
+                  begin: 0.0,
+                  end: 1.0,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
+                ));
+
+                return SlideTransition(
+                  position: slideAnimation,
+                  child: FadeTransition(
+                    opacity: fadeAnimation,
+                    child: child,
+                  ),
                 );
               },
             ),
@@ -352,15 +329,20 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         }
       }
     } catch (e) {
-      
       if (mounted) {
         setState(() => _isAppleLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Apple sign-in failed: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
+        
+        // Handle deleted account error specifically
+        if (e is AuthException && e.code == AuthErrorCodes.accountMarkedDeleted) {
+          await _handleDeletedAccountError(e);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Apple sign-in failed: ${e.toString()}'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
       }
     }
   }
@@ -495,30 +477,76 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
         
         // Navigate based on whether user is new or returning
         if (isNewUser) {
-          Navigator.pushReplacementNamed(context, AppRoutes.profileCompletion);
+          // New user goes to profile completion with right-to-left slide transition
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => 
+                const ProfileCompletionScreen(),
+              transitionDuration: const Duration(milliseconds: 600),
+              reverseTransitionDuration: const Duration(milliseconds: 400),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                // Right-to-left slide transition
+                const begin = Offset(1.0, 0.0); // Start from right
+                const end = Offset.zero; // End at center
+                const curve = Curves.easeOutExpo;
+
+                var slideAnimation = Tween(
+                  begin: begin,
+                  end: end,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: curve,
+                ));
+
+                // Optional fade animation for smoother transition
+                var fadeAnimation = Tween(
+                  begin: 0.0,
+                  end: 1.0,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
+                ));
+
+                return SlideTransition(
+                  position: slideAnimation,
+                  child: FadeTransition(
+                    opacity: fadeAnimation,
+                    child: child,
+                  ),
+                );
+              },
+            ),
+          );
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
       }
     } catch (e) {
-      // Extract meaningful error message
-      String errorMessage = 'Verification failed';
-      String errorCode = 'unknown';
-      
-      // Extract error code from error message if possible
-      if (e.toString().contains('invalid-verification-code')) {
-        errorMessage = 'Invalid verification code';
-        errorCode = 'invalid-verification-code';
-      } else if (e.toString().contains('session-expired') || e.toString().contains('code-expired')) {
-        errorMessage = 'Verification code expired';
-        errorCode = 'code-expired';
-      } else if (e.toString().contains('network')) {
-        errorMessage = 'Network error, please check your connection';
-        errorCode = 'network-error';
-      }
-      
       if (mounted) {
         setState(() => _isOtpVerificationLoading = false);
+        
+        // Handle deleted account error specifically
+        if (e is AuthException && e.code == AuthErrorCodes.accountMarkedDeleted) {
+          await _handleDeletedAccountError(e);
+          return;
+        }
+        
+        // Extract meaningful error message for other errors
+        String errorMessage = 'Verification failed';
+        String errorCode = 'unknown';
+        
+        // Extract error code from error message if possible
+        if (e.toString().contains('invalid-verification-code')) {
+          errorMessage = 'Invalid verification code';
+          errorCode = 'invalid-verification-code';
+        } else if (e.toString().contains('session-expired') || e.toString().contains('code-expired')) {
+          errorMessage = 'Verification code expired';
+          errorCode = 'code-expired';
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Network error, please check your connection';
+          errorCode = 'network-error';
+        }
         
         // Show user-friendly error message with option to resend if code expired
         ScaffoldMessenger.of(context).showSnackBar(
@@ -660,6 +688,38 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
       setState(() => _currentStage = AuthStage.options);
       _animationController.reverse();
     }
+  }
+
+  /// Handles deleted account errors by showing a dialog with restore option
+  Future<void> _handleDeletedAccountError(AuthException error) async {
+    if (!mounted) return;
+    
+    // Show the enhanced deleted account dialog
+    await DeletedAccountDialog.show(
+      context: context,
+      error: error,
+      onRestoreSuccess: () {
+        // Close the bottom sheet first
+        Navigator.of(context).pop();
+        
+        // Account restored successfully - complete the auth process
+        // User is still signed in, so we can proceed with normal flow
+        widget.onAuthComplete();
+      },
+      onKeepDeleted: () async {
+        // Close the bottom sheet first
+        Navigator.of(context).pop();
+        
+        // Sign out the user since they want to keep the account deleted
+        try {
+          final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+          await authProvider.signOut();
+        } catch (e) {
+          // Log error but continue - user is already signed out from auth service
+          print('Error during sign out: ${e.toString()}');
+        }
+      },
+    );
   }
 
   @override

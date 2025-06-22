@@ -45,6 +45,7 @@ class AuthErrorCodes {
   static const String accountExistsWithDifferentCredential = 'auth/account-exists-with-different-credential';
   static const String notLoggedIn = 'auth/not-logged-in';
   static const String userDeleted = 'auth/user-deleted';
+  static const String accountMarkedDeleted = 'auth/account-marked-deleted';
   
   // Token and session errors
   static const String tokenRefreshFailed = 'auth/token-refresh-failed';
@@ -109,6 +110,8 @@ class AuthErrorMessages {
         return 'No user currently logged in.';
       case AuthErrorCodes.userDeleted:
         return 'Account has been deleted.';
+      case AuthErrorCodes.accountMarkedDeleted:
+        return 'This account has been marked as deleted.';
       
       // Google Sign-in specific errors
       case AuthErrorCodes.googleSignInFailed:

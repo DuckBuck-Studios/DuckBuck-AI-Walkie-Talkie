@@ -41,6 +41,8 @@ class AppColors {
   static Color whiteOpacity30 = Colors.white.withValues(alpha: 0.3);
   static Color whiteOpacity50 = Colors.white.withValues(alpha: 0.5);
   static Color whiteOpacity54 = Colors.white.withValues(alpha: 0.54);
+  static Color whiteOpacity70 = Colors.white.withValues(alpha: 0.7);
+  static Color whiteOpacity80 = Colors.white.withValues(alpha: 0.8);
   
   static Color accentBlueOpacity30 = accentBlue.withValues(alpha: 0.3);
   static Color accentBlueOpacity50 = accentBlue.withValues(alpha: 0.5);

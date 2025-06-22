@@ -276,7 +276,8 @@ class _PrivacySettingsContent extends StatelessWidget {
         builder: (context) => CupertinoAlertDialog(
           title: const Text('Delete All Data'),
           content: const Text(
-            'This will permanently delete all your data from our servers. This action cannot be undone.',
+            'Your data will be marked for deletion and permanently removed after 45 days. '
+            'You can restore your account and data anytime during this period.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -301,7 +302,8 @@ class _PrivacySettingsContent extends StatelessWidget {
         builder: (context) => AlertDialog(
           title: const Text('Delete All Data'),
           content: const Text(
-            'This will permanently delete all your data from our servers. This action cannot be undone.',
+            'Your data will be marked for deletion and permanently removed after 45 days. '
+            'You can restore your account and data anytime during this period.',
           ),
           actions: [
             TextButton(
