@@ -469,8 +469,9 @@ class AiAgentProvider extends ChangeNotifier {
       _logger.i(_tag, 'Audio states initialized - mic muted: $_isMicrophoneMuted, speaker enabled: $_isSpeakerEnabled');
       
       // Debug: Print the actual states
-      print('AI Agent Provider: Initial mic state: $_isMicrophoneMuted');
-      print('AI Agent Provider: Initial speaker state: $_isSpeakerEnabled');
+      // Initial audio states logged via proper logger
+      _logger.d(_tag, 'Initial mic state: $_isMicrophoneMuted');
+      _logger.d(_tag, 'Initial speaker state: $_isSpeakerEnabled');
       
       notifyListeners();
     } catch (e) {
@@ -478,7 +479,8 @@ class AiAgentProvider extends ChangeNotifier {
       // Use default states on error
       _isMicrophoneMuted = false;
       _isSpeakerEnabled = true;
-      print('AI Agent Provider: Using default states due to error');
+      // Using default states due to error - logged via proper logger
+      _logger.w(_tag, 'Using default audio states due to error');
     }
   }
 

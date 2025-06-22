@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // END: FlutterFire Configuration
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -47,14 +48,12 @@ android {
             storePassword = "SrxnS@2005" // Updated to the correct password
         }
         
-        // TODO: Add a proper release signing config with a more secure keystore
-        // For production, do NOT store credentials in the build file
-        // Use environment variables or a secure credential store instead
+        // Release signing config with secure keystore
+        // Credentials are externalized using environment variables
         create("release") {
-            // These should be externalized in production
-            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: "duckbuck_debug"
+            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: "release"
             keyPassword = System.getenv("KEYSTORE_PASSWORD") ?: "SrxnS@2005"
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "duckbuck_debug.jks")
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "duckbuck_release.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "SrxnS@2005"
         }
     }

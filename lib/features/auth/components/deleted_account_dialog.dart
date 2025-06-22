@@ -126,13 +126,9 @@ class _DeletedAccountDialogState extends State<DeletedAccountDialog>
         }
       }
       
-      // Debug logging to understand what's happening
-      print('DEBUG: Extracted UID for account restoration: $_uid');
-      print('DEBUG: Firebase Auth user exists: ${authRepository.currentUser != null}');
-      print('DEBUG: Error code: ${widget.error.code}');
-      print('DEBUG: Error message: ${widget.error.message}');
+      // Debug logging removed for production
     } catch (e) {
-      print('Failed to get UID for account restoration: ${e.toString()}');
+      // Failed to get UID for account restoration - error logged elsewhere
     }
   }
 
@@ -185,7 +181,7 @@ class _DeletedAccountDialogState extends State<DeletedAccountDialog>
         ),
       );
     } catch (e) {
-      print('Failed to show error message: $message');
+      // Failed to show error message - logged elsewhere
     }
   }
 

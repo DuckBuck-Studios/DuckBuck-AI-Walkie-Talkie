@@ -716,7 +716,7 @@ class _AuthBottomSheetState extends State<AuthBottomSheet> with SingleTickerProv
           await authProvider.signOut();
         } catch (e) {
           // Log error but continue - user is already signed out from auth service
-          print('Error during sign out: ${e.toString()}');
+          // Error during sign out - removed print for production
         }
       },
     );
