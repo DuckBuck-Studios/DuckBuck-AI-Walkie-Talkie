@@ -1,5 +1,6 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:flutter/foundation.dart';
+import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Service for handling Firebase Analytics operations
 /// 
@@ -7,6 +8,9 @@ import 'package:flutter/foundation.dart';
 /// screen navigation, and other analytics data
 class FirebaseAnalyticsService {
   final FirebaseAnalytics _analytics;
+  final LoggerService _logger;
+  
+  static const String _tag = 'FIREBASE_ANALYTICS_SERVICE';
   
   // Constants for analytics event names
   static const String _eventAuthAttempt = 'auth_attempt';
@@ -16,8 +20,11 @@ class FirebaseAnalyticsService {
   static const String _eventOtpEntered = 'otp_entered';
 
   /// Creates a new FirebaseAnalyticsService instance
-  FirebaseAnalyticsService({FirebaseAnalytics? analytics})
-    : _analytics = analytics ?? FirebaseAnalytics.instance;
+  FirebaseAnalyticsService({
+    FirebaseAnalytics? analytics,
+    LoggerService? logger,
+  }) : _analytics = analytics ?? FirebaseAnalytics.instance,
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Log a custom event with parameters
   Future<void> logEvent({
@@ -27,7 +34,7 @@ class FirebaseAnalyticsService {
     // Validate event name (1-40 characters)
     String eventName = name;
     if (eventName.length > 40) {
-      debugPrint('WARNING: Firebase Analytics event name too long (max 40 chars): $eventName');
+      _logger.w(_tag, 'Firebase Analytics event name too long (max 40 chars): $eventName');
       eventName = eventName.substring(0, 40);
     }
     
@@ -39,7 +46,7 @@ class FirebaseAnalyticsService {
         // Check key length (max 40 chars)
         String sanitizedKey = key;
         if (key.length > 40) {
-          debugPrint('WARNING: Firebase Analytics param key too long (max 40 chars): $key');
+          _logger.w(_tag, 'Firebase Analytics param key too long (max 40 chars): $key');
           sanitizedKey = key.substring(0, 40);
         }
         
@@ -47,7 +54,7 @@ class FirebaseAnalyticsService {
         Object sanitizedValue;
         if (value is String) {
           if (value.length > 100) {
-            debugPrint('WARNING: Firebase Analytics string param value too long (max 100 chars): $key');
+            _logger.w(_tag, 'Firebase Analytics string param value too long (max 100 chars): $key');
             sanitizedValue = value.substring(0, 100);
           } else {
             sanitizedValue = value;
@@ -59,7 +66,7 @@ class FirebaseAnalyticsService {
           sanitizedValue = value ? '1' : '0';
         } else {
           // Convert to string for unsupported types
-          debugPrint('WARNING: Firebase Analytics param value type not supported: ${value.runtimeType} for $key');
+          _logger.w(_tag, 'Firebase Analytics param value type not supported: ${value.runtimeType} for $key');
           String strValue = value.toString();
           if (strValue.length > 100) {
             strValue = strValue.substring(0, 100);
@@ -77,7 +84,7 @@ class FirebaseAnalyticsService {
         parameters: sanitizedParams,
       );
     } catch (e) {
-      debugPrint('ERROR logging Firebase Analytics event: $e');
+      _logger.e(_tag, 'Error logging Firebase Analytics event: $e');
     }
   }
 

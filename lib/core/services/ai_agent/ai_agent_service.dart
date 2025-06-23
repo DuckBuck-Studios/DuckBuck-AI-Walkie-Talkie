@@ -54,7 +54,6 @@ class AiAgentService implements AiAgentServiceInterface {
       // Step 2: Get Agora token (backend assigns UID)
       _logger.i(_tag, 'Getting Agora token for channel: $channelName');
       final tokenResponse = await _agoraTokenService.generateToken(
-        uid: 0, // Let backend assign UID
         channelId: channelName,
       );
       
@@ -471,7 +470,6 @@ class AiAgentService implements AiAgentServiceInterface {
       // Step 2: Get Agora token (backend assigns UID)
       _logger.i(_tag, 'Getting Agora token for channel: $channelName');
       final tokenResponse = await _agoraTokenService.generateToken(
-        uid: 0, // Let backend assign UID
         channelId: channelName,
       );
       

@@ -2,6 +2,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io' show Platform;
+import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Service for handling Firebase Crashlytics operations
 /// 
@@ -9,10 +11,16 @@ import 'dart:io' show Platform;
 /// and setting user identifiers for better error tracking
 class FirebaseCrashlyticsService {
   final FirebaseCrashlytics _crashlytics;
+  final LoggerService _logger;
+  
+  static const String _tag = 'FIREBASE_CRASHLYTICS_SERVICE';
   
   /// Creates a new FirebaseCrashlyticsService instance
-  FirebaseCrashlyticsService({FirebaseCrashlytics? crashlytics})
-    : _crashlytics = crashlytics ?? FirebaseCrashlytics.instance;
+  FirebaseCrashlyticsService({
+    FirebaseCrashlytics? crashlytics,
+    LoggerService? logger,
+  }) : _crashlytics = crashlytics ?? FirebaseCrashlytics.instance,
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Initialize Crashlytics and set up error handlers
   Future<void> initialize() async {
@@ -32,10 +40,10 @@ class FirebaseCrashlyticsService {
       await _crashlytics.setCustomKey('platform_version', Platform.operatingSystemVersion);
       await _crashlytics.log('Crashlytics initialized with app metadata');
     } catch (e) {
-      debugPrint('Failed to set app metadata for Crashlytics: $e');
+      _logger.e(_tag, 'Failed to set app metadata for Crashlytics: $e');
     }
     
-    debugPrint('Firebase Crashlytics initialized${kDebugMode ? " (disabled in debug mode)" : ""}');
+    _logger.i(_tag, 'Firebase Crashlytics initialized${kDebugMode ? " (disabled in debug mode)" : ""}');
   }
 
   /// Pass PlatformDispatcher errors to Crashlytics
@@ -89,7 +97,7 @@ class FirebaseCrashlyticsService {
     if (!kReleaseMode) {
       _crashlytics.crash();
     } else {
-      debugPrint('Refusing to force crash in release mode');
+      _logger.w(_tag, 'Refusing to force crash in release mode');
     }
   }
   

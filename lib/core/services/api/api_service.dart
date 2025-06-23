@@ -267,7 +267,7 @@ class ApiService {
       };
       
       final response = await _dio.post(
-        '/api/notifications/send',
+        '/notifications/send-notification',
         options: Options(
           headers: {
             'Authorization': 'Bearer $idToken',
@@ -312,7 +312,7 @@ class ApiService {
       }
       
       final response = await _dio.post(
-        '/api/notifications/send-data-only',
+        '/notifications/send-data-only-notification',
         options: Options(
           headers: {
             'Authorization': 'Bearer $idToken',
@@ -382,7 +382,7 @@ class ApiService {
       }
 
       final response = await _dio.post(
-        '/api/ai-agent/join',
+        '/agora/ai-agent/join',
         data: {
           'uid': uid,
           'channelName': channelName,
@@ -491,7 +491,7 @@ class ApiService {
       _logger.i(_tag, 'Sending stop request to backend with data: $requestData');
 
       final response = await _dio.post(
-        '/api/ai-agent/stop',
+        '/agora/ai-agent/stop',
         data: requestData,
         options: Options(
           headers: {
@@ -565,7 +565,6 @@ class ApiService {
   /// Generate Agora token from backend
   /// BLOCKING method - throws exceptions on failure to ensure proper error handling
   Future<AgoraTokenResponse> generateAgoraToken({
-    required int uid,
     required String channelId, 
     required String firebaseToken,
   }) async {
@@ -583,18 +582,17 @@ class ApiService {
       // Handle rate limiting
       await _handleRateLimit();
 
-      _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid');
+      _logger.i(_tag, 'Generating Agora token for channel: $channelId');
 
       final response = await _dio.post(
-        '/api/agora/generate-token',
+        '/agora/token',
         data: {
-          'uid': uid.toString(),  // Send uid as string to match backend expectations
           'channelId': channelId, 
         },
         options: Options(
           headers: {
             'Authorization': 'Bearer $firebaseToken',
-            'x-api-key': _apiKey,  // Use lowercase header as expected by backend
+            'x-api-key': _apiKey,  
           },
         ),
       );

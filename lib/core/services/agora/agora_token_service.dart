@@ -66,17 +66,15 @@ class AgoraTokenService {
   /// Generate Agora token for a channel
   /// 
   /// Parameters:
-  /// - [uid]: User ID for the call (optional, defaults to 0 for auto-assignment)
   /// - [channelId]: Channel ID to join
   /// 
   /// Returns [AgoraTokenResponse] with token and metadata
   /// Throws [TokenGenerationException] on failure
   Future<AgoraTokenResponse> generateToken({
-    int uid = 0, // Default to 0 for backend auto-assignment
     required String channelId, 
   }) async {
     try {
-      _logger.i(_tag, 'Generating Agora token for channel: $channelId, uid: $uid (0 = auto-assign)');
+      _logger.i(_tag, 'Generating Agora token for channel: $channelId (backend will auto-assign UID)');
 
       // Get Firebase ID token for authentication
       final firebaseToken = await _authService.refreshIdToken(forceRefresh: false);
@@ -89,7 +87,6 @@ class AgoraTokenService {
 
       // Prepare request data
       final requestData = {
-        'uid': uid,
         'channelId': channelId, 
       };
 
@@ -97,7 +94,6 @@ class AgoraTokenService {
 
       // Make API request to generate token
       final response = await _apiService.generateAgoraToken(
-        uid: uid,
         channelId: channelId, 
         firebaseToken: firebaseToken,
       );
@@ -122,16 +118,14 @@ class AgoraTokenService {
   /// Generate token with retry logic for better reliability
   /// 
   /// Parameters:
-  /// - [uid]: User ID for the call
   /// - [channelId]: Channel ID to join
-  /// - [callerPhoto]: URL of the caller's photo
-  /// - [callName]: Name/title of the call
+  /// - [callerPhoto]: URL of the caller's photo (for logging/context)
+  /// - [callName]: Name/title of the call (for logging/context)
   /// - [maxRetries]: Maximum number of retry attempts (default: 3)
   /// 
   /// Returns [AgoraTokenResponse] with token and metadata
   /// Throws [TokenGenerationException] on failure after all retries
   Future<AgoraTokenResponse> generateTokenWithRetry({
-    required int uid,
     required String channelId,
     required String callerPhoto,
     required String callName,
@@ -145,7 +139,6 @@ class AgoraTokenService {
         _logger.d(_tag, 'Token generation attempt $attempts/$maxRetries');
         
         return await generateToken(
-          uid: uid,
           channelId: channelId, 
         );
         

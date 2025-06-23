@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Re-export Firestore types that other services might need
 export 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, DocumentSnapshot, QuerySnapshot, WriteBatch, Transaction, Query;
@@ -8,10 +10,16 @@ export 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, DocumentS
 /// Service for handling Firebase Firestore operations
 class FirebaseDatabaseService {
   final FirebaseFirestore _firestore;
+  final LoggerService _logger;
+  
+  static const String _tag = 'FIREBASE_DATABASE_SERVICE';
 
   /// Creates a new FirebaseDatabaseService instance with optional custom configuration
-  FirebaseDatabaseService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? _configureFirestore();
+  FirebaseDatabaseService({
+    FirebaseFirestore? firestore,
+    LoggerService? logger,
+  }) : _firestore = firestore ?? _configureFirestore(),
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Configure Firestore with custom settings and connect to "duckbuck" database
   static FirebaseFirestore _configureFirestore() {    
@@ -32,8 +40,10 @@ class FirebaseDatabaseService {
     // Apply the settings to the instance
     instance.settings = settings;
     
-    // Log connection confirmation
-    debugPrint('🔥 FIREBASE: Connected to Firestore database: duckbuck');
+    // Use print instead of debugPrint for static method (no logger available)
+    if (kDebugMode) {
+      print('🔥 FIREBASE: Connected to Firestore database: duckbuck');
+    }
     
     return instance;
   }
@@ -88,8 +98,8 @@ class FirebaseDatabaseService {
   }) async {
     try {
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Setting document $documentId in $collection (merge: $merge)');
-        debugPrint('🔥 FIREBASE: Document data: $data');
+        _logger.d(_tag, 'Setting document $documentId in $collection (merge: $merge)');
+        _logger.d(_tag, 'Document data: $data');
       }
       
       await _firestore.collection(collection).doc(documentId).set({
@@ -99,11 +109,11 @@ class FirebaseDatabaseService {
       }, SetOptions(merge: merge));
       
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Document set successfully');
+        _logger.i(_tag, 'Document set successfully');
       }
     } catch (e) {
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Error setting document: ${e.toString()}');
+        _logger.e(_tag, 'Error setting document: ${e.toString()}');
       }
       throw Exception('Failed to set document: ${e.toString()}');
     }
@@ -459,8 +469,8 @@ class FirebaseDatabaseService {
   }) async {
     try {
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Setting subcollection document $subcollectionDocumentId in $collection/$documentId/$subcollection (merge: $merge)');
-        debugPrint('🔥 FIREBASE: Document data: $data');
+        _logger.d(_tag, 'Setting subcollection document $subcollectionDocumentId in $collection/$documentId/$subcollection (merge: $merge)');
+        _logger.d(_tag, 'Document data: $data');
       }
       
       await _firestore
@@ -475,11 +485,11 @@ class FirebaseDatabaseService {
           }, SetOptions(merge: merge));
       
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Subcollection document set successfully');
+        _logger.i(_tag, 'Subcollection document set successfully');
       }
     } catch (e) {
       if (logOperation) {
-        debugPrint('🔥 FIREBASE: Error setting subcollection document: ${e.toString()}');
+        _logger.e(_tag, 'Error setting subcollection document: ${e.toString()}');
       }
       throw Exception('Failed to set subcollection document: ${e.toString()}');
     }

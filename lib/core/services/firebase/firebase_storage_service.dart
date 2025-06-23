@@ -1,14 +1,22 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import '../logger/logger_service.dart';
+import '../service_locator.dart';
 
 /// Service for handling Firebase Storage operations
 class FirebaseStorageService {
   final FirebaseStorage _storage;
+  final LoggerService _logger;
+  
+  static const String _tag = 'FIREBASE_STORAGE_SERVICE';
 
   /// Creates a new FirebaseStorageService instance
-  FirebaseStorageService({FirebaseStorage? storage})
-    : _storage = storage ?? FirebaseStorage.instance;
+  FirebaseStorageService({
+    FirebaseStorage? storage,
+    LoggerService? logger,
+  }) : _storage = storage ?? FirebaseStorage.instance,
+       _logger = logger ?? serviceLocator<LoggerService>();
 
   /// Upload a file to Firebase Storage
   /// Returns the download URL
@@ -18,6 +26,7 @@ class FirebaseStorageService {
     Map<String, String>? metadata,
   }) async {
     try {
+      _logger.d(_tag, 'Uploading file to path: $path');
       final ref = _storage.ref().child(path);
 
       final UploadTask task = ref.putFile(
@@ -29,8 +38,11 @@ class FirebaseStorageService {
       );
 
       final snapshot = await task;
-      return await snapshot.ref.getDownloadURL();
+      final downloadURL = await snapshot.ref.getDownloadURL();
+      _logger.i(_tag, 'File uploaded successfully to: $path');
+      return downloadURL;
     } catch (e) {
+      _logger.e(_tag, 'Failed to upload file: ${e.toString()}');
       throw Exception('Failed to upload file: ${e.toString()}');
     }
   }
@@ -44,6 +56,7 @@ class FirebaseStorageService {
     Map<String, String>? metadata,
   }) async {
     try {
+      _logger.d(_tag, 'Uploading bytes to path: $path');
       final ref = _storage.ref().child(path);
 
       final UploadTask task = ref.putData(
@@ -52,8 +65,11 @@ class FirebaseStorageService {
       );
 
       final snapshot = await task;
-      return await snapshot.ref.getDownloadURL();
+      final downloadURL = await snapshot.ref.getDownloadURL();
+      _logger.i(_tag, 'Bytes uploaded successfully to: $path');
+      return downloadURL;
     } catch (e) {
+      _logger.e(_tag, 'Failed to upload bytes: ${e.toString()}');
       throw Exception('Failed to upload bytes: ${e.toString()}');
     }
   }
@@ -71,9 +87,13 @@ class FirebaseStorageService {
   /// Download a file from Firebase Storage
   Future<Uint8List> downloadBytes(String path) async {
     try {
+      _logger.d(_tag, 'Downloading bytes from path: $path');
       final ref = _storage.ref().child(path);
-      return await ref.getData() ?? Uint8List(0);
+      final data = await ref.getData() ?? Uint8List(0);
+      _logger.i(_tag, 'Downloaded ${data.length} bytes from: $path');
+      return data;
     } catch (e) {
+      _logger.e(_tag, 'Failed to download file: ${e.toString()}');
       throw Exception('Failed to download file: ${e.toString()}');
     }
   }
@@ -81,9 +101,13 @@ class FirebaseStorageService {
   /// Get the download URL for a file
   Future<String> getDownloadURL(String path) async {
     try {
+      _logger.d(_tag, 'Getting download URL for path: $path');
       final ref = _storage.ref().child(path);
-      return await ref.getDownloadURL();
+      final url = await ref.getDownloadURL();
+      _logger.i(_tag, 'Retrieved download URL for: $path');
+      return url;
     } catch (e) {
+      _logger.e(_tag, 'Failed to get download URL: ${e.toString()}');
       throw Exception('Failed to get download URL: ${e.toString()}');
     }
   }
@@ -91,9 +115,12 @@ class FirebaseStorageService {
   /// Delete a file from Firebase Storage
   Future<void> deleteFile(String path) async {
     try {
+      _logger.d(_tag, 'Deleting file at path: $path');
       final ref = _storage.ref().child(path);
       await ref.delete();
+      _logger.i(_tag, 'File deleted successfully: $path');
     } catch (e) {
+      _logger.e(_tag, 'Failed to delete file: ${e.toString()}');
       throw Exception('Failed to delete file: ${e.toString()}');
     }
   }
@@ -101,10 +128,13 @@ class FirebaseStorageService {
   /// Get list of files in a directory
   Future<List<Reference>> listFiles(String path) async {
     try {
+      _logger.d(_tag, 'Listing files in path: $path');
       final ref = _storage.ref().child(path);
       final result = await ref.listAll();
+      _logger.i(_tag, 'Found ${result.items.length} files in: $path');
       return result.items;
     } catch (e) {
+      _logger.e(_tag, 'Failed to list files: ${e.toString()}');
       throw Exception('Failed to list files: ${e.toString()}');
     }
   }
@@ -112,9 +142,13 @@ class FirebaseStorageService {
   /// Get metadata for a file
   Future<FullMetadata> getMetadata(String path) async {
     try {
+      _logger.d(_tag, 'Getting metadata for path: $path');
       final ref = _storage.ref().child(path);
-      return await ref.getMetadata();
+      final metadata = await ref.getMetadata();
+      _logger.i(_tag, 'Retrieved metadata for: $path');
+      return metadata;
     } catch (e) {
+      _logger.e(_tag, 'Failed to get metadata: ${e.toString()}');
       throw Exception('Failed to get metadata: ${e.toString()}');
     }
   }
@@ -125,11 +159,15 @@ class FirebaseStorageService {
     Map<String, String> customMetadata,
   ) async {
     try {
+      _logger.d(_tag, 'Updating metadata for path: $path');
       final ref = _storage.ref().child(path);
-      return await ref.updateMetadata(
+      final metadata = await ref.updateMetadata(
         SettableMetadata(customMetadata: customMetadata),
       );
+      _logger.i(_tag, 'Updated metadata for: $path');
+      return metadata;
     } catch (e) {
+      _logger.e(_tag, 'Failed to update metadata: ${e.toString()}');
       throw Exception('Failed to update metadata: ${e.toString()}');
     }
   }
@@ -142,9 +180,11 @@ class FirebaseStorageService {
   }) async {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final path = 'users/$userId/profile/$timestamp.jpg';  // Match the Storage rules path
+      final path = 'profile_images/$userId/$timestamp.jpg';
+      
+      _logger.i(_tag, 'Uploading profile image for user: $userId');
 
-      return await uploadFile(
+      final downloadURL = await uploadFile(
         path: path,
         file: imageFile,
         metadata: {
@@ -153,8 +193,11 @@ class FirebaseStorageService {
           'type': 'profile_image',
         },
       );
+      
+      _logger.i(_tag, 'Profile image uploaded successfully for user: $userId');
+      return downloadURL;
     } catch (e) {
-      debugPrint('Failed to upload profile image: $e');
+      _logger.e(_tag, 'Failed to upload profile image for user $userId: ${e.toString()}');
       throw Exception('Failed to upload profile image: ${e.toString()}');
     }
   }
