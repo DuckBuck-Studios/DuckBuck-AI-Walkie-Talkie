@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
 import '../../../core/services/crashlytics_consent_manager.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/services/logger/logger_service.dart';
 
 /// Provider to manage crashlytics consent state in the app
 class CrashlyticsConsentProvider with ChangeNotifier {
   CrashlyticsConsentManager? _manager;
   bool _isEnabled = kReleaseMode;  
   bool _isInitialized = false;
+  final LoggerService _logger = LoggerService();
+  
+  static const String _tag = 'CRASHLYTICS_CONSENT_PROVIDER';
 
   /// Creates a new CrashlyticsConsentProvider
   CrashlyticsConsentProvider();
@@ -29,7 +33,7 @@ class CrashlyticsConsentProvider with ChangeNotifier {
         _isInitialized = true;
         notifyListeners();
       } catch (e) {
-        debugPrint('Error initializing CrashlyticsConsentProvider: $e');
+        _logger.e(_tag, 'Error initializing CrashlyticsConsentProvider: $e');
         // Use default value
         _isEnabled = kReleaseMode;
         _isInitialized = true;
