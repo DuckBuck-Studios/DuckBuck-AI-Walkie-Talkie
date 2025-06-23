@@ -92,10 +92,16 @@ flowchart TD
     %% Model Layer - Enhanced data structures
     subgraph Model_Layer ["📋 Model Layer - Data Structures"]
         direction TB
-        UserModel["Enhanced User Model<br/>👤<br/>Multi-Auth Support<br/>Metadata Handling"] 
+        UserModel["Enhanced User Model<br/>👤<br/>uid, email, displayName<br/>phoneNumber, photoURL<br/>agentRemainingTime, deleted<br/>fcmTokenData, metadata"] 
         AuthExceptions["Enhanced Auth Exceptions<br/>⚠️<br/>Detailed Error Codes<br/>User-Friendly Messages<br/>Security Context"]
         TokenModel["Auth Token Model<br/>🔑<br/>Secure Token Handling<br/>Refresh Management"]
         RateLimitModel["Rate Limiting Model<br/>⏱️<br/>Attempt Tracking<br/>Timeout Calculation"]
+        
+        subgraph Model_Features ["Model Features"]
+            AuthFields["Authentication Fields<br/>🔐<br/>Multi-Provider Support<br/>Phone/Email/Google/Apple<br/>Metadata Tracking"]
+            ProfileFields["Profile Fields<br/>👤<br/>Display Name & Photo<br/>Email Verification<br/>Phone Validation"]
+            AppFields["App-Specific Fields<br/>⏱️<br/>Agent Time (Premium)<br/>Soft Delete Support<br/>FCM Token Management"]
+        end
     end
     
     %% External Services - Enhanced integrations
@@ -453,9 +459,95 @@ The service layer provides specialized functionality for different aspects of au
 The model layer defines the data structures used across the authentication system.
 
 #### Components:
-- **User Model**: Represents authenticated user data
+- **User Model**: Comprehensive authenticated user data representation
 - **Auth Exceptions**: Standardized authentication error handling
 - **Auth Token Model**: Manages authentication tokens and credentials
+
+#### User Model Structure:
+
+The `UserModel` class provides comprehensive user data management with multi-provider authentication support:
+
+```dart
+class UserModel {
+  final String uid;                              // Firebase UID (primary key)
+  final String? email;                           // Email (Google/Apple auth)
+  final String? displayName;                     // User display name
+  final String? photoURL;                        // Profile photo URL
+  final String? phoneNumber;                     // Phone number (phone auth)
+  final bool isEmailVerified;                    // Email verification status
+  final Map<String, dynamic>? metadata;         // Auth metadata
+  final Map<String, dynamic>? fcmTokenData;     // FCM token information
+  final bool isNewUser;                          // New user flag
+  final int agentRemainingTime;                  // Premium feature time (seconds)
+  final bool deleted;                            // Soft delete flag
+}
+```
+
+#### User Model Features:
+
+**Multi-Provider Authentication Support:**
+- **Google Sign-In**: Includes email, displayName, photoURL
+- **Apple Sign-In**: Includes email (if provided), displayName, photoURL
+- **Phone Authentication**: Includes phoneNumber, excludes email fields
+- **Metadata Tracking**: Stores provider-specific information and auth method
+
+**Smart Field Management:**
+```dart
+factory UserModel.fromFirebaseUser(firebase.User user) {
+  String? authMethod = _determineAuthMethod(user.providerData);
+  
+  return UserModel(
+    uid: user.uid,
+    email: authMethod != 'phone' ? user.email : null,  // Email only for non-phone auth
+    phoneNumber: user.phoneNumber,                      // Phone number when available
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    metadata: _buildMetadata(user, authMethod),
+  );
+}
+```
+
+**App-Specific Features:**
+- **Agent Time Management**: Premium feature with time-based access (default 1 hour)
+- **Soft Delete Support**: Allows account recovery within 90-day period  
+- **FCM Token Management**: Stores notification tokens with device information
+- **New User Detection**: Enables onboarding flows for first-time users
+
+**Data Persistence Strategy:**
+```dart
+Map<String, dynamic> toMap() {
+  final Map<String, dynamic> data = {
+    'uid': uid,
+    'displayName': displayName,
+    'photoURL': photoURL,
+    'agentRemainingTime': agentRemainingTime,
+    'deleted': deleted,
+    'fcmTokenData': fcmTokenData,
+  };
+  
+  // Conditionally include auth-method-specific fields
+  String? authMethod = metadata?['authMethod'];
+  if (authMethod == 'google' || authMethod == 'apple') {
+    data['email'] = email;
+  }
+  if (authMethod == 'phone' || phoneNumber != null) {
+    data['phoneNumber'] = phoneNumber;
+  }
+  
+  return data;
+}
+```
+
+**Premium Feature Integration:**
+- **Time-Based Access**: `agentRemainingTime` tracks premium feature usage
+- **Default Allocation**: New users get 1 hour (3600 seconds) of agent time
+- **Existing User Preservation**: Agent time loaded from Firestore for returning users
+- **Seamless Degradation**: App functions normally when agent time expires
+
+**Account Lifecycle Management:**
+- **Soft Delete**: `deleted` flag enables account recovery
+- **Account Restoration**: Users can restore deleted accounts within 90 days
+- **Data Retention**: User data preserved during deletion grace period
 
 #### Responsibilities:
 - Define data structures for user information

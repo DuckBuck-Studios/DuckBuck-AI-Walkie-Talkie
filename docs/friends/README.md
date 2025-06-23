@@ -1,53 +1,72 @@
-# Friends Feature Documentation
+# Friends Feature Documentation - Enhanced v2.0
 
-This directory contains comprehensive documentation for DuckBuck's friends system - a real-time, relationship management platform built with Flutter and Firebase.
+This directory contains comprehensive documentation for DuckBuck's unified friends system - a production-ready, real-time relationship management platform built with Flutter, Firebase, and intelligent caching.
 
 ## 📋 Documentation Overview
 
 ### [📐 Architecture Documentation](./friends_architecture.md)
-**Complete technical architecture analysis**
-- Layered architecture design (UI → Provider → Repository → Service → Firebase)
-- Real-time data synchronization patterns
-- Comprehensive mermaid diagrams showing data flow
-- Performance optimizations and caching strategies
-- Security features and validation patterns
-- Error handling and recovery mechanisms
+**Complete technical architecture analysis - Enhanced v2.0**
+- Unified SharedFriendsProvider architecture with repository-level caching
+- Smart caching strategy with 5-minute validity and background refresh
+- Real-time Firebase streams with automatic reconnection
+- Comprehensive RelationshipModel and UserModel integration
+- Performance optimizations including memory management and photo caching
+- Analytics integration and error monitoring
+- Enhanced mermaid diagrams showing unified data flow
 
 ### [🔄 User Flows Documentation](./friends_user_flows.md)
-**Detailed sequence diagrams for all user interactions**
-- Send friend request flow with validation and notifications
-- Accept/decline friend request flows with real-time updates
-- Block/unblock user flows with privacy controls
-- Real-time stream synchronization across multiple clients
-- Error handling and recovery flows
-- Profile caching and performance optimization flows
+**Detailed sequence diagrams for all user interactions - Enhanced v2.0**
+- Send friend request flow with UID search and smart caching
+- Accept/reject friend request flows with repository coordination
+- Block/unblock user flows with comprehensive state management
+- Real-time stream synchronization with SharedFriendsProvider
+- Error handling and recovery with analytics integration
+- Cache optimization and background photo loading flows
 
 ### [🏗️ Code Organization Documentation](./friends_code_organization.md)
-**Detailed code structure and class responsibilities**
-- Complete directory structure and file organization
-- Class-by-class responsibility breakdown
-- Key methods and properties documentation
-- Data flow patterns and testing strategies
+**Detailed code structure and class responsibilities - Enhanced v2.0**
+- Updated directory structure with SharedFriendsProvider
+- Repository-level caching architecture
+- Enhanced RelationshipModel and UserModel specifications
+- Memory optimization and disposal patterns
 - Performance considerations and security features
 
-## 🚀 Quick Start
+## 🚀 Quick Start - Enhanced Architecture
 
-### Core Components
+### Core Components v2.0
 ```dart
-// Main state management
-FriendsProvider - Real-time state management with stream subscriptions
+// Unified state management (Single Source of Truth)
+SharedFriendsProvider - Consolidated friends, requests, and blocked users
+  ├── Real-time Firebase streams with auto-reconnection
+  ├── Repository delegation for all caching operations
+  ├── Memory optimization with proper disposal
+  └── Error handling with user-friendly messages
 
-// Business logic coordination  
-RelationshipRepository - Analytics, error handling, service coordination
+// Repository-level caching and business logic
+RelationshipRepository - Smart caching, analytics, and service coordination
+  ├── 5-minute cache validity with background refresh
+  ├── Offline support with local database integration
+  ├── Analytics tracking for all operations
+  └── Comprehensive error handling and monitoring
 
-// Core business logic
-RelationshipService - Friendship operations with transaction safety
+// Enhanced data models
+RelationshipModel - Comprehensive relationship data
+  ├── Sorted participants for consistent querying
+  ├── RelationshipType (friendship, future: group, family)
+  ├── RelationshipStatus (pending, accepted, blocked, declined)
+  └── Metadata (createdAt, updatedAt, initiatorId, acceptedAt)
 
-// Data model
-RelationshipModel - Immutable relationship data with cached profiles
+UserModel - Multi-provider user data
+  ├── Authentication fields (uid, email, phoneNumber)
+  ├── Profile fields (displayName, photoURL, isEmailVerified)
+  ├── App fields (agentRemainingTime, deleted, fcmTokenData)
+  └── Smart field management based on auth method
 
-// Main UI
-FriendsScreen - Platform-specific tabbed interface
+// Enhanced UI Components
+FriendsScreen - Platform-specific interface with real-time updates
+BlockedUsersScreen - Privacy management with unblock functionality
+Settings Integration - Account management with auth state handling
+```
 ```
 
 ### Key Features

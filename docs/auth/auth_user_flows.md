@@ -1,83 +1,82 @@
-# Authentication User Flows - Enhanced with LocalDatabaseService Integration
+# Authentication User Flows - Enhanced v2.0 with UserModel Integration
 
-This document describes the comprehensive user flows for authentication in the DuckBuck application. These flows illustrate the interactions between all components in the authentication system, including the **new LocalDatabaseService integration** that replaces SharedPreferences for authentication state management.
+This document describes the comprehensive user flows for authentication in the DuckBuck application. These flows illustrate the interactions between all components in the authentication system, including the **enhanced UserModel structure** with multi-provider support, premium features, and soft delete functionality.
 
-## **🔄 IMPORTANT ARCHITECTURAL UPDATE**
+## **🔄 ENHANCED USERMODEL ARCHITECTURE**
 
-The authentication system has been **significantly enhanced** to eliminate dual-state management complexity:
+The authentication system has been **significantly enhanced** with a comprehensive UserModel:
 
-- **✅ NEW**: LocalDatabaseService manages authentication state persistence
-- **✅ NEW**: Firebase Auth serves as the single source of truth for authentication decisions  
-- **✅ NEW**: Simplified route determination in main.dart using only Firebase Auth
-- **✅ NEW**: AppBootstrapper handles background state synchronization
-- **❌ DEPRECATED**: SharedPreferences no longer used for authentication state
-- **❌ REMOVED**: Dual-state validation complexity eliminated
+- **✅ Multi-Provider Support**: Google, Apple, Phone authentication with smart field management
+- **✅ Premium Features**: Agent time management with time-based access control
+- **✅ Soft Delete Support**: Account recovery within 90-day period
+- **✅ FCM Token Management**: Device notification tokens with metadata
+- **✅ Enhanced Metadata**: Provider information, auth method tracking, and creation timestamps
+- **✅ Smart Data Persistence**: Conditional field storage based on authentication method
 
-## Enhanced Authentication State Flow
+## Enhanced UserModel Structure
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4285f4', 'primaryTextColor': '#fff', 'primaryBorderColor': '#357ae8', 'lineColor': '#357ae8', 'secondaryColor': '#34a853', 'tertiaryColor': '#ea4335'}}}%%
 flowchart TD
-    %% App Launch Decision Flow
-    subgraph AppLaunch ["🚀 App Launch Authentication Flow"]
-        Start([App Starts]) --> FirebaseCheck{Firebase Auth\nCurrent User?}
-        FirebaseCheck -->|User Exists| HomeRoute[Navigate to Home]
-        FirebaseCheck -->|No User| WelcomeRoute[Navigate to Welcome]
-        
-        %% Background Sync Process
-        Start --> BackgroundSync[AppBootstrapper\nBackground Sync]
-        BackgroundSync --> LocalCheck{LocalDatabaseService\nisAnyUserLoggedIn?}
-        LocalCheck -->|true| SyncCheck{States Match?}
-        LocalCheck -->|false| SyncComplete[Sync Complete]
-        SyncCheck -->|Yes| SyncComplete
-        SyncCheck -->|No| FixSync[Update LocalDB\nto match Firebase]
-        FixSync --> SyncComplete
+    %% UserModel Core Structure
+    subgraph UserModelCore ["� UserModel Core Structure"]
+        UID[uid: String<br/>🔑 Firebase UID<br/>Primary Identifier]
+        DisplayName[displayName: String?<br/>📝 User Display Name<br/>Shown in UI]
+        PhotoURL[photoURL: String?<br/>📸 Profile Photo URL<br/>Firebase Storage]
+        Metadata[metadata: Map?<br/>📊 Auth Metadata<br/>Provider Info]
     end
     
-    %% Authentication Process
-    subgraph AuthProcess ["🔐 Authentication Process"]
-        AuthStart([User Initiates Auth]) --> AuthMethod{Auth Method}
-        AuthMethod -->|Google| GoogleFlow[Google Sign-In]
-        AuthMethod -->|Apple| AppleFlow[Apple Sign-In]  
-        AuthMethod -->|Phone| PhoneFlow[Phone Verification]
-        
-        GoogleFlow --> AuthSuccess[Firebase Auth Success]
-        AppleFlow --> AuthSuccess
-        PhoneFlow --> AuthSuccess
-        
-        AuthSuccess --> UpdateLocalDB[LocalDatabaseService\nsetUserLoggedIn = true]
-        UpdateLocalDB --> CacheUser[Cache User Data\nin LocalDB]
-        CacheUser --> AuthComplete[Authentication Complete]
+    %% Authentication Fields
+    subgraph AuthFields ["🔐 Authentication Fields"]
+        Email[email: String?<br/>📧 Email Address<br/>Google/Apple Auth Only]
+        Phone[phoneNumber: String?<br/>📱 Phone Number<br/>Phone Auth Only]
+        EmailVerified[isEmailVerified: bool<br/>✅ Verification Status<br/>Email Validation]
     end
     
-    %% Sign Out Process
-    subgraph SignOutProcess ["🔓 Sign Out Process"]
-        SignOutStart([User Signs Out]) --> ClearFirebase[Firebase Sign Out]
-        ClearFirebase --> ClearLocalDB[LocalDatabaseService\nsetUserLoggedIn = false]
-        ClearLocalDB --> ClearCache[Clear Cached\nSensitive Data]
-        ClearCache --> SignOutComplete[Sign Out Complete]
+    %% App-Specific Fields
+    subgraph AppFields ["⚙️ App-Specific Fields"]
+        AgentTime[agentRemainingTime: int<br/>⏱️ Premium Time (seconds)<br/>Default: 3600 (1 hour)]
+        Deleted[deleted: bool<br/>🗑️ Soft Delete Flag<br/>90-day Recovery]
+        NewUser[isNewUser: bool<br/>🆕 First-time User<br/>Onboarding Flag]
+        FCMData[fcmTokenData: Map?<br/>📱 Notification Tokens<br/>Device Management]
     end
     
-    %% Enhanced State Management
-    subgraph StateManagement ["📊 Enhanced State Management"]
-        StateSource[Firebase Auth\n💡 Single Source of Truth]
-        StatePersist[LocalDatabaseService\n💾 Persistent State Storage]
-        StateSync[AppBootstrapper\n🔄 Background Sync]
-        
-        StateSource -.->|Authoritative| StatePersist
-        StateSync -.->|Monitors & Syncs| StateSource
-        StateSync -.->|Updates| StatePersist
+    %% Smart Field Management
+    subgraph SmartManagement ["🧠 Smart Field Management"]
+        AuthMethod{Auth Method<br/>Detection}
+        AuthMethod -->|google/apple| IncludeEmail[Include Email Fields<br/>📧 Email-based Auth]
+        AuthMethod -->|phone| IncludePhone[Include Phone Fields<br/>📱 Phone-based Auth]
+        AuthMethod -->|metadata| TrackProvider[Track Provider Info<br/>📊 Metadata Storage]
     end
+    
+    %% Data Flow Connections
+    UID --> UserModelCore
+    DisplayName --> UserModelCore
+    PhotoURL --> UserModelCore
+    Metadata --> UserModelCore
+    
+    Email --> AuthFields
+    Phone --> AuthFields
+    EmailVerified --> AuthFields
+    
+    AgentTime --> AppFields
+    Deleted --> AppFields
+    NewUser --> AppFields
+    FCMData --> AppFields
+    
+    AuthFields --> SmartManagement
+    SmartManagement --> UserModelCore
     
     %% Styling
-    classDef firebase fill:#4285f4,stroke:#357ae8,stroke-width:3px,color:#fff,font-weight:bold
-    classDef localdb fill:#34a853,stroke:#2d7d32,stroke-width:3px,color:#fff,font-weight:bold
-    classDef process fill:#ff9800,stroke:#f57c00,stroke-width:3px,color:#fff,font-weight:bold
-    classDef deprecated fill:#ea4335,stroke:#d32f2f,stroke-width:2px,color:#fff,font-weight:bold,stroke-dasharray: 5 5
+    classDef coreField fill:#4285f4,stroke:#357ae8,stroke-width:3px,color:#fff,font-weight:bold
+    classDef authField fill:#34a853,stroke:#2d7d32,stroke-width:3px,color:#fff,font-weight:bold
+    classDef appField fill:#ff9800,stroke:#f57c00,stroke-width:3px,color:#fff,font-weight:bold
+    classDef smartField fill:#9c27b0,stroke:#7b1fa2,stroke-width:3px,color:#fff,font-weight:bold
     
-    class FirebaseCheck,AuthSuccess,ClearFirebase,StateSource firebase
-    class LocalCheck,UpdateLocalDB,ClearLocalDB,StatePersist localdb
-    class AuthMethod,AuthStart,SignOutStart process
+    class UID,DisplayName,PhotoURL,Metadata coreField
+    class Email,Phone,EmailVerified authField
+    class AgentTime,Deleted,NewUser,FCMData appField
+    class AuthMethod,IncludeEmail,IncludePhone,TrackProvider smartField
 ```
 
 ## Architecture Flow

@@ -1,53 +1,80 @@
-# Friends Feature User Flows
+# Friends Feature User Flows - Enhanced v2.0
 
-This document describes the comprehensive user flows for the friends system in the DuckBuck application. These flows illustrate the interactions between all components in the friends architecture, including real-time updates, state management, error handling, and all service integrations.
+This document describes the comprehensive user flows for the unified friends system in the DuckBuck application. These flows illustrate the interactions between the SharedFriendsProvider, RelationshipRepository, and all integrated services including real-time updates, smart caching, error handling, and cross-platform functionality.
 
 ## Architecture Flow Integration
 
-The user flows incorporate all the features from the DuckBuck friends architecture:
+The user flows incorporate all the enhanced features from the DuckBuck friends architecture v2.0:
 
-- **Real-time Stream System**: Live updates via Firestore streams
-- **State Management**: Comprehensive Provider-based state handling
-- **Transaction Safety**: Atomic operations for data consistency
-- **Analytics Integration**: Event tracking and performance monitoring
-- **Notification Service**: Push notifications for friend requests
-- **Error Recovery**: Comprehensive error handling and retry mechanisms
-- **Profile Caching**: Optimized performance with cached user data
+- **Unified SharedFriendsProvider**: Single source of truth for all friends data
+- **Repository-Level Caching**: Smart caching with 5-minute validity and background refresh
+- **Real-time Firebase Streams**: Live updates with automatic reconnection
+- **Comprehensive State Management**: Friends, pending requests, and blocked users
+- **Analytics Integration**: Full event tracking and performance monitoring
+- **Memory Optimization**: Efficient disposal and resource management
+- **Error Recovery**: Comprehensive error handling with retry mechanisms
+- **Photo Caching**: Optimized profile image loading and storage
 
 ## User Flow Diagrams
 
-### Send Friend Request Flow
+### Send Friend Request Flow - Enhanced
 
 ```mermaid
 sequenceDiagram
     actor User
     participant UI as Friends Screen
     participant Dialog as Add Friend Dialog
-    participant Provider as Friends Provider
-    participant Repo as Relationship Repository
-    participant Service as Relationship Service
-    participant UserSvc as User Service
-    participant DB as Firebase Database
-    participant Firestore as Firestore
-    participant Notif as Notification Service
-    participant FCM as Firebase Cloud Messaging
+    participant SFP as SharedFriendsProvider
+    participant RR as RelationshipRepository
+    participant RS as RelationshipService
+    participant US as UserService
+    participant LDB as LocalDatabaseService
+    participant FS as Firestore
     participant Analytics as Firebase Analytics
     participant Logger as Logger Service
     
     User->>UI: Clicks "Add Friend" button
     UI->>Dialog: Show add friend dialog
-    Dialog->>Dialog: Display search interface
+    Dialog->>Dialog: Display UID search interface
     
-    User->>Dialog: Enters username/email
-    Dialog->>Provider: searchUsers(query)
-    Provider->>UserSvc: searchUsersByUsername(query)
-    UserSvc->>Firestore: Query users collection
-    Firestore-->>UserSvc: User search results
-    UserSvc-->>Provider: List<UserModel>
-    Provider-->>Dialog: Search results
-    Dialog->>Dialog: Display search results
+    User->>Dialog: Enters target user UID
+    Dialog->>SFP: searchUserByUid(uid)
+    SFP->>RR: searchUserByUid(uid)
+    RR->>RS: searchUserByUid(uid)
+    RS->>FS: Query users collection by UID
+    FS-->>RS: User document
+    RS-->>RR: UserModel
+    RR-->>SFP: Map<String, dynamic>
+    SFP-->>Dialog: User profile data
+    Dialog->>Dialog: Display user profile
     
-    User->>Dialog: Selects target user
+    User->>Dialog: Confirms friend request
+    Dialog->>SFP: sendFriendRequest(targetUid)
+    SFP->>RR: sendFriendRequest(targetUid)
+    
+    %% Repository handles caching and analytics
+    RR->>Analytics: Log event 'friend_request_sent'
+    RR->>RS: sendFriendRequest(targetUid)
+    
+    %% Service layer handles business logic
+    RS->>FS: Create relationship document
+    FS-->>RS: Relationship ID
+    RS-->>RR: Success with relationshipId
+    
+    %% Update local cache
+    RR->>RR: Invalidate requests cache
+    RR-->>SFP: Success response
+    
+    %% Provider updates UI state
+    SFP->>SFP: Refresh requests data
+    SFP->>SFP: notifyListeners()
+    SFP-->>Dialog: Success
+    Dialog->>UI: Close dialog
+    UI->>UI: Update friends list
+    
+    %% Background analytics and logging
+    RR->>Analytics: Log success metrics
+    RR->>Logger: Log operation success
     Dialog->>Provider: sendFriendRequest(targetUserId)
     Provider->>Provider: Set loading state
     Provider->>Repo: sendFriendRequest(targetUserId)
