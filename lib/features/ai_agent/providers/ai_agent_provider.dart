@@ -446,7 +446,10 @@ class AiAgentProvider extends ChangeNotifier {
   /// Update proximity sensor based on speaker state
   /// Only activate proximity detection when in earpiece mode for screen dimming
   Future<void> _updateProximitySensorState() async {
+    _logger.i(_tag, '🔧 DEBUG: _updateProximitySensorState called. Session: ${_currentSession != null}, Speaker enabled: $_isSpeakerEnabled, Sensor listening: ${_sensorService.isListening}');
+    
     if (_currentSession == null) {
+      _logger.i(_tag, '🔧 DEBUG: No session exists, stopping proximity sensor');  
       await _stopProximitySensor();
       return;
     }
@@ -456,12 +459,16 @@ class AiAgentProvider extends ChangeNotifier {
       if (!_sensorService.isListening) {
         _logger.i(_tag, 'Earpiece mode - starting proximity sensor for screen control');
         await _startProximitySensorForScreenControl();
+      } else {
+        _logger.i(_tag, '🔧 DEBUG: Earpiece mode but sensor already listening');
       }
     } else {
       // In speaker mode - stop proximity detection
       if (_sensorService.isListening) {
         _logger.i(_tag, 'Speaker mode - stopping proximity sensor');
         await _stopProximitySensor();
+      } else {
+        _logger.i(_tag, '🔧 DEBUG: Speaker mode and sensor already stopped');
       }
     }
   }
@@ -472,16 +479,18 @@ class AiAgentProvider extends ChangeNotifier {
       _logger.i(_tag, 'Starting proximity sensor for screen control in earpiece mode');
       
       await _sensorService.startListening(
-        onNearUser: () {
-          _logger.i(_tag, 'Phone near ear - dimming screen (earpiece mode)');
-          // Screen dimming is handled inside the sensor service
+        onProximityChanged: (isNear) {
+          _logger.i(_tag, 'Proximity changed: ${isNear ? "near ear" : "away from ear"}');
         },
-        onAwayFromUser: () {
-          _logger.i(_tag, 'Phone away from ear - restoring screen brightness');
-          // Screen brightening is handled inside the sensor service
+        onNear: () {
+          _logger.i(_tag, 'Phone near ear - screen turns off automatically (earpiece mode)');
         },
-        autoEarpieceDelay: const Duration(seconds: 2), // Quick activation for screen control
+        onAway: () {
+          _logger.i(_tag, 'Phone away from ear - screen turns on automatically');
+        },
       );
+      
+      _logger.i(_tag, '🔧 DEBUG: Proximity sensor started successfully. Listening: ${_sensorService.isListening}');
       
     } catch (e) {
       _logger.e(_tag, 'Error starting proximity sensor for screen control: $e');
@@ -539,7 +548,9 @@ class AiAgentProvider extends ChangeNotifier {
       _logger.d(_tag, 'Initial speaker state: $_isSpeakerEnabled');
       
       // Update proximity sensor based on initial speaker state
+      _logger.i(_tag, '🔧 DEBUG: About to update proximity sensor state. Speaker enabled: $_isSpeakerEnabled, Session exists: ${_currentSession != null}');
       await _updateProximitySensorState();
+      _logger.i(_tag, '🔧 DEBUG: Proximity sensor state updated. Sensor listening: ${_sensorService.isListening}');
       
       notifyListeners();
     } catch (e) {

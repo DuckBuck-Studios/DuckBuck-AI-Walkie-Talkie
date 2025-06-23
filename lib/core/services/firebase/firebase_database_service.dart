@@ -5,7 +5,7 @@ import '../logger/logger_service.dart';
 import '../service_locator.dart';
 
 /// Re-export Firestore types that other services might need
-export 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, DocumentSnapshot, QuerySnapshot, WriteBatch, Transaction, Query;
+export 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, DocumentSnapshot, QuerySnapshot, WriteBatch, Transaction, Query, CollectionReference, SetOptions;
 
 /// Service for handling Firebase Firestore operations
 class FirebaseDatabaseService {

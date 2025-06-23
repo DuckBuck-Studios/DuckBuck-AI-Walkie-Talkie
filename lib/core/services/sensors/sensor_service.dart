@@ -1,316 +1,140 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:screen_brightness/screen_brightness.dart';
-import '../logger/logger_service.dart';
-import '../service_locator.dart';
+import 'package:flutter/foundation.dart' as foundation;
+import 'package:flutter/material.dart';
+import 'package:proximity_sensor/proximity_sensor.dart';
 
-/// Service for managing device sensors during calls
-/// Provides proximity simulation using accelerometer and gyroscope data
-/// Handles automatic earpiece switching and screen dimming
+/// Service class to handle proximity sensor functionality
+/// Provides screen-off behavior when device is near user's ear
 class SensorService {
-  static const String _tag = 'SENSOR_SERVICE';
-  
-  final LoggerService _logger;
-  
-  // Sensor subscriptions
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
-  StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
-  StreamSubscription<UserAccelerometerEvent>? _userAccelerometerSubscription;
-  
-  // State management
+  static final SensorService _instance = SensorService._internal();
+  factory SensorService() => _instance;
+  SensorService._internal();
+
+  StreamSubscription<dynamic>? _streamSubscription;
   bool _isListening = false;
-  bool _isNearUser = false;
-  Timer? _stabilityTimer;
-  Timer? _autoEarpieceTimer;
-  
-  // Sensor data for analysis
-  AccelerometerEvent? _lastAccelerometerEvent;
-  GyroscopeEvent? _lastGyroscopeEvent;
-  UserAccelerometerEvent? _lastUserAccelerometerEvent;
-  
+  bool _isNear = false;
+
   // Callbacks for proximity events
-  VoidCallback? _onNearUser;
-  VoidCallback? _onAwayFromUser;
-  
-  // Detection thresholds
-  static const double _stabilityThreshold = 0.5; // Movement threshold for stability
-  static const Duration _stabilityDuration = Duration(milliseconds: 2000);
-  static const Duration _sensorSamplingPeriod = SensorInterval.uiInterval;
-  
-  SensorService({
-    LoggerService? logger,
-  }) : _logger = logger ?? serviceLocator<LoggerService>();
+  Function(bool isNear)? _onProximityChanged;
+  VoidCallback? _onNearCallback;
+  VoidCallback? _onAwayCallback;
 
-  /// Whether the sensor service is currently active
+  /// Get current proximity state
+  bool get isNear => _isNear;
+
+  /// Check if sensor is currently listening
   bool get isListening => _isListening;
-  
-  /// Whether the device is currently in earpiece mode (near user)
-  bool get isNearUser => _isNearUser;
 
-  /// Start listening to device sensors for proximity detection
-  /// [onNearUser] - Called when device should switch to earpiece mode
-  /// [onAwayFromUser] - Called when device should switch to speaker mode
-  /// [autoEarpieceDelay] - Automatic switch to earpiece after delay
+  /// Start listening to proximity sensor events
+  /// [onProximityChanged] - Callback when proximity state changes
+  /// [onNear] - Callback when device is near
+  /// [onAway] - Callback when device is away
   Future<void> startListening({
-    VoidCallback? onNearUser,
-    VoidCallback? onAwayFromUser,
-    Duration autoEarpieceDelay = const Duration(seconds: 4),
+    Function(bool isNear)? onProximityChanged,
+    VoidCallback? onNear,
+    VoidCallback? onAway,
   }) async {
     if (_isListening) {
-      _logger.w(_tag, 'Sensor service already listening');
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Already listening to proximity sensor');
+      }
       return;
     }
 
+    _onProximityChanged = onProximityChanged;
+    _onNearCallback = onNear;
+    _onAwayCallback = onAway;
+
     try {
-      _logger.i(_tag, 'Starting sensor-based proximity detection');
-      
-      _onNearUser = onNearUser;
-      _onAwayFromUser = onAwayFromUser;
-      _isListening = true;
-      
-      // Start listening to accelerometer events
-      _accelerometerSubscription = accelerometerEventStream(
-        samplingPeriod: _sensorSamplingPeriod,
-      ).listen(
-        _handleAccelerometerEvent,
-        onError: (error) {
-          _logger.w(_tag, 'Accelerometer error: $error');
-        },
-        cancelOnError: false,
-      );
-      
-      // Start listening to gyroscope events
-      _gyroscopeSubscription = gyroscopeEventStream(
-        samplingPeriod: _sensorSamplingPeriod,
-      ).listen(
-        _handleGyroscopeEvent,
-        onError: (error) {
-          _logger.w(_tag, 'Gyroscope error: $error');
-        },
-        cancelOnError: false,
-      );
-      
-      // Start listening to user accelerometer events (gravity removed)
-      _userAccelerometerSubscription = userAccelerometerEventStream(
-        samplingPeriod: _sensorSamplingPeriod,
-      ).listen(
-        _handleUserAccelerometerEvent,
-        onError: (error) {
-          _logger.w(_tag, 'User accelerometer error: $error');
-        },
-        cancelOnError: false,
-      );
-      
-      // Auto-switch to earpiece mode after delay (fallback)
-      _autoEarpieceTimer = Timer(autoEarpieceDelay, () {
-        _logger.i(_tag, '📱➡️👂 Auto-switching to earpiece mode (timeout)');
-        _triggerNearUser();
+      // Error handling setup
+      FlutterError.onError = (FlutterErrorDetails details) {
+        if (foundation.kDebugMode) {
+          FlutterError.dumpErrorToConsole(details);
+        }
+      };
+
+      // Enable proximity screen off functionality (Android only)
+      // Requires WAKE_LOCK permission in AndroidManifest.xml
+      await ProximitySensor.setProximityScreenOff(true).onError((error, stackTrace) {
+        if (foundation.kDebugMode) {
+          debugPrint('SensorService: Could not enable screen off functionality - $error');
+        }
+        return null;
       });
-      
-      _logger.i(_tag, '✅ Sensor proximity detection started');
-      
+
+      // Start listening to proximity sensor events
+      _streamSubscription = ProximitySensor.events.listen((int event) {
+        final bool wasNear = _isNear;
+        _isNear = event > 0;
+
+        if (foundation.kDebugMode) {
+          debugPrint('SensorService: Proximity sensor event = $event, isNear = $_isNear');
+        }
+
+        // Only trigger callbacks if state actually changed
+        if (wasNear != _isNear) {
+          _onProximityChanged?.call(_isNear);
+
+          if (_isNear) {
+            _onNearCallback?.call();
+          } else {
+            _onAwayCallback?.call();
+          }
+        }
+      });
+
+      _isListening = true;
+
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Started listening to proximity sensor');
+      }
     } catch (e) {
-      _logger.e(_tag, 'Failed to start sensor service: $e');
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Error starting proximity sensor - $e');
+      }
       rethrow;
     }
   }
 
-  /// Stop sensor-based proximity detection
+  /// Stop listening to proximity sensor events
   Future<void> stopListening() async {
     if (!_isListening) {
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Not currently listening to proximity sensor');
+      }
       return;
     }
 
     try {
-      _logger.i(_tag, 'Stopping sensor proximity detection');
-      
-      // Cancel all subscriptions
-      await _accelerometerSubscription?.cancel();
-      await _gyroscopeSubscription?.cancel();
-      await _userAccelerometerSubscription?.cancel();
-      
-      // Cancel timers
-      _stabilityTimer?.cancel();
-      _autoEarpieceTimer?.cancel();
-      
-      // Reset state
-      _accelerometerSubscription = null;
-      _gyroscopeSubscription = null;
-      _userAccelerometerSubscription = null;
-      _stabilityTimer = null;
-      _autoEarpieceTimer = null;
-      
-      _isListening = false;
-      _isNearUser = false;
-      _onNearUser = null;
-      _onAwayFromUser = null;
-      
-      _lastAccelerometerEvent = null;
-      _lastGyroscopeEvent = null;
-      _lastUserAccelerometerEvent = null;
-      
-      // Restore screen brightness when stopping
-      await _brightenScreen();
-      
-      _logger.i(_tag, '🛑 Sensor proximity detection stopped');
-      
-    } catch (e) {
-      _logger.e(_tag, 'Error stopping sensor service: $e');
-    }
-  }
+      // Cancel the stream subscription
+      await _streamSubscription?.cancel();
+      _streamSubscription = null;
 
-  /// Handle accelerometer events (includes gravity)
-  void _handleAccelerometerEvent(AccelerometerEvent event) {
-    _lastAccelerometerEvent = event;
-    _analyzeProximity();
-  }
-
-  /// Handle gyroscope events (rotation)
-  void _handleGyroscopeEvent(GyroscopeEvent event) {
-    _lastGyroscopeEvent = event;
-    _analyzeProximity();
-  }
-
-  /// Handle user accelerometer events (gravity removed)
-  void _handleUserAccelerometerEvent(UserAccelerometerEvent event) {
-    _lastUserAccelerometerEvent = event;
-    _analyzeProximity();
-  }
-
-  /// Analyze sensor data to detect proximity to ear
-  void _analyzeProximity() {
-    if (!_isListening || 
-        _lastAccelerometerEvent == null || 
-        _lastGyroscopeEvent == null || 
-        _lastUserAccelerometerEvent == null) {
-      return;
-    }
-
-    // Calculate total acceleration magnitude
-    final accel = _lastAccelerometerEvent!;
-    final totalAccel = (accel.x * accel.x + accel.y * accel.y + accel.z * accel.z).abs();
-    
-    // Calculate gyroscope magnitude (how much rotation)
-    final gyro = _lastGyroscopeEvent!;
-    final totalGyro = (gyro.x * gyro.x + gyro.y * gyro.y + gyro.z * gyro.z).abs();
-    
-    // Calculate user acceleration magnitude (movement without gravity)
-    final userAccel = _lastUserAccelerometerEvent!;
-    final totalUserAccel = (userAccel.x * userAccel.x + userAccel.y * userAccel.y + userAccel.z * userAccel.z).abs();
-    
-    _logger.d(_tag, 'Sensor data - Accel: ${totalAccel.toStringAsFixed(2)}, '
-                   'Gyro: ${totalGyro.toStringAsFixed(2)}, '
-                   'UserAccel: ${totalUserAccel.toStringAsFixed(2)}');
-    
-    // Detect if phone is stable and in ear-like position
-    final isStable = totalGyro < _stabilityThreshold && totalUserAccel < _stabilityThreshold;
-    final isPotentialEarPosition = totalAccel > 8.0 && totalAccel < 12.0; // Around gravity level
-    
-    if (isStable && isPotentialEarPosition && !_isNearUser) {
-      // Start stability timer to confirm position
-      _stabilityTimer?.cancel();
-      _stabilityTimer = Timer(_stabilityDuration, () {
-        _logger.i(_tag, '📱➡️👂 Stable ear position detected - switching to earpiece');
-        _triggerNearUser();
+      // Disable proximity screen off functionality (Android only)
+      await ProximitySensor.setProximityScreenOff(false).onError((error, stackTrace) {
+        if (foundation.kDebugMode) {
+          debugPrint('SensorService: Could not disable screen off functionality - $error');
+        }
+        return null;
       });
-    } else if ((!isStable || !isPotentialEarPosition) && _isNearUser) {
-      // Phone moved away from ear
-      _stabilityTimer?.cancel();
-      _logger.i(_tag, '👂➡️📱 Movement detected - switching to speaker');
-      _triggerAwayFromUser();
-    }
-  }
 
-  /// Manually trigger earpiece mode (near user)
-  void triggerNearUser() {
-    if (_isListening) {
-      _triggerNearUser();
-    }
-  }
+      _isListening = false;
+      _isNear = false;
+      _onProximityChanged = null;
+      _onNearCallback = null;
+      _onAwayCallback = null;
 
-  /// Manually trigger speaker mode (away from user)  
-  void triggerAwayFromUser() {
-    if (_isListening) {
-      _triggerAwayFromUser();
-    }
-  }
-
-  /// Internal method to trigger near user state
-  void _triggerNearUser() {
-    if (!_isNearUser) {
-      _isNearUser = true;
-      _logger.i(_tag, '📱➡️👂 Device brought to ear - switching to earpiece mode');
-      _dimScreen();
-      _onNearUser?.call();
-    }
-  }
-
-  /// Internal method to trigger away from user state
-  void _triggerAwayFromUser() {
-    if (_isNearUser) {
-      _isNearUser = false;
-      _logger.i(_tag, '👂➡️📱 Device moved away from ear - switching to speaker mode');
-      _brightenScreen();
-      _onAwayFromUser?.call();
-    }
-  }
-
-  /// Dim the screen when phone is near ear
-  Future<void> _dimScreen() async {
-    try {
-      await ScreenBrightness().setScreenBrightness(0.0);
-      _logger.d(_tag, '🔅 Screen dimmed for earpiece mode');
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Stopped listening to proximity sensor');
+      }
     } catch (e) {
-      _logger.w(_tag, 'Failed to dim screen: $e');
-    }
-  }
-
-  /// Restore screen brightness when phone is away from ear
-  Future<void> _brightenScreen() async {
-    try {
-      await ScreenBrightness().resetScreenBrightness();
-      _logger.d(_tag, '🔆 Screen brightness restored');
-    } catch (e) {
-      _logger.w(_tag, 'Failed to restore screen brightness: $e');
-    }
-  }
-
-  /// Toggle between earpiece and speaker mode
-  void toggleProximityMode() {
-    if (_isListening) {
-      if (_isNearUser) {
-        _triggerAwayFromUser();
-      } else {
-        _triggerNearUser();
+      if (foundation.kDebugMode) {
+        debugPrint('SensorService: Error stopping proximity sensor - $e');
       }
     }
   }
 
-  /// Get current sensor readings for debugging
-  Map<String, dynamic> getCurrentSensorData() {
-    return {
-      'isListening': _isListening,
-      'isNearUser': _isNearUser,
-      'accelerometer': _lastAccelerometerEvent != null ? {
-        'x': _lastAccelerometerEvent!.x,
-        'y': _lastAccelerometerEvent!.y,
-        'z': _lastAccelerometerEvent!.z,
-      } : null,
-      'gyroscope': _lastGyroscopeEvent != null ? {
-        'x': _lastGyroscopeEvent!.x,
-        'y': _lastGyroscopeEvent!.y,
-        'z': _lastGyroscopeEvent!.z,
-      } : null,
-      'userAccelerometer': _lastUserAccelerometerEvent != null ? {
-        'x': _lastUserAccelerometerEvent!.x,
-        'y': _lastUserAccelerometerEvent!.y,
-        'z': _lastUserAccelerometerEvent!.z,
-      } : null,
-    };
-  }
-
-  /// Dispose the service
+  /// Dispose of the service and clean up resources
   void dispose() {
     stopListening();
   }

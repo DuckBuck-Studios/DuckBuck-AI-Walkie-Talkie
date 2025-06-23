@@ -60,7 +60,7 @@ class ApiService {
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = 'https://api.duckbuck.app',
+    _baseUrl = 'https://ab23-117-194-126-233.ngrok-free.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
@@ -267,7 +267,7 @@ class ApiService {
       };
       
       final response = await _dio.post(
-        '/notifications/send-notification',
+        '/api/notifications/send-notification',
         options: Options(
           headers: {
             'Authorization': 'Bearer $idToken',
@@ -312,7 +312,7 @@ class ApiService {
       }
       
       final response = await _dio.post(
-        '/notifications/send-data-only-notification',
+        '/api/notifications/send-data-only-notification',
         options: Options(
           headers: {
             'Authorization': 'Bearer $idToken',
@@ -382,10 +382,10 @@ class ApiService {
       }
 
       final response = await _dio.post(
-        '/agora/ai-agent/join',
+        '/api/agora/ai-agent/join',
         data: {
           'uid': uid,
-          'channelName': channelName,
+          'channel_name': channelName,
         },
         options: Options(
           headers: {
@@ -485,13 +485,13 @@ class ApiService {
 
       // Log the exact data being sent to backend
       final requestData = {
-        'agentId': agentId,
+        'agent_id': agentId,
       };
       
       _logger.i(_tag, 'Sending stop request to backend with data: $requestData');
 
       final response = await _dio.post(
-        '/agora/ai-agent/stop',
+        '/api/agora/ai-agent/stop',
         data: requestData,
         options: Options(
           headers: {
@@ -585,9 +585,9 @@ class ApiService {
       _logger.i(_tag, 'Generating Agora token for channel: $channelId');
 
       final response = await _dio.post(
-        '/agora/token',
+        '/api/agora/token',
         data: {
-          'channelId': channelId, 
+          'channel_name': channelId, 
         },
         options: Options(
           headers: {

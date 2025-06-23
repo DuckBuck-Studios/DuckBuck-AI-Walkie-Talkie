@@ -461,15 +461,15 @@ class CallProvider with ChangeNotifier {
       _logger.i(_tag, 'Starting proximity sensor for screen control in earpiece mode');
       
       await _sensorService.startListening(
-        onNearUser: () {
-          _logger.i(_tag, 'Phone near ear - dimming screen (earpiece mode)');
-          // Screen dimming is handled inside the sensor service
+        onProximityChanged: (isNear) {
+          _logger.i(_tag, 'Proximity changed: ${isNear ? "near ear" : "away from ear"}');
         },
-        onAwayFromUser: () {
-          _logger.i(_tag, 'Phone away from ear - restoring screen brightness');
-          // Screen brightening is handled inside the sensor service
+        onNear: () {
+          _logger.i(_tag, 'Phone near ear - screen turns off automatically (earpiece mode)');
         },
-        autoEarpieceDelay: const Duration(seconds: 2), // Quick activation for screen control
+        onAway: () {
+          _logger.i(_tag, 'Phone away from ear - screen turns on automatically');
+        },
       );
       
     } catch (e) {
