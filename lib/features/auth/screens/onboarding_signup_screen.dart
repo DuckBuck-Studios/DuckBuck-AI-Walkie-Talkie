@@ -20,6 +20,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
   bool _isLoading = false;
   late AnimationController _animationController;
   late Animation<double> _moveUpAnimation;
+  bool _isDisposed = false; // Track disposal state
 
   @override
   void initState() {
@@ -53,7 +54,12 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
 
   @override
   void dispose() {
+    // Safely dispose animation controller
+    if (_animationController.isAnimating) {
+      _animationController.stop();
+    }
     _animationController.dispose();
+    _isDisposed = true;
     super.dispose();
   }
 
@@ -93,18 +99,27 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
 
   /// Navigate to home screen with premium celebration transition
   void _navigateToHome() {
+    // Safely dispose animation controller to free memory before navigation
+    if (!_isDisposed) {
+      if (_animationController.isAnimating) {
+        _animationController.stop();
+      }
+      _animationController.dispose();
+      _isDisposed = true;
+    }
+    
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => 
           const MainNavigation(),
-        transitionDuration: const Duration(milliseconds: 1200),
-        reverseTransitionDuration: const Duration(milliseconds: 800),
+        transitionDuration: const Duration(milliseconds: 600), // Reduced for better performance
+        reverseTransitionDuration: const Duration(milliseconds: 400),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // Premium "onboarding completion" to "home" celebration transition
+          // Simplified but still cool celebration transition
           return Stack(
             children: [
-              // Celebration gradient background
+              // Simplified celebration gradient background
               AnimatedBuilder(
                 animation: animation,
                 builder: (context, _) {
@@ -112,44 +127,42 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
                         center: Alignment.center,
-                        radius: 2.0 * animation.value,
+                        radius: 1.5 * animation.value,
                         colors: [
-                          Colors.green.shade400.withValues(alpha: animation.value * 0.3),
-                          Colors.blue.shade600.withValues(alpha: animation.value * 0.2),
-                          Colors.purple.shade800.withValues(alpha: animation.value * 0.1),
+                          Colors.green.shade400.withValues(alpha: animation.value * 0.2),
+                          Colors.blue.shade600.withValues(alpha: animation.value * 0.15),
                           Colors.black,
                         ],
-                        stops: [0.0, 0.3, 0.7, 1.0],
+                        stops: [0.0, 0.5, 1.0],
                       ),
                     ),
                   );
                 },
               ),
               
-              // Floating particles effect
-              ...List.generate(12, (index) {
-                final delay = (index * 0.05);
+              // Reduced floating particles - only 6 instead of 12
+              ...List.generate(6, (index) {
+                final delay = (index * 0.08);
                 return AnimatedBuilder(
                   animation: animation,
                   builder: (context, _) {
-                    final animationWithDelay = Curves.easeOutExpo.transform(
+                    final animationWithDelay = Curves.easeOut.transform(
                       (animation.value - delay).clamp(0.0, 1.0),
                     );
                     return Positioned(
-                      left: 50.0 + (index * 30) * animationWithDelay,
-                      top: 100.0 + (index % 3 * 150) * animationWithDelay,
+                      left: 50.0 + (index * 40) * animationWithDelay,
+                      top: 100.0 + (index % 2 * 200) * animationWithDelay,
                       child: Opacity(
                         opacity: animationWithDelay * (1 - animationWithDelay),
                         child: Container(
-                          width: 8,
-                          height: 8,
+                          width: 6,
+                          height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: [
                               Colors.blue.shade300,
-                              Colors.purple.shade300,
                               Colors.green.shade300,
-                            ][index % 3],
+                            ][index % 2],
                           ),
                         ),
                       ),
@@ -158,23 +171,22 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                 );
               }),
               
-              // Main content with celebration scale and slide
+              // Main content with simplified celebration scale and slide
               Transform(
                 alignment: Alignment.center,
                 transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.001)
                   ..scale(
-                    0.7 + (animation.value * 0.3), // Scale from 70% to 100%
+                    0.8 + (animation.value * 0.2), // Scale from 80% to 100%
                   )
                   ..translate(
                     0.0,
-                    (1 - animation.value) * 150, // Slide up from bottom
+                    (1 - animation.value) * 100, // Slide up from bottom
                     0.0,
                   ),
                 child: FadeTransition(
                   opacity: CurvedAnimation(
                     parent: animation,
-                    curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                    curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
                   ),
                   child: child,
                 ),
@@ -197,7 +209,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
       decoration: const BoxDecoration(color: Colors.black),
       child: Stack(
         children: [
-          // Enhanced decorative background elements with animations
+          // Simplified background - only 2 static elements for better performance
           Positioned(
             top: -size.height * 0.1,
             right: -size.width * 0.1,
@@ -208,20 +220,6 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                 shape: BoxShape.circle,
                 color: AppColors.whiteOpacity10,
               ),
-            )
-            .animate(onPlay: (controller) => controller.repeat())
-            .scale(
-              duration: 4000.ms,
-              begin: const Offset(0.8, 0.8),
-              end: const Offset(1.2, 1.2),
-              curve: Curves.easeInOut,
-            )
-            .then()
-            .scale(
-              duration: 4000.ms,
-              begin: const Offset(1.2, 1.2),
-              end: const Offset(0.8, 0.8),
-              curve: Curves.easeInOut,
             ),
           ),
 
@@ -235,51 +233,8 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                 shape: BoxShape.circle,
                 color: AppColors.whiteOpacity15,
               ),
-            )
-            .animate(onPlay: (controller) => controller.repeat())
-            .scale(
-              duration: 3500.ms,
-              begin: const Offset(1.1, 1.1),
-              end: const Offset(0.9, 0.9),
-              curve: Curves.easeInOut,
-            )
-            .then()
-            .scale(
-              duration: 3500.ms,
-              begin: const Offset(0.9, 0.9),
-              end: const Offset(1.1, 1.1),
-              curve: Curves.easeInOut,
             ),
           ),
-
-          // Floating particle animations
-          ...List.generate(8, (index) {
-            final random = index * 37 % 100;
-            final delay = (index * 200 + random * 10).ms;
-            return Positioned(
-              top: size.height * (random % 80) / 100,
-              left: size.width * ((random * 3) % 90) / 100,
-              child: Container(
-                height: 6 + (random % 10),
-                width: 6 + (random % 10),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.whiteOpacity30,
-                ),
-              )
-              .animate(onPlay: (controller) => controller.repeat())
-              .fadeIn(delay: delay, duration: 1000.ms)
-              .then()
-              .moveY(
-                duration: (3000 + random * 20).ms,
-                begin: 0,
-                end: -50,
-                curve: Curves.easeInOut,
-              )
-              .fadeOut(duration: 500.ms)
-              .then(delay: (500 + random * 100).ms),
-            );
-          }),
 
           // Content container with modern entrance animations
           Padding(
@@ -304,7 +259,7 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                             offset: Offset(0, _moveUpAnimation.value),
                             child: Column(
                               children: [
-                                // Logo container with sophisticated entrance animation
+                                // Logo container with simplified entrance animation
                                 Container(
                                   width: size.width * 0.4,
                                   height: size.width * 0.4,
@@ -331,27 +286,15 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                                   ),
                                 )
                                 .animate()
-                                .scale(
-                                  delay: 200.ms,
-                                  duration: 800.ms,
-                                  begin: const Offset(0.5, 0.5),
-                                  end: const Offset(1.0, 1.0),
-                                  curve: Curves.elasticOut,
-                                )
                                 .fadeIn(
                                   delay: 100.ms,
-                                  duration: 600.ms,
-                                  curve: Curves.easeOutExpo,
-                                )
-                                .shimmer(
-                                  delay: 1000.ms,
-                                  duration: 1500.ms,
-                                  color: Colors.white.withValues(alpha: 0.3),
+                                  duration: 400.ms,
+                                  curve: Curves.easeOut,
                                 ),
 
                                 SizedBox(height: size.height * 0.05),
 
-                                // Title text with staggered character animation
+                                // Title text with simplified animation
                                 Text(
                                   'Welcome to DuckBuck',
                                   style: const TextStyle(
@@ -365,22 +308,9 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                                 )
                                 .animate()
                                 .fadeIn(
-                                  delay: 400.ms,
-                                  duration: 800.ms,
-                                  curve: Curves.easeOutExpo,
-                                )
-                                .slideY(
-                                  delay: 400.ms,
-                                  duration: 800.ms,
-                                  begin: 0.3,
-                                  end: 0.0,
-                                  curve: Curves.easeOutExpo,
-                                )
-                                .then()
-                                .shimmer(
-                                  delay: 500.ms,
-                                  duration: 2000.ms,
-                                  color: AppColors.accentBlue.withValues(alpha: 0.2),
+                                  delay: 200.ms,
+                                  duration: 400.ms,
+                                  curve: Curves.easeOut,
                                 ),
                               ],
                             ),
@@ -444,23 +374,9 @@ class _OnboardingSignupScreenState extends State<OnboardingSignupScreen>
                   )
                   .animate()
                   .fadeIn(
-                    delay: 800.ms,
-                    duration: 600.ms,
-                    curve: Curves.easeOutExpo,
-                  )
-                  .slideY(
-                    delay: 800.ms,
-                    duration: 600.ms,
-                    begin: 0.5,
-                    end: 0.0,
-                    curve: Curves.easeOutExpo,
-                  )
-                  .scale(
-                    delay: 800.ms,
-                    duration: 600.ms,
-                    begin: const Offset(0.8, 0.8),
-                    end: const Offset(1.0, 1.0),
-                    curve: Curves.easeOutBack,
+                    delay: 300.ms,
+                    duration: 400.ms,
+                    curve: Curves.easeOut,
                   ),
                 ),
               ],

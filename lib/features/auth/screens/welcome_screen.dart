@@ -36,6 +36,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _markWelcomeScreenAsSeen();
     _logScreenView();
   }
+
+  @override
+  void dispose() { 
+    super.dispose();
+  }
   
   void _logScreenView() {
     _analytics.logScreenView(
@@ -93,10 +98,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // Simplified logo with basic fade-in only
                     _buildLogo(screenSize)
                         .animate()
-                        .fadeIn(duration: 800.ms, curve: Curves.easeOut)
-                        .scale(begin: const Offset(0.8, 0.8), delay: 300.ms),
+                        .fadeIn(duration: 600.ms, curve: Curves.easeOut),
                     SizedBox(height: screenSize.height * 0.05),
                     _buildAppTitle(),
                   ],
@@ -110,29 +115,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Terms & Privacy Policy links
-                    _buildLegalLinks().animate().fadeIn(
-                      delay: 300.ms,
-                      duration: 600.ms,
-                    ),
+                    // Terms & Privacy Policy links - simplified animation
+                    _buildLegalLinks()
+                        .animate()
+                        .fadeIn(delay: 200.ms, duration: 400.ms),
                     const SizedBox(height: 16),
 
-                    // Continue button with platform-specific styling
+                    // Continue button - simplified animation
                     _buildContinueButton(context, isIOS)
                         .animate()
-                        .fadeIn(delay: 400.ms, duration: 600.ms)
-                        .slideY(begin: 0.2, end: 0.0),
+                        .fadeIn(delay: 300.ms, duration: 400.ms),
                     const SizedBox(height: 16),
 
-                    _buildStudioCredit().animate().fadeIn(
-                      delay: 800.ms,
-                      duration: 600.ms,
-                    ),
+                    // Credits - simplified animation
+                    _buildStudioCredit()
+                        .animate()
+                        .fadeIn(delay: 400.ms, duration: 400.ms),
                     const SizedBox(height: 4),
-                    _buildVersionText().animate().fadeIn(
-                      delay: 800.ms,
-                      duration: 600.ms,
-                    ),
+                    _buildVersionText()
+                        .animate()
+                        .fadeIn(delay: 400.ms, duration: 400.ms),
                   ],
                 ),
               ),
@@ -380,9 +382,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             onComplete: () => Navigator.of(context).pushReplacementNamed(AppRoutes.home),
           ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // Ultra-smooth transition with perfect easing
+          // Optimized transition with reduced complexity for better performance
           final slideAnimation = Tween<Offset>(
-            begin: const Offset(0.0, 0.08), // Start slightly below
+            begin: const Offset(0.0, 0.05), // Reduced movement
             end: Offset.zero,
           ).animate(CurvedAnimation(
             parent: animation,
@@ -397,27 +399,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
           ));
           
-          final scaleAnimation = Tween<double>(
-            begin: 0.96,
-            end: 1.0,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          ));
-          
           return SlideTransition(
             position: slideAnimation,
-            child: ScaleTransition(
-              scale: scaleAnimation,
-              child: FadeTransition(
-                opacity: fadeAnimation,
-                child: child,
-              ),
+            child: FadeTransition(
+              opacity: fadeAnimation,
+              child: child,
             ),
           );
         },
-        transitionDuration: const Duration(milliseconds: 900),
-        reverseTransitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: const Duration(milliseconds: 600), // Reduced for better performance
+        reverseTransitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }

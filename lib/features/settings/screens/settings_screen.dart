@@ -25,8 +25,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAppInfo();
+    _loadAppInfo(); 
   }
+ 
 
   // Load app version information
   Future<void> _loadAppInfo() async {
@@ -62,6 +63,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = true);
     try {
       final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      
+      // Check if user is still authenticated
+      if (authProvider.currentUser == null) {
+        // User is already signed out, just navigate to welcome
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+        }
+        return;
+      }
+      
       await authProvider.signOut();
       
       if (mounted) {
@@ -69,8 +80,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Failed to log out';
+        
+        // Handle specific logout errors
+        if (e.toString().contains('no auth user') || e.toString().contains('not authenticated')) {
+          // User is already signed out, just navigate
+          Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+          return;
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Network error during logout. You may already be signed out.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to log out: ${e.toString()}')),
+          SnackBar(
+            content: Text('$errorMessage: ${e.toString()}'),
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } finally {
@@ -82,6 +107,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Delete user account with confirmation
   Future<void> _confirmDeleteAccount() async {
+    // First check if user is still authenticated
+    final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+    if (authProvider.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are not signed in. Please sign in again to delete your account.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+      return;
+    }
+
     final bool isIOS = Platform.isIOS;
     bool shouldDelete = false;
 
@@ -153,16 +191,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     
     try {
       final authProvider = Provider.of<AuthStateProvider>(context, listen: false);
+      
+      // Check if user is still authenticated before attempting deletion
+      if (authProvider.currentUser == null) {
+        throw Exception('User is not authenticated. Please sign in again to delete your account.');
+      }
+      
       await authProvider.deleteUserAccount();
       
+      // Navigate to welcome screen after successful deletion
       if (mounted) {
         Navigator.pushReplacementNamed(context, AppRoutes.welcome);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDeleting = false);
+        
+        String errorMessage = 'Failed to delete account';
+        
+        // Handle specific error cases
+        if (e.toString().contains('no auth user') || e.toString().contains('not authenticated')) {
+          errorMessage = 'Authentication expired. Please sign in again to delete your account.';
+          // Navigate to welcome screen since user is no longer authenticated
+          Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+          return;
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (e.toString().contains('requires-recent-login')) {
+          errorMessage = 'For security, please sign out and sign in again before deleting your account.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete account: ${e.toString()}')),
+          SnackBar(
+            content: Text('$errorMessage: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ),
         );
       }
     }
@@ -648,6 +717,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             width: screenWidth * 0.24,
             height: screenWidth * 0.24,
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.low, // Low quality for better performance
             cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
             cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
             errorBuilder: (context, error, stackTrace) {
@@ -676,6 +746,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       width: screenWidth * 0.24,
       height: screenWidth * 0.24,
       fit: BoxFit.cover,
+      filterQuality: FilterQuality.low,  
       cacheWidth: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
       cacheHeight: (screenWidth * 0.24 * MediaQuery.of(context).devicePixelRatio).round(),
       errorBuilder: (context, error, stackTrace) {

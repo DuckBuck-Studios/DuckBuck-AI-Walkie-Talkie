@@ -23,6 +23,7 @@ class ProviderRegistry {
       // Authentication state provider
       ChangeNotifierProvider<AuthStateProvider>(
         create: (_) => AuthStateProvider(),
+        lazy: false, // Keep immediately available for auth checks
       ),
       
       // Crashlytics consent provider
@@ -36,16 +37,19 @@ class ProviderRegistry {
           });
           return provider;
         },
+        lazy: false, // Keep immediately available for crash reporting
       ),
       
       // Call provider for handling call UI state (receiver side)
       ChangeNotifierProvider<CallProvider>(
         create: (_) => CallProvider(),
+        lazy: true, // Only create when call functionality is needed
       ),
       
       // AI Agent provider for managing AI agent operations and state
       ChangeNotifierProvider<AiAgentProvider>(
         create: (_) => AiAgentProvider(),
+        lazy: true, // Only create when AI agent is accessed
       ),
       
       // Call initiator provider for handling call initiation (caller side)
@@ -54,19 +58,15 @@ class ProviderRegistry {
       // Settings provider for real-time user updates in settings screen
       ChangeNotifierProvider<SettingsProvider>(
         create: (_) => SettingsProvider(),
+        lazy: true, // Only create when settings screen is accessed
       ),
       
       // Shared friends provider for unified friends and relationship management
       // Replaces both RelationshipProvider and HomeProvider with a single, optimized provider
+      // Use lazy initialization to improve app startup performance
       ChangeNotifierProvider<SharedFriendsProvider>(
-        create: (_) {
-          final provider = SharedFriendsProvider();
-          // Initialize provider with real-time streams and caching
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await provider.initialize();
-          });
-          return provider;
-        },
+        create: (_) => SharedFriendsProvider(),
+        lazy: true, // Only create when first accessed
       ),
       
       // Add more app-wide providers here as needed

@@ -26,7 +26,6 @@ import 'ai_agent/ai_agent_service.dart';
 import 'cache/cache_sync_service.dart';
 import 'lifecycle/app_lifecycle_manager.dart';
 import 'permissions/permissions_service.dart';
-import '../../features/friends/providers/relationship_provider.dart';
 
 
 /// Global service locator instance
@@ -198,11 +197,6 @@ Future<void> setupServiceLocator() async {
       cacheSyncService: serviceLocator<CacheSyncService>(),
       logger: serviceLocator<LoggerService>(),
     ),
-  );
-  
-  // Register RelationshipProvider as a service
-  serviceLocator.registerLazySingleton<RelationshipProvider>(
-    () => RelationshipProvider(),
   );
   
   // Register Permissions service

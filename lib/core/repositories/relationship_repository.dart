@@ -3,6 +3,7 @@ import '../services/firebase/firebase_analytics_service.dart';
 import '../services/firebase/firebase_crashlytics_service.dart';
 import '../services/logger/logger_service.dart';
 import '../services/service_locator.dart';
+import '../services/database/local_database_service.dart';
 import '../exceptions/relationship_exceptions.dart';
 import 'dart:async';
 
@@ -22,8 +23,15 @@ class RelationshipRepository {
   final FirebaseAnalyticsService _analytics;
   final FirebaseCrashlyticsService _crashlytics;
   final LoggerService _logger;
+  final LocalDatabaseService _localDb;
 
   static const String _tag = 'RELATIONSHIP_REPO';
+  
+  // Cache configuration - following UserRepository pattern
+  static const Duration _cacheValidDuration = Duration(minutes: 5);
+  DateTime? _lastFriendsRefresh;
+  DateTime? _lastRequestsRefresh;
+  DateTime? _lastBlockedUsersRefresh;
 
   /// Creates a new RelationshipRepository
   RelationshipRepository({
@@ -31,10 +39,12 @@ class RelationshipRepository {
     FirebaseAnalyticsService? analytics,
     FirebaseCrashlyticsService? crashlytics,
     LoggerService? logger,
+    LocalDatabaseService? localDb,
   }) : _relationshipService = relationshipService ?? serviceLocator<RelationshipServiceInterface>(),
        _analytics = analytics ?? serviceLocator<FirebaseAnalyticsService>(),
        _crashlytics = crashlytics ?? serviceLocator<FirebaseCrashlyticsService>(),
-       _logger = logger ?? serviceLocator<LoggerService>();
+       _logger = logger ?? serviceLocator<LoggerService>(),
+       _localDb = localDb ?? LocalDatabaseService.instance;
 
   // ========== FRIEND REQUEST OPERATIONS ==========
 
@@ -45,6 +55,9 @@ class RelationshipRepository {
       _logger.d(_tag, 'Sending friend request to user: $targetUserId');
       
       final relationshipId = await _relationshipService.sendFriendRequest(targetUserId);
+      
+      // Invalidate requests cache after successful send
+      _lastRequestsRefresh = null;
       
       // Track success analytics
       await _analytics.logEvent(
@@ -91,6 +104,10 @@ class RelationshipRepository {
       
       final resultId = await _relationshipService.acceptFriendRequest(relationshipId);
       
+      // Invalidate friends and requests cache after successful accept
+      _lastFriendsRefresh = null;
+      _lastRequestsRefresh = null;
+      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_request_accepted',
@@ -136,6 +153,9 @@ class RelationshipRepository {
       
       final result = await _relationshipService.rejectFriendRequest(relationshipId);
       
+      // Invalidate requests cache after successful reject
+      _lastRequestsRefresh = null;
+      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_request_rejected',
@@ -180,6 +200,9 @@ class RelationshipRepository {
       _logger.d(_tag, 'Cancelling friend request: $relationshipId');
       
       final result = await _relationshipService.cancelFriendRequest(relationshipId);
+      
+      // Invalidate requests cache after successful cancel
+      _lastRequestsRefresh = null;
       
       // Track success analytics
       await _analytics.logEvent(
@@ -228,6 +251,9 @@ class RelationshipRepository {
       
       final result = await _relationshipService.removeFriend(targetUserId);
       
+      // Invalidate friends cache after successful removal
+      _lastFriendsRefresh = null;
+      
       // Track success analytics
       await _analytics.logEvent(
         name: 'friend_removed',
@@ -275,6 +301,10 @@ class RelationshipRepository {
       
       final relationshipId = await _relationshipService.blockUser(targetUserId);
       
+      // Invalidate blocked users and friends cache after successful block
+      _lastBlockedUsersRefresh = null;
+      _lastFriendsRefresh = null; // Block removes from friends if they were friends
+      
       // Track success analytics
       await _analytics.logEvent(
         name: 'user_blocked',
@@ -319,6 +349,9 @@ class RelationshipRepository {
       _logger.d(_tag, 'Unblocking user: $targetUserId');
       
       final result = await _relationshipService.unblockUser(targetUserId);
+      
+      // Invalidate blocked users cache after successful unblock
+      _lastBlockedUsersRefresh = null;
       
       // Track success analytics
       await _analytics.logEvent(
@@ -594,6 +627,204 @@ class RelationshipRepository {
       
       return Stream.error(e);
     }
+  }
+
+  // ========== CACHED DATA OPERATIONS ==========
+
+  /// Get friends with smart caching - offline first approach
+  /// Follows UserRepository caching pattern
+  Future<List<Map<String, dynamic>>> getFriendsWithCaching({
+    required String userId,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      _logger.d(_tag, 'Getting friends with caching for user: $userId');
+      
+      // Check if we should use cache
+      final shouldUseCache = !forceRefresh && _isFriendsCacheValid();
+      
+      if (shouldUseCache) {
+        // Load from cache first (offline-first approach)
+        final cachedFriends = await _localDb.getCachedFriends(userId);
+        if (cachedFriends.isNotEmpty) {
+          _logger.d(_tag, 'Loaded ${cachedFriends.length} friends from cache');
+          return cachedFriends;
+        }
+      }
+      
+      // Cache miss or force refresh - load from Firebase
+      _logger.i(_tag, 'Loading friends from Firebase...');
+      final friends = await getFriendsStream().first;
+      
+      // Update cache timestamp and cache the data
+      _lastFriendsRefresh = DateTime.now();
+      await _localDb.cacheFriends(userId, friends);
+      
+      _logger.i(_tag, 'Loaded and cached ${friends.length} friends from Firebase');
+      return friends;
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error loading friends: $e');
+      
+      // Fallback to cache on error
+      try {
+        final cachedFriends = await _localDb.getCachedFriends(userId);
+        if (cachedFriends.isNotEmpty) {
+          _logger.w(_tag, 'Using cached friends due to load error');
+          return cachedFriends;
+        }
+      } catch (cacheError) {
+        _logger.e(_tag, 'Failed to load cached friends: $cacheError');
+      }
+      
+      rethrow;
+    }
+  }
+
+  /// Get pending requests with smart caching
+  Future<List<Map<String, dynamic>>> getPendingRequestsWithCaching({
+    required String userId,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      _logger.d(_tag, 'Getting requests with caching for user: $userId');
+      
+      // Check if we should use cache
+      final shouldUseCache = !forceRefresh && _isRequestsCacheValid();
+      
+      if (shouldUseCache) {
+        // Load from cache first
+        final cachedRequests = await _localDb.getCachedPendingRequests(userId);
+        if (cachedRequests.isNotEmpty) {
+          _logger.d(_tag, 'Loaded ${cachedRequests.length} requests from cache');
+          return cachedRequests;
+        }
+      }
+      
+      // Cache miss or force refresh - load from Firebase
+      _logger.i(_tag, 'Loading requests from Firebase...');
+      final requests = await getPendingRequestsStream().first;
+      
+      // Update cache timestamp and cache the data
+      _lastRequestsRefresh = DateTime.now();
+      await _localDb.cachePendingRequests(userId, requests);
+      
+      _logger.i(_tag, 'Loaded and cached ${requests.length} requests from Firebase');
+      return requests;
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error loading requests: $e');
+      
+      // Fallback to cache on error
+      try {
+        final cachedRequests = await _localDb.getCachedPendingRequests(userId);
+        if (cachedRequests.isNotEmpty) {
+          _logger.w(_tag, 'Using cached requests due to load error');
+          return cachedRequests;
+        }
+      } catch (cacheError) {
+        _logger.e(_tag, 'Failed to load cached requests: $cacheError');
+      }
+      
+      rethrow;
+    }
+  }
+
+  /// Get blocked users with smart caching
+  Future<List<Map<String, dynamic>>> getBlockedUsersWithCaching({
+    required String userId,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      _logger.d(_tag, 'Getting blocked users with caching for user: $userId');
+      
+      // Check if we should use cache
+      final shouldUseCache = !forceRefresh && _isBlockedUsersCacheValid();
+      
+      if (shouldUseCache) {
+        // Load from cache first
+        final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(userId);
+        if (cachedBlockedUsers.isNotEmpty) {
+          _logger.d(_tag, 'Loaded ${cachedBlockedUsers.length} blocked users from cache');
+          return cachedBlockedUsers;
+        }
+      }
+      
+      // Cache miss or force refresh - load from Firebase
+      _logger.i(_tag, 'Loading blocked users from Firebase...');
+      final blockedUsers = await getBlockedUsersStream().first;
+      
+      // Update cache timestamp and cache the data
+      _lastBlockedUsersRefresh = DateTime.now();
+      await _localDb.cacheBlockedUsers(userId, blockedUsers);
+      
+      _logger.i(_tag, 'Loaded and cached ${blockedUsers.length} blocked users from Firebase');
+      return blockedUsers;
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error loading blocked users: $e');
+      
+      // Fallback to cache on error
+      try {
+        final cachedBlockedUsers = await _localDb.getCachedBlockedUsers(userId);
+        if (cachedBlockedUsers.isNotEmpty) {
+          _logger.w(_tag, 'Using cached blocked users due to load error');
+          return cachedBlockedUsers;
+        }
+      } catch (cacheError) {
+        _logger.e(_tag, 'Failed to load cached blocked users: $cacheError');
+      }
+      
+      rethrow;
+    }
+  }
+
+  /// Check if friends cache is still valid
+  bool _isFriendsCacheValid() {
+    if (_lastFriendsRefresh == null) return false;
+    return DateTime.now().difference(_lastFriendsRefresh!) < _cacheValidDuration;
+  }
+
+  /// Check if requests cache is still valid
+  bool _isRequestsCacheValid() {
+    if (_lastRequestsRefresh == null) return false;
+    return DateTime.now().difference(_lastRequestsRefresh!) < _cacheValidDuration;
+  }
+
+  /// Check if blocked users cache is still valid
+  bool _isBlockedUsersCacheValid() {
+    if (_lastBlockedUsersRefresh == null) return false;
+    return DateTime.now().difference(_lastBlockedUsersRefresh!) < _cacheValidDuration;
+  }
+
+  /// Force refresh all cached data
+  Future<void> refreshAllCachedData(String userId) async {
+    _logger.d(_tag, 'Force refreshing all cached data...');
+    await Future.wait([
+      getFriendsWithCaching(userId: userId, forceRefresh: true),
+      getPendingRequestsWithCaching(userId: userId, forceRefresh: true),
+      getBlockedUsersWithCaching(userId: userId, forceRefresh: true),
+    ]);
+  }
+
+  /// Clear all relationship cache for a user
+  Future<void> clearUserCache(String userId) async {
+    _logger.d(_tag, 'Clearing relationship cache for user: $userId');
+    await _localDb.clearRelationshipCache(userId);
+    // Reset cache timestamps
+    _lastFriendsRefresh = null;
+    _lastRequestsRefresh = null;
+    _lastBlockedUsersRefresh = null;
+  }
+
+  /// Clear all relationship cache
+  Future<void> clearAllCache() async {
+    _logger.d(_tag, 'Clearing all relationship cache');
+    await _localDb.clearAllRelationshipCache();
+    // Reset cache timestamps
+    _lastFriendsRefresh = null;
+    _lastRequestsRefresh = null;
+    _lastBlockedUsersRefresh = null;
   }
 
   // ========== USER SEARCH OPERATIONS ==========

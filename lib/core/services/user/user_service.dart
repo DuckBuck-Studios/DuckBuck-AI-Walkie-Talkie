@@ -8,7 +8,6 @@ import '../firebase/firebase_analytics_service.dart';
 import '../service_locator.dart';
 import '../../exceptions/auth_exceptions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Firebase implementation of the UserService interface
 class UserService implements UserServiceInterface {

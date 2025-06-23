@@ -41,6 +41,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+  @override
+  void dispose() {
+    // Optimize memory when leaving home screen
+    if (mounted) {
+      context.read<SharedFriendsProvider>().optimizeMemory();
+    }
+    super.dispose();
+  }
+
   void _handleFriendTap(Map<String, dynamic> friend) {
     _photoHandler.showPhotoViewer(friend);
   }

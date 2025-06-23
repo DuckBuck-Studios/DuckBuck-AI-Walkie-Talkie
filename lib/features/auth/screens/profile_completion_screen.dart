@@ -39,6 +39,9 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
   late AnimationController _contentAnimationController;
   late AnimationController _loadingAnimationController;
   
+  // Track disposal state to prevent double disposal
+  bool _isDisposed = false;
+  
   // Sophisticated Animations
   late Animation<double> _photoScaleAnimation;
   late Animation<double> _photoSlideAnimation;
@@ -156,10 +159,21 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
   @override
   void dispose() {
     _nameController.dispose();
-    _stepTransitionController.dispose();
-    _photoAnimationController.dispose();
-    _contentAnimationController.dispose();
-    _loadingAnimationController.dispose();
+    
+    // Safely dispose animation controllers
+    if (!_isDisposed) {
+      if (_stepTransitionController.isAnimating) _stepTransitionController.stop();
+      if (_photoAnimationController.isAnimating) _photoAnimationController.stop();
+      if (_contentAnimationController.isAnimating) _contentAnimationController.stop();
+      if (_loadingAnimationController.isAnimating) _loadingAnimationController.stop();
+      
+      _stepTransitionController.dispose();
+      _photoAnimationController.dispose();
+      _contentAnimationController.dispose();
+      _loadingAnimationController.dispose();
+      _isDisposed = true;
+    }
+    
     super.dispose();
   }
 
@@ -403,6 +417,20 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
 
   /// Navigate to home screen with premium transition
   void _navigateToHome() {
+    // Safely dispose animation controllers to free memory before navigation
+    if (!_isDisposed) {
+      if (_stepTransitionController.isAnimating) _stepTransitionController.stop();
+      if (_photoAnimationController.isAnimating) _photoAnimationController.stop();
+      if (_contentAnimationController.isAnimating) _contentAnimationController.stop();
+      if (_loadingAnimationController.isAnimating) _loadingAnimationController.stop();
+      
+      _stepTransitionController.dispose();
+      _photoAnimationController.dispose();
+      _contentAnimationController.dispose();
+      _loadingAnimationController.dispose();
+      _isDisposed = true;
+    }
+    
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
