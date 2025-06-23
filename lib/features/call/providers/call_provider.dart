@@ -4,11 +4,13 @@ import '../models/call_state.dart';
 import '../../../core/services/agora/agora_service.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
+import '../../../core/services/sensors/sensor_service.dart';
 
 class CallProvider with ChangeNotifier {
   static const MethodChannel _methodChannel = MethodChannel('com.duckbuck.app/call');
   static const String _tag = 'CALL_PROVIDER';
   final LoggerService _logger = serviceLocator<LoggerService>();
+  final SensorService _sensorService = serviceLocator<SensorService>();
   
   CallState? _currentCall;
   bool _isInCall = false;
@@ -189,6 +191,9 @@ class CallProvider with ChangeNotifier {
         
         // Haptic feedback for successful friend join
         HapticFeedback.mediumImpact();
+        
+        // Initialize proximity sensor for screen control
+        _updateProximitySensorState();
         
         notifyListeners();
         AgoraService.setUserJoinedCallback(null); // Remove listener
@@ -409,17 +414,76 @@ class CallProvider with ChangeNotifier {
         final result = await AgoraService.turnSpeakerOff();
         if (result) {
           _isSpeakerOn = false;
+          // Update proximity sensor state based on new speaker mode
+          await _updateProximitySensorState();
           notifyListeners();
         }
       } else {
         final result = await AgoraService.turnSpeakerOn();
         if (result) {
           _isSpeakerOn = true;
+          // Update proximity sensor state based on new speaker mode
+          await _updateProximitySensorState();
           notifyListeners();
         }
       }
     } catch (e) {
       debugPrint('Error toggling speaker: $e');
+    }
+  }
+
+  /// Update proximity sensor based on speaker state
+  /// Only activate proximity detection when in earpiece mode for screen dimming
+  Future<void> _updateProximitySensorState() async {
+    if (!_isInCall) {
+      await _stopProximitySensor();
+      return;
+    }
+
+    if (!_isSpeakerOn) {
+      // In earpiece mode - start proximity detection for screen dimming
+      if (!_sensorService.isListening) {
+        _logger.i(_tag, 'Earpiece mode - starting proximity sensor for screen control');
+        await _startProximitySensorForScreenControl();
+      }
+    } else {
+      // In speaker mode - stop proximity detection
+      if (_sensorService.isListening) {
+        _logger.i(_tag, 'Speaker mode - stopping proximity sensor');
+        await _stopProximitySensor();
+      }
+    }
+  }
+
+  /// Start proximity sensor for screen control in earpiece mode
+  Future<void> _startProximitySensorForScreenControl() async {
+    try {
+      _logger.i(_tag, 'Starting proximity sensor for screen control in earpiece mode');
+      
+      await _sensorService.startListening(
+        onNearUser: () {
+          _logger.i(_tag, 'Phone near ear - dimming screen (earpiece mode)');
+          // Screen dimming is handled inside the sensor service
+        },
+        onAwayFromUser: () {
+          _logger.i(_tag, 'Phone away from ear - restoring screen brightness');
+          // Screen brightening is handled inside the sensor service
+        },
+        autoEarpieceDelay: const Duration(seconds: 2), // Quick activation for screen control
+      );
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error starting proximity sensor for screen control: $e');
+    }
+  }
+
+  /// Stop proximity sensor detection
+  Future<void> _stopProximitySensor() async {
+    try {
+      _logger.i(_tag, 'Stopping proximity sensor detection');
+      await _sensorService.stopListening();
+    } catch (e) {
+      _logger.e(_tag, 'Error stopping proximity sensor: $e');
     }
   }
 
@@ -480,6 +544,9 @@ class CallProvider with ChangeNotifier {
     _myUid = null;
     _waitingForFriend = false;
     _friendJoined = false;
+    
+    // Stop proximity sensor
+    _stopProximitySensor();
     
     notifyListeners();
   }

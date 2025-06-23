@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/repositories/ai_agent_repository.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
+import '../../../core/services/sensors/sensor_service.dart';
 import '../../../core/exceptions/ai_agent_exceptions.dart';
 import '../models/ai_agent_models.dart';
 
@@ -10,6 +11,7 @@ import '../models/ai_agent_models.dart';
 class AiAgentProvider extends ChangeNotifier {
   final AiAgentRepository _repository;
   final LoggerService _logger;
+  final SensorService _sensorService;
   
   static const String _tag = 'AI_AGENT_PROVIDER';
   
@@ -40,8 +42,10 @@ class AiAgentProvider extends ChangeNotifier {
   AiAgentProvider({
     AiAgentRepository? repository,
     LoggerService? logger,
+    SensorService? sensorService,
   }) : _repository = repository ?? serviceLocator<AiAgentRepository>(),
-       _logger = logger ?? serviceLocator<LoggerService>();
+       _logger = logger ?? serviceLocator<LoggerService>(),
+       _sensorService = sensorService ?? serviceLocator<SensorService>();
 
   // Getters
   AiAgentState get state => _state;
@@ -248,6 +252,7 @@ class AiAgentProvider extends ChangeNotifier {
       
       // Clean up regardless of success to prevent stuck state
       _stopUsageTracking();
+      await _stopProximitySensor();
       _currentSession = null;
       _setState(AiAgentState.idle);
       
@@ -263,6 +268,7 @@ class AiAgentProvider extends ChangeNotifier {
       
       // Clean up on error to prevent stuck state
       _stopUsageTracking();
+      await _stopProximitySensor();
       _currentSession = null;
       _setState(AiAgentState.idle);
       
@@ -322,6 +328,10 @@ class AiAgentProvider extends ChangeNotifier {
         // Get the actual current state from the repository after toggle using async method
         _isSpeakerEnabled = await _repository.isSpeakerEnabledAsync();
         _logger.i(_tag, 'Speaker toggled successfully. New state: $_isSpeakerEnabled');
+        
+        // Update proximity sensor state based on new speaker mode
+        await _updateProximitySensorState();
+        
         notifyListeners();
       } else {
         _logger.w(_tag, 'Failed to toggle speaker');
@@ -433,6 +443,61 @@ class AiAgentProvider extends ChangeNotifier {
     }
   }
 
+  /// Update proximity sensor based on speaker state
+  /// Only activate proximity detection when in earpiece mode for screen dimming
+  Future<void> _updateProximitySensorState() async {
+    if (_currentSession == null) {
+      await _stopProximitySensor();
+      return;
+    }
+
+    if (!_isSpeakerEnabled) {
+      // In earpiece mode - start proximity detection for screen dimming
+      if (!_sensorService.isListening) {
+        _logger.i(_tag, 'Earpiece mode - starting proximity sensor for screen control');
+        await _startProximitySensorForScreenControl();
+      }
+    } else {
+      // In speaker mode - stop proximity detection
+      if (_sensorService.isListening) {
+        _logger.i(_tag, 'Speaker mode - stopping proximity sensor');
+        await _stopProximitySensor();
+      }
+    }
+  }
+
+  /// Start proximity sensor for screen control in earpiece mode
+  Future<void> _startProximitySensorForScreenControl() async {
+    try {
+      _logger.i(_tag, 'Starting proximity sensor for screen control in earpiece mode');
+      
+      await _sensorService.startListening(
+        onNearUser: () {
+          _logger.i(_tag, 'Phone near ear - dimming screen (earpiece mode)');
+          // Screen dimming is handled inside the sensor service
+        },
+        onAwayFromUser: () {
+          _logger.i(_tag, 'Phone away from ear - restoring screen brightness');
+          // Screen brightening is handled inside the sensor service
+        },
+        autoEarpieceDelay: const Duration(seconds: 2), // Quick activation for screen control
+      );
+      
+    } catch (e) {
+      _logger.e(_tag, 'Error starting proximity sensor for screen control: $e');
+    }
+  }
+
+  /// Stop proximity sensor detection
+  Future<void> _stopProximitySensor() async {
+    try {
+      _logger.i(_tag, 'Stopping proximity sensor detection');
+      await _sensorService.stopListening();
+    } catch (e) {
+      _logger.e(_tag, 'Error stopping proximity sensor: $e');
+    }
+  }
+
   /// Set provider state
   void _setState(AiAgentState newState) {
     if (_state != newState) {
@@ -473,6 +538,9 @@ class AiAgentProvider extends ChangeNotifier {
       _logger.d(_tag, 'Initial mic state: $_isMicrophoneMuted');
       _logger.d(_tag, 'Initial speaker state: $_isSpeakerEnabled');
       
+      // Update proximity sensor based on initial speaker state
+      await _updateProximitySensorState();
+      
       notifyListeners();
     } catch (e) {
       _logger.e(_tag, 'Error initializing audio states: $e');
@@ -505,6 +573,9 @@ class AiAgentProvider extends ChangeNotifier {
     
     // Cancel all timers
     _stopUsageTracking();
+    
+    // Stop proximity sensor
+    _stopProximitySensor();
     
     // Cancel stream subscription
     _timeStreamSubscription?.cancel();
