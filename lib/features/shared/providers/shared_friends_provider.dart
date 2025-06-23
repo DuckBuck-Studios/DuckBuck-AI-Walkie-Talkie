@@ -327,15 +327,34 @@ class SharedFriendsProvider extends ChangeNotifier {
     
     try {
       _logger.i(_tag, 'Accepting friend request from: $fromUid');
+      _logger.d(_tag, 'Looking for request in ${_pendingRequests.length} pending requests');
+      
+      // Debug: Log all pending requests
+      for (int i = 0; i < _pendingRequests.length; i++) {
+        final req = _pendingRequests[i];
+        _logger.d(_tag, 'Request $i: uid=${req['uid']}, initiatorId=${req['initiatorId']}, isIncoming=${req['isIncoming']}');
+      }
       
       // Find the relationship ID for this request
+      // For incoming requests, match by initiatorId (who sent the request)
+      // For outgoing requests, match by uid (the other user)
       final request = _pendingRequests.firstWhere(
-        (req) => req['fromUserId'] == fromUid,
+        (req) {
+          final isIncoming = req['isIncoming'] as bool? ?? false;
+          if (isIncoming) {
+            // For incoming requests, match by initiatorId
+            return req['initiatorId'] == fromUid;
+          } else {
+            // For outgoing requests, match by uid
+            return req['uid'] == fromUid;
+          }
+        },
         orElse: () => {},
       );
       
       if (request.isEmpty) {
         _logger.e(_tag, 'Friend request not found for user: $fromUid');
+        _logger.e(_tag, 'Available requests: ${_pendingRequests.map((r) => 'uid=${r['uid']}, initiatorId=${r['initiatorId']}, isIncoming=${r['isIncoming']}').join(', ')}');
         return false;
       }
       
@@ -365,15 +384,28 @@ class SharedFriendsProvider extends ChangeNotifier {
     
     try {
       _logger.i(_tag, 'Rejecting friend request from: $fromUid');
+      _logger.d(_tag, 'Looking for request in ${_pendingRequests.length} pending requests');
       
       // Find the relationship ID for this request
+      // For incoming requests, match by initiatorId (who sent the request)
+      // For outgoing requests, match by uid (the other user)
       final request = _pendingRequests.firstWhere(
-        (req) => req['fromUserId'] == fromUid,
+        (req) {
+          final isIncoming = req['isIncoming'] as bool? ?? false;
+          if (isIncoming) {
+            // For incoming requests, match by initiatorId
+            return req['initiatorId'] == fromUid;
+          } else {
+            // For outgoing requests, match by uid
+            return req['uid'] == fromUid;
+          }
+        },
         orElse: () => {},
       );
       
       if (request.isEmpty) {
         _logger.e(_tag, 'Friend request not found for user: $fromUid');
+        _logger.e(_tag, 'Available requests: ${_pendingRequests.map((r) => 'uid=${r['uid']}, initiatorId=${r['initiatorId']}, isIncoming=${r['isIncoming']}').join(', ')}');
         return false;
       }
       

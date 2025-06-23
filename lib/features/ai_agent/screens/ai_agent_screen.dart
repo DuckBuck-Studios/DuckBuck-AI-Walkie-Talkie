@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io' show Platform;
 import '../../../core/services/auth/auth_service_interface.dart';
 import '../../../core/services/service_locator.dart';
+import '../../../core/theme/app_colors.dart';
 import '../providers/ai_agent_provider.dart';
 import '../models/ai_agent_models.dart';
 
@@ -118,11 +118,11 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
 
   Widget _buildCupertinoScreen(BuildContext context, AiAgentProvider provider) {
     return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        backgroundColor: CupertinoColors.systemGroupedBackground,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: AppColors.backgroundBlack,
         automaticallyImplyLeading: false,
       ),
-      backgroundColor: CupertinoColors.systemGroupedBackground,
+      backgroundColor: AppColors.backgroundBlack,
       child: SafeArea(
         child: _buildContent(context, provider, true),
       ),
@@ -130,12 +130,10 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
   }
 
   Widget _buildMaterialScreen(BuildContext context, AiAgentProvider provider) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: AppColors.backgroundBlack,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: AppColors.backgroundBlack,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -146,72 +144,58 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
   }
 
   Widget _buildContent(BuildContext context, AiAgentProvider provider, bool isIOS) {
-    final theme = Theme.of(context);
-    
     return Padding(
       padding: const EdgeInsets.all(32.0),
       child: Column(
         children: [
           const SizedBox(height: 40),
           
-          // Logo with wave animations when AI agent is running
+          // Logo with clean visual indicators for AI agent state
           Stack(
             alignment: Alignment.center,
             children: [
-              // Wave rings when AI agent is running, starting, or has an active session
+              // Static wave rings when AI agent is running
               if (provider.isAgentRunning || provider.state == AiAgentState.starting || (provider.state == AiAgentState.error && provider.currentSession != null)) ...[
-                // Outer wave - slower and larger
+                // Outer ring
                 Container(
                   width: 300,
                   height: 300,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemGreen : Colors.green).withValues(alpha: 0.2),
-                      width: 2,
+                      color: AppColors.accentBlue,
+                      width: 1,
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat())
-                  .scaleXY(begin: 0.7, end: 1.3, duration: 2000.ms)
-                  .fadeOut(duration: 2000.ms)
-                  .animate() // Initial entrance animation
-                  .scaleXY(begin: 0.0, end: 0.7, duration: 800.ms, curve: Curves.elasticOut),
+                ),
                 
-                // Middle wave - medium speed
+                // Middle ring
                 Container(
                   width: 260,
                   height: 260,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemGreen : Colors.green).withValues(alpha: 0.4),
-                      width: 2,
+                      color: AppColors.accentBlue,
+                      width: 1,
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat())
-                  .scaleXY(begin: 0.8, end: 1.2, duration: 1600.ms)
-                  .fadeOut(duration: 1600.ms)
-                  .animate(delay: 200.ms) // Staggered entrance
-                  .scaleXY(begin: 0.0, end: 0.8, duration: 700.ms, curve: Curves.elasticOut),
+                ),
                 
-                // Inner wave - faster
+                // Inner ring
                 Container(
                   width: 230,
                   height: 230,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: (isIOS ? CupertinoColors.systemGreen : Colors.green).withValues(alpha: 0.6),
-                      width: 2,
+                      color: AppColors.accentBlue,
+                      width: 1,
                     ),
                   ),
-                ).animate(onPlay: (controller) => controller.repeat())
-                  .scaleXY(begin: 0.85, end: 1.15, duration: 1200.ms)
-                  .fadeOut(duration: 1200.ms)
-                  .animate(delay: 400.ms) // More staggered entrance
-                  .scaleXY(begin: 0.0, end: 0.85, duration: 600.ms, curve: Curves.elasticOut),
+                ),
                 
-                // Additional inner pulse when AI is speaking
+                // Speaking indicator ring when AI is speaking
                 if (provider.isAiSpeaking) 
                   Container(
                     width: 210,
@@ -219,56 +203,26 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: (isIOS ? CupertinoColors.systemOrange : Colors.orange).withValues(alpha: 0.8),
-                        width: 3,
+                        color: AppColors.successGreen,
+                        width: 2,
                       ),
                     ),
-                  ).animate(onPlay: (controller) => controller.repeat())
-                    .scaleXY(begin: 0.9, end: 1.1, duration: 800.ms)
-                    .fadeOut(duration: 800.ms),
+                  ),
               ],
               
-              // Main logo container with simple, clean animations
+              // Main logo container with clean design
               Container(
                 width: 200,
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error) ? (isIOS ? [
-                      CupertinoColors.systemGreen,
-                      CupertinoColors.systemBlue,
-                      CupertinoColors.systemTeal,
-                    ] : [
-                      Colors.green,
-                      Colors.blue,
-                      Colors.teal,
-                    ]) : (isIOS ? [
-                      CupertinoColors.systemGrey,
-                      CupertinoColors.systemGrey2,
-                    ] : [
-                      theme.colorScheme.outline,
-                      theme.colorScheme.outlineVariant,
-                    ]),
+                  color: (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error) 
+                      ? AppColors.accentBlue 
+                      : AppColors.backgroundBlack,
+                  border: Border.all(
+                    color: AppColors.borderColor,
+                    width: 2,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error)
-                          ? (isIOS 
-                              ? CupertinoColors.systemGreen.withAlpha(provider.isAiSpeaking ? 153 : 102)
-                              : Colors.green.withAlpha(provider.isAiSpeaking ? 153 : 102))
-                          : Colors.grey.withAlpha(51),
-                      blurRadius: (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error)
-                          ? (provider.isAiSpeaking ? 40 : 30) 
-                          : 15,
-                      spreadRadius: (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error)
-                          ? (provider.isAiSpeaking ? 15 : 10) 
-                          : 5,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
                 ),
                 child: ClipOval(
                   child: Image.asset(
@@ -280,7 +234,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                       return Icon(
                         isIOS ? CupertinoIcons.sparkles : Icons.auto_awesome,
                         size: 100,
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                       );
                     },
                   ),
@@ -295,10 +249,12 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              color: isIOS 
-                  ? CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context)
-                  : theme.colorScheme.surfaceContainerHighest,
+              color: AppColors.backgroundBlack,
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.borderColor,
+                width: 1,
+              ),
             ),
             child: Text(
               provider.isAgentRunning 
@@ -308,10 +264,10 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: provider.isAgentRunning
-                    ? (isIOS ? CupertinoColors.systemBlue : theme.colorScheme.primary)
+                    ? AppColors.accentBlue
                     : provider.remainingTimeSeconds > 0
-                        ? (isIOS ? CupertinoColors.systemGreen : theme.colorScheme.primary)
-                        : (isIOS ? CupertinoColors.systemRed : theme.colorScheme.error),
+                        ? AppColors.successGreen
+                        : AppColors.errorRed,
               ),
             ),
           ),
@@ -321,9 +277,6 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
           // Call Controls when there's an active session (starting, running, or error), Join button when idle
           (provider.isAgentRunning || provider.state == AiAgentState.starting || provider.state == AiAgentState.error)
               ? _buildCallControls(context, provider)
-                  .animate()
-                  .slideY(begin: 1.0, end: 0.0, duration: 800.ms, curve: Curves.elasticOut)
-                  .fadeIn(duration: 600.ms)
               : _buildActionButton(context, provider, isIOS),
         ],
       ),
@@ -337,15 +290,12 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: AppColors.backgroundBlack,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.borderColor,
+          width: 1,
+        ),
       ),
       child: isStarting
           ? Row(
@@ -356,14 +306,14 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.accentBlue),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   'Connecting...',
                   style: TextStyle(
-                    color: Colors.green,
+                    color: AppColors.accentBlue,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
@@ -385,8 +335,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                       _showErrorSnackBar(context, 'Failed to toggle microphone');
                     }
                   },
-                  backgroundColor: provider.isMicrophoneMuted ? Colors.red : Colors.white.withValues(alpha: 0.2),
-                  iconColor: Colors.white,
+                  backgroundColor: provider.isMicrophoneMuted ? AppColors.errorRed : AppColors.backgroundBlack,
+                  borderColor: provider.isMicrophoneMuted ? AppColors.errorRed : AppColors.borderColor,
+                  iconColor: provider.isMicrophoneMuted ? AppColors.textPrimary : AppColors.accentBlue,
                 ),
                 
                 // End Call Button
@@ -396,8 +347,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                   onPressed: () async {
                     await provider.stopAgent();
                   },
-                  backgroundColor: Colors.red,
-                  iconColor: Colors.white,
+                  backgroundColor: AppColors.errorRed,
+                  borderColor: AppColors.errorRed,
+                  iconColor: AppColors.textPrimary,
                 ),
                 
                 // Speaker Button
@@ -412,8 +364,9 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
                       _showErrorSnackBar(context, 'Failed to toggle speaker');
                     }
                   },
-                  backgroundColor: provider.isSpeakerEnabled ? Colors.green : Colors.white.withValues(alpha: 0.2),
-                  iconColor: Colors.white,
+                  backgroundColor: provider.isSpeakerEnabled ? AppColors.successGreen : AppColors.backgroundBlack,
+                  borderColor: provider.isSpeakerEnabled ? AppColors.successGreen : AppColors.borderColor,
+                  iconColor: provider.isSpeakerEnabled ? AppColors.backgroundBlack : AppColors.accentBlue,
                 ),
               ],
             ),
@@ -425,6 +378,7 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
     required IconData icon,
     required VoidCallback onPressed,
     required Color backgroundColor,
+    required Color borderColor,
     required Color iconColor,
   }) {
     return GestureDetector(
@@ -438,135 +392,170 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
         decoration: BoxDecoration(
           color: backgroundColor,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: Border.all(
+            color: borderColor,
+            width: 2,
+          ),
         ),
         child: Icon(
           icon,
           color: iconColor,
-          size: 32,
+          size: 28,
         ),
       ),
     );
   }
 
   Widget _buildActionButton(BuildContext context, AiAgentProvider provider, bool isIOS) {
-    final theme = Theme.of(context);
     final isLoading = provider.state == AiAgentState.starting || provider.state == AiAgentState.stopping;
     final canJoin = provider.canStartAgent && !isLoading;
     final isRunning = provider.isAgentRunning;
     
+    Color backgroundColor;
+    Color borderColor;
+    Color textColor;
+    
+    if (isRunning) {
+      backgroundColor = AppColors.errorRed;
+      borderColor = AppColors.errorRed;
+      textColor = AppColors.textPrimary;
+    } else if (canJoin) {
+      backgroundColor = AppColors.accentBlue;
+      borderColor = AppColors.accentBlue;
+      textColor = AppColors.backgroundBlack;
+    } else {
+      backgroundColor = AppColors.backgroundBlack;
+      borderColor = AppColors.borderColor;
+      textColor = AppColors.textSecondary;
+    }
+    
     if (isIOS) {
       return SizedBox(
         width: double.infinity,
-        child: CupertinoButton.filled(
-          onPressed: isLoading ? null : (isRunning ? _handleStopAgent : (canJoin ? _handleJoinAgent : null)),
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          child: isLoading
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CupertinoActivityIndicator(color: CupertinoColors.white),
-                    const SizedBox(width: 12),
-                    Text(
-                      isRunning ? 'Stopping...' : 'Starting...',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: borderColor,
+              width: 2,
+            ),
+          ),
+          child: CupertinoButton(
+            onPressed: isLoading ? null : (isRunning ? _handleStopAgent : (canJoin ? _handleJoinAgent : null)),
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: isLoading
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CupertinoActivityIndicator(color: textColor),
+                      const SizedBox(width: 12),
+                      Text(
+                        isRunning ? 'Stopping...' : 'Starting...',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isRunning 
-                          ? CupertinoIcons.stop_fill 
-                          : CupertinoIcons.play_fill,
-                      color: CupertinoColors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isRunning ? 'Stop AI Agent' : 'Join AI Agent',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isRunning 
+                            ? CupertinoIcons.stop_fill 
+                            : CupertinoIcons.play_fill,
+                        color: textColor,
+                        size: 20,
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isRunning ? 'Stop AI Agent' : 'Join AI Agent',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
-      ).animate(target: canJoin || isRunning ? 1 : 0)
-        .fadeIn(duration: 300.ms)
-        .scaleXY(begin: 0.95, end: 1.0, duration: 300.ms);
+      );
     } else {
       return SizedBox(
         width: double.infinity,
-        child: ElevatedButton(
-          onPressed: isLoading ? null : (isRunning ? _handleStopAgent : (canJoin ? _handleJoinAgent : null)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isRunning 
-                ? theme.colorScheme.error 
-                : theme.colorScheme.primary,
-            foregroundColor: isRunning 
-                ? theme.colorScheme.onError 
-                : theme.colorScheme.onPrimary,
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: borderColor,
+              width: 2,
             ),
-            elevation: canJoin || isRunning ? 6 : 2,
           ),
-          child: isLoading
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      isRunning ? 'Stopping...' : 'Starting...',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : (isRunning ? _handleStopAgent : (canJoin ? _handleJoinAgent : null)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: textColor,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 0,
+              shadowColor: Colors.transparent,
+            ),
+            child: isLoading
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isRunning 
-                          ? Icons.stop 
-                          : Icons.play_arrow,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isRunning ? 'Stop AI Agent' : 'Join AI Agent',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(width: 12),
+                      Text(
+                        isRunning ? 'Stopping...' : 'Starting...',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isRunning 
+                            ? Icons.stop 
+                            : Icons.play_arrow,
+                        size: 24,
+                        color: textColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isRunning ? 'Stop AI Agent' : 'Join AI Agent',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
-      ).animate(target: canJoin || isRunning ? 1 : 0)
-        .fadeIn(duration: 300.ms)
-        .scaleXY(begin: 0.95, end: 1.0, duration: 300.ms);
+      );
     }
   }
 
@@ -592,8 +581,11 @@ class _AiAgentScreenState extends State<AiAgentScreen> {
       // For Android, show snack bar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
+          content: Text(
+            message,
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          backgroundColor: AppColors.errorRed,
           duration: const Duration(seconds: 2),
         ),
       );

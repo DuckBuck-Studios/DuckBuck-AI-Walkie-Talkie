@@ -43,10 +43,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // Optimize memory when leaving home screen
-    if (mounted) {
-      context.read<SharedFriendsProvider>().optimizeMemory();
-    }
+    // Note: Removed Provider access from dispose as it's unsafe during widget disposal
+    // Memory optimization will be handled by the provider's own lifecycle management
     super.dispose();
   }
 

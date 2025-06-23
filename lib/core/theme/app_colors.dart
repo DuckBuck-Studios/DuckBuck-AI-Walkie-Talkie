@@ -6,6 +6,11 @@ class AppColors {
   static const Color primaryBlack = Color(0xFF000000);
   static const Color surfaceBlack = Color(0xFF000000);
   static const Color backgroundBlack = Color(0xFF000000);
+  
+  // Pure colors
+  static const Color pureBlack = Color(0xFF000000);
+  static const Color pureWhite = Color(0xFFFFFFFF);
+  static const Color black87 = Color(0xDD000000); // 87% opacity black
 
   // Accent colors for the black theme
   static const Color accentBlue = Color(0xFF00FF66); // Green accent
@@ -33,6 +38,7 @@ class AppColors {
   static Color blackOpacity30 = Colors.black.withValues(alpha: 0.3);
   static Color blackOpacity50 = Colors.black.withValues(alpha: 0.5);
   static Color blackOpacity70 = Colors.black.withValues(alpha: 0.7);
+  static Color blackOpacity80 = Colors.black.withValues(alpha: 0.8);
   
   static Color whiteOpacity08 = Colors.white.withValues(alpha: 0.08);
   static Color whiteOpacity10 = Colors.white.withValues(alpha: 0.1);
@@ -47,8 +53,29 @@ class AppColors {
   static Color accentBlueOpacity30 = accentBlue.withValues(alpha: 0.3);
   static Color accentBlueOpacity50 = accentBlue.withValues(alpha: 0.5);
   
-  // Pure colors for convenience
-  static const Color pureWhite = Colors.white;
-  static const Color pureBlack = Colors.black;
-  static const Color black87 = Colors.black87;
+  // Additional colors for AI agent UI
+  static Color accentBlueOpacity20 = accentBlue.withValues(alpha: 0.2);
+  static Color accentBlueOpacity40 = accentBlue.withValues(alpha: 0.4);
+  static Color accentBlueOpacity60 = accentBlue.withValues(alpha: 0.6);
+  static Color accentBlueOpacity80 = accentBlue.withValues(alpha: 0.8);
+  
+  // Gradient colors for buttons
+  static const Color gradientStart = Color(0xFF00FF66); // Main green
+  static const Color gradientMiddle = Color(0xFF00CC55); // Darker green
+  static const Color gradientEnd = Color(0xFF00FFAA); // Lighter green
+  
+  // Loading and progress colors
+  static const Color loadingGreen = Color(0xFF00FF66);
+  static const Color loadingDark = Color(0xFF00AA44);
+  
+  // Call control colors
+  static const Color callEndRed = Color(0xFFFF453A);
+  static const Color callMuteRed = Color(0xFFCF6679);
+  static const Color callSpeakerGreen = Color(0xFF00FF66);
+  
+  // Wave animation colors
+  static Color waveColor1 = accentBlue.withValues(alpha: 0.6);
+  static Color waveColor2 = accentBlue.withValues(alpha: 0.4);
+  static Color waveColor3 = accentBlue.withValues(alpha: 0.2);
+  static Color wavePulse = Color(0xFF00FFAA).withValues(alpha: 0.8);
 }

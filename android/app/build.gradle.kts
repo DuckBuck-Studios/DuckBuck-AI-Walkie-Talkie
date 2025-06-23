@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -10,15 +13,15 @@ plugins {
 }
 
 // Load keystore properties for release builds
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
     namespace = "com.duckbuck.app"
-    compileSdk = 34  // Updated to latest Android 14
+    compileSdk = 35  // Updated to latest Android 15 for plugin compatibility
     ndkVersion = "27.0.12077973"
     
     // Add packagingOptions to handle native libraries properly for Agora SDK and production

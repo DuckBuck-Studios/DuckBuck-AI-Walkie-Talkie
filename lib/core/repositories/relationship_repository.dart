@@ -395,30 +395,111 @@ class RelationshipRepository {
   /// Get real-time stream of friends list (accepted relationships)
   /// Returns stream of user data for friends with real-time updates
   /// Limited to 15 items per page for optimal performance
+  /// Now with proper stream ordering to prevent race conditions
   Stream<List<Map<String, dynamic>>> getFriendsStream() {
     try {
       _logger.d(_tag, 'Getting friends stream for current user');
       
-      return _relationshipService.getFriendsStream()
-        .asyncMap((friends) async {
-          // Track stream updates for analytics
-          await _analytics.logEvent(
-            name: 'friends_stream_updated',
-            parameters: {
-              'count': friends.length,
-              'success': true,
-            },
-          );
+      // Use a stream controller to ensure proper ordering
+      late StreamController<List<Map<String, dynamic>>> controller;
+      StreamSubscription? subscription;
+      
+      controller = StreamController<List<Map<String, dynamic>>>(
+        onCancel: () {
+          subscription?.cancel();
+        },
+      );
+      
+      // Track the latest stream emission timestamp to prevent race conditions
+      int latestEmissionTime = 0;
+      
+      subscription = _relationshipService.getFriendsStream().listen(
+        (friends) async {
+          final currentEmissionTime = DateTime.now().millisecondsSinceEpoch;
+          latestEmissionTime = currentEmissionTime;
           
-          _logger.d(_tag, 'Friends stream updated: ${friends.length} friends');
-          // Enhanced debugging - log friend UIDs
-          for (int i = 0; i < friends.length; i++) {
-            final friend = friends[i];
-            _logger.d(_tag, 'Repository Friend $i: uid=${friend['uid']}, name=${friend['displayName']}');
+          try {
+            // Ensure each friend has complete user data
+            final enrichedFriends = <Map<String, dynamic>>[];
+            
+            for (final friend in friends) {
+              // Check if this emission is still the latest (prevent race conditions)
+              if (currentEmissionTime != latestEmissionTime) {
+                _logger.d(_tag, 'Skipping stale stream emission');
+                return;
+              }
+              
+              final userId = friend['uid'] as String?;
+              if (userId != null) {
+                // Verify that essential user data is present
+                if (friend['displayName'] == null || friend['displayName'] == '') {
+                  _logger.w(_tag, 'Friend missing displayName for user: $userId, attempting to fetch');
+                  
+                  // Try to get user data from the service
+                  try {
+                    final userData = await _relationshipService.searchUserByUid(userId);
+                    
+                    // Double-check that this emission is still the latest
+                    if (currentEmissionTime != latestEmissionTime) {
+                      _logger.d(_tag, 'Skipping stale user data fetch');
+                      return;
+                    }
+                    
+                    if (userData != null) {
+                      // Merge the complete user data
+                      final enrichedFriend = Map<String, dynamic>.from(friend);
+                      enrichedFriend.addAll(userData);
+                      enrichedFriends.add(enrichedFriend);
+                      _logger.i(_tag, 'Enriched friend with user data for: ${userData['displayName']}');
+                    } else {
+                      // Use original data even if incomplete
+                      enrichedFriends.add(friend);
+                      _logger.w(_tag, 'Could not fetch user data for: $userId');
+                    }
+                  } catch (e) {
+                    // Use original data if fetch fails
+                    enrichedFriends.add(friend);
+                    _logger.e(_tag, 'Failed to fetch user data for $userId: $e');
+                  }
+                } else {
+                  // User data is complete
+                  enrichedFriends.add(friend);
+                }
+              } else {
+                // No user ID, add as-is
+                enrichedFriends.add(friend);
+              }
+            }
+            
+            // Final check that this emission is still the latest
+            if (currentEmissionTime == latestEmissionTime) {
+              // Track stream updates for analytics
+              await _analytics.logEvent(
+                name: 'friends_stream_updated',
+                parameters: {
+                  'count': enrichedFriends.length,
+                  'success': true,
+                },
+              );
+              
+              _logger.d(_tag, 'Friends stream updated: ${enrichedFriends.length} friends');
+              
+              // Enhanced debugging - log friend UIDs
+              for (int i = 0; i < enrichedFriends.length; i++) {
+                final friend = enrichedFriends[i];
+                _logger.d(_tag, 'Repository Friend $i: uid=${friend['uid']}, name=${friend['displayName']}');
+              }
+              
+              controller.add(enrichedFriends);
+            } else {
+              _logger.d(_tag, 'Discarding stale stream result');
+            }
+          } catch (e) {
+            _logger.e(_tag, 'Error processing friends stream: $e');
+            controller.addError(e);
           }
-          return friends;
-        })
-        .handleError((error) async {
+        },
+        onError: (error) async {
           _logger.e(_tag, 'Error in friends stream: $error');
           
           // Track stream errors
@@ -438,8 +519,11 @@ class RelationshipRepository {
             fatal: false,
           );
           
-          throw error;
-        });
+          controller.addError(error);
+        },
+      );
+      
+      return controller.stream;
     } catch (e) {
       _logger.e(_tag, 'Failed to initialize friends stream: ${e.toString()}');
       
@@ -458,25 +542,111 @@ class RelationshipRepository {
   /// Get real-time stream of pending friend requests (received by current user)
   /// Returns stream of user data for users who sent requests with real-time updates
   /// Limited to 15 items per page for optimal performance
+  /// Now with proper stream ordering to prevent race conditions
   Stream<List<Map<String, dynamic>>> getPendingRequestsStream() {
     try {
       _logger.d(_tag, 'Getting pending requests stream for current user');
       
-      return _relationshipService.getPendingRequestsStream()
-        .asyncMap((requests) async {
-          // Track stream updates for analytics
-          await _analytics.logEvent(
-            name: 'pending_requests_stream_updated',
-            parameters: {
-              'count': requests.length,
-              'success': true,
-            },
-          );
+      // Use a stream controller to ensure proper ordering
+      late StreamController<List<Map<String, dynamic>>> controller;
+      StreamSubscription? subscription;
+      
+      controller = StreamController<List<Map<String, dynamic>>>(
+        onCancel: () {
+          subscription?.cancel();
+        },
+      );
+      
+      // Track the latest stream emission timestamp to prevent race conditions
+      int latestEmissionTime = 0;
+      
+      subscription = _relationshipService.getPendingRequestsStream().listen(
+        (requests) async {
+          final currentEmissionTime = DateTime.now().millisecondsSinceEpoch;
+          latestEmissionTime = currentEmissionTime;
           
-          _logger.d(_tag, 'Pending requests stream updated: ${requests.length} requests');
-          return requests;
-        })
-        .handleError((error) async {
+          try {
+            // Ensure each request has complete user data
+            final enrichedRequests = <Map<String, dynamic>>[];
+            
+            for (final request in requests) {
+              // Check if this emission is still the latest (prevent race conditions)
+              if (currentEmissionTime != latestEmissionTime) {
+                _logger.d(_tag, 'Skipping stale requests stream emission');
+                return;
+              }
+              
+              final userId = request['uid'] as String?;
+              if (userId != null) {
+                // Verify that essential user data is present
+                if (request['displayName'] == null || request['displayName'] == '') {
+                  _logger.w(_tag, 'Request missing displayName for user: $userId, attempting to fetch');
+                  
+                  // Try to get user data from the service
+                  try {
+                    final userData = await _relationshipService.searchUserByUid(userId);
+                    
+                    // Double-check that this emission is still the latest
+                    if (currentEmissionTime != latestEmissionTime) {
+                      _logger.d(_tag, 'Skipping stale user data fetch for requests');
+                      return;
+                    }
+                    
+                    if (userData != null) {
+                      // Merge the complete user data
+                      final enrichedRequest = Map<String, dynamic>.from(request);
+                      enrichedRequest.addAll(userData);
+                      enrichedRequests.add(enrichedRequest);
+                      _logger.i(_tag, 'Enriched request with user data for: ${userData['displayName']}');
+                    } else {
+                      // Use original data even if incomplete
+                      enrichedRequests.add(request);
+                      _logger.w(_tag, 'Could not fetch user data for: $userId');
+                    }
+                  } catch (e) {
+                    // Use original data if fetch fails
+                    enrichedRequests.add(request);
+                    _logger.e(_tag, 'Failed to fetch user data for $userId: $e');
+                  }
+                } else {
+                  // User data is complete
+                  enrichedRequests.add(request);
+                }
+              } else {
+                // No user ID, add as-is
+                enrichedRequests.add(request);
+              }
+            }
+            
+            // Final check that this emission is still the latest
+            if (currentEmissionTime == latestEmissionTime) {
+              // Track stream updates for analytics
+              await _analytics.logEvent(
+                name: 'pending_requests_stream_updated',
+                parameters: {
+                  'count': enrichedRequests.length,
+                  'success': true,
+                },
+              );
+              
+              _logger.d(_tag, 'Pending requests stream updated: ${enrichedRequests.length} requests');
+              
+              // Enhanced debugging - log request details
+              for (int i = 0; i < enrichedRequests.length; i++) {
+                final request = enrichedRequests[i];
+                _logger.d(_tag, 'Repository Request $i: uid=${request['uid']}, name=${request['displayName']}');
+              }
+              
+              controller.add(enrichedRequests);
+            } else {
+              _logger.d(_tag, 'Discarding stale requests stream result');
+            }
+          } catch (e) {
+            _logger.e(_tag, 'Error processing pending requests stream: $e');
+            controller.addError(e);
+          }
+        },
+        onError: (error) async {
           _logger.e(_tag, 'Error in pending requests stream: $error');
           
           // Track stream errors
@@ -496,8 +666,11 @@ class RelationshipRepository {
             fatal: false,
           );
           
-          throw error;
-        });
+          controller.addError(error);
+        },
+      );
+      
+      return controller.stream;
     } catch (e) {
       _logger.e(_tag, 'Failed to initialize pending requests stream: ${e.toString()}');
       
@@ -522,17 +695,56 @@ class RelationshipRepository {
       
       return _relationshipService.getBlockedUsersStream()
         .asyncMap((blockedUsers) async {
+          // Ensure each blocked user has complete user data
+          final enrichedBlockedUsers = <Map<String, dynamic>>[];
+          
+          for (final blockedUser in blockedUsers) {
+            final userId = blockedUser['uid'] as String?;
+            if (userId != null) {
+              // Verify that essential user data is present
+              if (blockedUser['displayName'] == null || blockedUser['displayName'] == '') {
+                _logger.w(_tag, 'Blocked user missing displayName for user: $userId, attempting to fetch');
+                
+                // Try to get user data from the service
+                try {
+                  final userData = await _relationshipService.searchUserByUid(userId);
+                  if (userData != null) {
+                    // Merge the complete user data
+                    final enrichedBlockedUser = Map<String, dynamic>.from(blockedUser);
+                    enrichedBlockedUser.addAll(userData);
+                    enrichedBlockedUsers.add(enrichedBlockedUser);
+                    _logger.i(_tag, 'Enriched blocked user with user data for: ${userData['displayName']}');
+                  } else {
+                    // Use original data even if incomplete
+                    enrichedBlockedUsers.add(blockedUser);
+                    _logger.w(_tag, 'Could not fetch user data for: $userId');
+                  }
+                } catch (e) {
+                  // Use original data if fetch fails
+                  enrichedBlockedUsers.add(blockedUser);
+                  _logger.e(_tag, 'Failed to fetch user data for $userId: $e');
+                }
+              } else {
+                // User data is complete
+                enrichedBlockedUsers.add(blockedUser);
+              }
+            } else {
+              // No user ID, add as-is
+              enrichedBlockedUsers.add(blockedUser);
+            }
+          }
+          
           // Track stream updates for analytics
           await _analytics.logEvent(
             name: 'blocked_users_stream_updated',
             parameters: {
-              'count': blockedUsers.length,
+              'count': enrichedBlockedUsers.length,
               'success': true,
             },
           );
           
-          _logger.d(_tag, 'Blocked users stream updated: ${blockedUsers.length} blocked');
-          return blockedUsers;
+          _logger.d(_tag, 'Blocked users stream updated: ${enrichedBlockedUsers.length} blocked users');
+          return enrichedBlockedUsers;
         })
         .handleError((error) async {
           _logger.e(_tag, 'Error in blocked users stream: $error');

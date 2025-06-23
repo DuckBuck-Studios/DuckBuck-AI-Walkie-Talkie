@@ -61,11 +61,3 @@ flutter:
   assets:
     - assets/ 
     - lib/core/legal/
-
-  # Font optimization for production
-  fonts:
-    # Include system fonts for better performance
-    - family: Roboto
-      fonts:
-        - asset: packages/font_awesome_flutter/lib/fonts/fa-solid-900.ttf
-          weight: 900

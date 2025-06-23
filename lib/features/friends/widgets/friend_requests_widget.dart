@@ -168,7 +168,7 @@ class _FriendRequestTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   color: CupertinoColors.systemGreen,
                   child: const Text('Accept', style: TextStyle(fontSize: 14)),
-                  onPressed: () => _acceptRequest(context, relationshipId),
+                  onPressed: () => _acceptRequest(context, request),
                 ),
                 const SizedBox(width: 8),
                 CupertinoButton(
@@ -249,7 +249,7 @@ class _FriendRequestTile extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ElevatedButton(
-                    onPressed: () => _acceptRequest(context, relationshipId),
+                    onPressed: () => _acceptRequest(context, request),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -361,11 +361,20 @@ class _FriendRequestTile extends StatelessWidget {
   }
 
   /// Accepts a friend request
-  Future<void> _acceptRequest(BuildContext context, String? relationshipId) async {
+  Future<void> _acceptRequest(BuildContext context, Map<String, dynamic> request) async {
+    final relationshipId = request['relationshipId'] ?? request['id'];
     if (relationshipId == null) return;
 
+    // Determine the correct user ID to pass based on request direction
+    final isIncoming = request['isIncoming'] ?? false;
+    final fromUid = isIncoming 
+        ? (request['initiatorId'] as String?) // For incoming requests, use initiatorId
+        : (request['uid'] as String?);        // For outgoing requests, use uid
+    
+    if (fromUid == null) return;
+
     // Silent operation - no external error notifications
-    await provider.acceptFriendRequest(relationshipId);
+    await provider.acceptFriendRequest(fromUid);
   }
 
   /// Rejects a friend request
