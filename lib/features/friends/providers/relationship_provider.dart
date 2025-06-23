@@ -167,6 +167,21 @@ class RelationshipProvider extends ChangeNotifier {
         },
         onError: (error) {
           _logger.e(_tag, 'Error in friends stream: ${error.toString()}');
+          
+          // Check if this is a Firestore index error and log the creation URL
+          final errorString = error.toString();
+          if (errorString.contains('index') && errorString.contains('create')) {
+            _logger.w(_tag, '🔥 FIRESTORE INDEX REQUIRED FOR FRIENDS STREAM');
+            _logger.w(_tag, '📋 Full error: $errorString');
+            
+            // Extract and highlight any URLs in the error
+            final urlRegex = RegExp(r'https://[^\s\)]+');
+            final matches = urlRegex.allMatches(errorString);
+            for (final match in matches) {
+              _logger.w(_tag, '🔗 CREATE INDEX URL: ${match.group(0)}');
+            }
+          }
+          
           _error = _getErrorMessage(error);
           _isLoadingFriends = false;
           notifyListeners();
@@ -190,6 +205,21 @@ class RelationshipProvider extends ChangeNotifier {
         },
         onError: (error) {
           _logger.e(_tag, 'Error in pending requests stream: ${error.toString()}');
+          
+          // Check if this is a Firestore index error and log the creation URL
+          final errorString = error.toString();
+          if (errorString.contains('index') && errorString.contains('create')) {
+            _logger.w(_tag, '🔥 FIRESTORE INDEX REQUIRED FOR PENDING REQUESTS STREAM');
+            _logger.w(_tag, '📋 Full error: $errorString');
+            
+            // Extract and highlight any URLs in the error
+            final urlRegex = RegExp(r'https://[^\s\)]+');
+            final matches = urlRegex.allMatches(errorString);
+            for (final match in matches) {
+              _logger.w(_tag, '🔗 CREATE INDEX URL: ${match.group(0)}');
+            }
+          }
+          
           _error = _getErrorMessage(error);
           _isLoadingPendingRequests = false;
           notifyListeners();
@@ -213,6 +243,21 @@ class RelationshipProvider extends ChangeNotifier {
         },
         onError: (error) {
           _logger.e(_tag, 'Error in blocked users stream: ${error.toString()}');
+          
+          // Check if this is a Firestore index error and log the creation URL
+          final errorString = error.toString();
+          if (errorString.contains('index') && errorString.contains('create')) {
+            _logger.w(_tag, '🔥 FIRESTORE INDEX REQUIRED FOR BLOCKED USERS STREAM');
+            _logger.w(_tag, '📋 Full error: $errorString');
+            
+            // Extract and highlight any URLs in the error
+            final urlRegex = RegExp(r'https://[^\s\)]+');
+            final matches = urlRegex.allMatches(errorString);
+            for (final match in matches) {
+              _logger.w(_tag, '🔗 CREATE INDEX URL: ${match.group(0)}');
+            }
+          }
+          
           _error = _getErrorMessage(error);
           _isLoadingBlockedUsers = false;
           notifyListeners();
@@ -317,6 +362,21 @@ class RelationshipProvider extends ChangeNotifier {
         },
         onError: (error) {
           _logger.e(_tag, 'Error in user data stream: ${error.toString()}');
+          
+          // Check if this is a Firestore index error and log the creation URL
+          final errorString = error.toString();
+          if (errorString.contains('index') && errorString.contains('create')) {
+            _logger.w(_tag, '🔥 FIRESTORE INDEX REQUIRED FOR USER DATA STREAM');
+            _logger.w(_tag, '📋 Full error: $errorString');
+            
+            // Extract and highlight any URLs in the error
+            final urlRegex = RegExp(r'https://[^\s\)]+');
+            final matches = urlRegex.allMatches(errorString);
+            for (final match in matches) {
+              _logger.w(_tag, '🔗 CREATE INDEX URL: ${match.group(0)}');
+            }
+          }
+          
           // Don't set _error here as this is a secondary stream
           // Relationship streams will continue to work without user data
         },

@@ -103,7 +103,12 @@ class _FriendsScreenState extends State<FriendsScreen>
               children: [
                 // Modern Segmented Control for tab switching
                 Container(
-                  margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  margin: EdgeInsets.fromLTRB(
+                    MediaQuery.of(context).size.width < 360 ? 16 : 20, 
+                    20, 
+                    MediaQuery.of(context).size.width < 360 ? 16 : 20, 
+                    16
+                  ),
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
@@ -129,70 +134,95 @@ class _FriendsScreenState extends State<FriendsScreen>
                     },
                     children: {
                       0: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: MediaQuery.of(context).size.width < 360 ? 16 : 24, 
+                          vertical: 12
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               CupertinoIcons.person_2_fill,
-                              size: 16,
+                              size: MediaQuery.of(context).size.width < 360 ? 14 : 16,
                               color: _selectedSegment == 0 
                                   ? CupertinoColors.activeBlue.resolveFrom(context)
                                   : CupertinoColors.secondaryLabel.resolveFrom(context),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Friends',
-                              style: TextStyle(
-                                fontWeight: _selectedSegment == 0 ? FontWeight.w600 : FontWeight.w500,
-                                color: _selectedSegment == 0 
-                                    ? CupertinoColors.activeBlue.resolveFrom(context)
-                                    : CupertinoColors.secondaryLabel.resolveFrom(context),
+                            SizedBox(width: MediaQuery.of(context).size.width < 360 ? 6 : 8),
+                            Flexible(
+                              child: Text(
+                                'Friends',
+                                style: TextStyle(
+                                  fontWeight: _selectedSegment == 0 ? FontWeight.w600 : FontWeight.w500,
+                                  fontSize: MediaQuery.of(context).size.width < 360 ? 13 : 14,
+                                  color: _selectedSegment == 0 
+                                      ? CupertinoColors.activeBlue.resolveFrom(context)
+                                      : CupertinoColors.secondaryLabel.resolveFrom(context),
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
                       ),
                       1: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: MediaQuery.of(context).size.width < 360 ? 16 : 24, 
+                          vertical: 12
+                        ),
                         child: Consumer<RelationshipProvider>(
                           builder: (context, provider, child) {
                             final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final isSmallScreen = screenWidth < 360;
+                            
                             return Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   CupertinoIcons.bell_fill,
-                                  size: 16,
+                                  size: isSmallScreen ? 14 : 16,
                                   color: _selectedSegment == 1 
                                       ? CupertinoColors.activeBlue.resolveFrom(context)
                                       : CupertinoColors.secondaryLabel.resolveFrom(context),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Requests',
-                                  style: TextStyle(
-                                    fontWeight: _selectedSegment == 1 ? FontWeight.w600 : FontWeight.w500,
-                                    color: _selectedSegment == 1 
-                                        ? CupertinoColors.activeBlue.resolveFrom(context)
-                                        : CupertinoColors.secondaryLabel.resolveFrom(context),
+                                SizedBox(width: isSmallScreen ? 6 : 8),
+                                Flexible(
+                                  child: Text(
+                                    isSmallScreen ? 'Req' : 'Requests',
+                                    style: TextStyle(
+                                      fontWeight: _selectedSegment == 1 ? FontWeight.w600 : FontWeight.w500,
+                                      fontSize: isSmallScreen ? 13 : 14,
+                                      color: _selectedSegment == 1 
+                                          ? CupertinoColors.activeBlue.resolveFrom(context)
+                                          : CupertinoColors.secondaryLabel.resolveFrom(context),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 if (requestsCount > 0) ...[
-                                  const SizedBox(width: 6),
+                                  SizedBox(width: isSmallScreen ? 4 : 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: isSmallScreen ? 4 : 6, 
+                                      vertical: 2
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      maxWidth: 24,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: CupertinoColors.destructiveRed,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
-                                      requestsCount.toString(),
-                                      style: const TextStyle(
+                                      requestsCount > 99 ? '99+' : requestsCount.toString(),
+                                      style: TextStyle(
                                         color: CupertinoColors.white,
-                                        fontSize: 12,
+                                        fontSize: isSmallScreen ? 10 : 12,
                                         fontWeight: FontWeight.w600,
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
                                   ),
                                 ],
@@ -300,7 +330,12 @@ class _FriendsScreenState extends State<FriendsScreen>
         children: [
           // Modern Segmented Control for Material Design
           Container(
-            margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            margin: EdgeInsets.fromLTRB(
+              MediaQuery.of(context).size.width < 360 ? 16 : 20, 
+              20, 
+              MediaQuery.of(context).size.width < 360 ? 16 : 20, 
+              16
+            ),
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest.withAlpha(77), // 0.3 * 255 = ~77
@@ -326,7 +361,10 @@ class _FriendsScreenState extends State<FriendsScreen>
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 360 ? 16 : 24, 
+                        vertical: 12
+                      ),
                       decoration: BoxDecoration(
                         color: _selectedSegment == 0
                             ? theme.colorScheme.surface
@@ -348,19 +386,23 @@ class _FriendsScreenState extends State<FriendsScreen>
                         children: [
                           Icon(
                             Icons.people,
-                            size: 16,
+                            size: MediaQuery.of(context).size.width < 360 ? 14 : 16,
                             color: _selectedSegment == 0
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Friends',
-                            style: TextStyle(
-                              fontWeight: _selectedSegment == 0 ? FontWeight.w600 : FontWeight.w500,
-                              color: _selectedSegment == 0
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
+                          SizedBox(width: MediaQuery.of(context).size.width < 360 ? 6 : 8),
+                          Flexible(
+                            child: Text(
+                              'Friends',
+                              style: TextStyle(
+                                fontWeight: _selectedSegment == 0 ? FontWeight.w600 : FontWeight.w500,
+                                fontSize: MediaQuery.of(context).size.width < 360 ? 13 : 14,
+                                color: _selectedSegment == 0
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -380,7 +422,10 @@ class _FriendsScreenState extends State<FriendsScreen>
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 360 ? 16 : 24, 
+                        vertical: 12
+                      ),
                       decoration: BoxDecoration(
                         color: _selectedSegment == 1
                             ? theme.colorScheme.surface
@@ -399,42 +444,57 @@ class _FriendsScreenState extends State<FriendsScreen>
                       child: Consumer<RelationshipProvider>(
                         builder: (context, provider, child) {
                           final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
+                          final screenWidth = MediaQuery.of(context).size.width;
+                          final isSmallScreen = screenWidth < 360;
+                          
                           return Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.notifications,
-                                size: 16,
+                                size: isSmallScreen ? 14 : 16,
                                 color: _selectedSegment == 1
                                     ? theme.colorScheme.primary
                                     : theme.colorScheme.onSurfaceVariant,
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Requests',
-                                style: TextStyle(
-                                  fontWeight: _selectedSegment == 1 ? FontWeight.w600 : FontWeight.w500,
-                                  color: _selectedSegment == 1
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
+                              SizedBox(width: isSmallScreen ? 6 : 8),
+                              Flexible(
+                                child: Text(
+                                  isSmallScreen ? 'Req' : 'Requests',
+                                  style: TextStyle(
+                                    fontWeight: _selectedSegment == 1 ? FontWeight.w600 : FontWeight.w500,
+                                    fontSize: isSmallScreen ? 13 : 14,
+                                    color: _selectedSegment == 1
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (requestsCount > 0) ...[
-                                const SizedBox(width: 6),
+                                SizedBox(width: isSmallScreen ? 4 : 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 4 : 6, 
+                                    vertical: 2
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    maxWidth: 24,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: theme.colorScheme.error,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
-                                    requestsCount.toString(),
+                                    requestsCount > 99 ? '99+' : requestsCount.toString(),
                                     style: TextStyle(
                                       color: theme.colorScheme.onError,
-                                      fontSize: 12,
+                                      fontSize: isSmallScreen ? 10 : 12,
                                       fontWeight: FontWeight.w600,
                                     ),
+                                    textAlign: TextAlign.center,
                                   ),
                                 ),
                               ],

@@ -601,6 +601,7 @@ class RelationshipService implements RelationshipServiceInterface {
             .where('participants', arrayContains: currentUserId)
             .where('status', isEqualTo: RelationshipStatus.accepted.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
+            .orderBy('createdAt', descending: true)  // This will require a composite index!
             .limit(_defaultPageSize), // Limit to 15 friends
       ).map((querySnapshot) {
         _logger.d(_tag, 'Friends stream: Received ${querySnapshot.docs.length} relationship documents');
@@ -658,6 +659,7 @@ class RelationshipService implements RelationshipServiceInterface {
             .where('participants', arrayContains: currentUserId)
             .where('status', isEqualTo: RelationshipStatus.pending.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
+            .orderBy('createdAt', descending: true)  // This will require a composite index!
             .limit(_defaultPageSize), // Limit to 15 pending requests
       ).map((querySnapshot) {
         _logger.d(_tag, 'Pending requests stream: Received ${querySnapshot.docs.length} relationship documents');
@@ -721,6 +723,7 @@ class RelationshipService implements RelationshipServiceInterface {
             .where('status', isEqualTo: RelationshipStatus.blocked.name)
             .where('type', isEqualTo: RelationshipType.friendship.name)
             .where('initiatorId', isEqualTo: currentUserId)
+            .orderBy('createdAt', descending: true)  // This will require a composite index!
             .limit(_defaultPageSize), // Limit to 15 blocked users
       ).map((querySnapshot) {
         _logger.d(_tag, 'Blocked users stream: Received ${querySnapshot.docs.length} relationship documents');

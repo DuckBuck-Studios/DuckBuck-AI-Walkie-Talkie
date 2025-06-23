@@ -5,7 +5,7 @@ service firebase.storage {
     // ===========================================
     // USER PROFILE PHOTOS ONLY
     // ===========================================
-    match /users/{userId}/profile/{fileName} {
+    match /users/{userId}/profile/{allPaths=**} {
       // READ: Allow any authenticated user to read profile photos
       // This enables showing friend photos, search results, etc.
       allow read: if request.auth != null;
