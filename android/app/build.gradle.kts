@@ -9,24 +9,36 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load keystore properties for release builds
+val keystoreProperties = java.util.Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.duckbuck.app"
-    compileSdk = flutter.compileSdkVersion 
+    compileSdk = 34  // Updated to latest Android 14
     ndkVersion = "27.0.12077973"
     
-    // Add packagingOptions to handle native libraries properly for Agora SDK 4.5.2
+    // Add packagingOptions to handle native libraries properly for Agora SDK and production
     packagingOptions {
         // Pick first occurrence of any duplicated files
         pickFirst("**/*.so")
-        // Exclude unnecessary files
+        pickFirst("**/libc++_shared.so")
+        pickFirst("**/libjsc.so")
+        // Exclude unnecessary files for smaller APK size
         exclude("META-INF/DEPENDENCIES")
         exclude("META-INF/LICENSE")
         exclude("META-INF/LICENSE.txt")
         exclude("META-INF/license.txt")
         exclude("META-INF/NOTICE")
-        exclude("META-INF/NOTICE.txt")
+        exclude("META-INF/NOTICE.txt")  
         exclude("META-INF/notice.txt")
         exclude("META-INF/ASL2.0")
+        exclude("META-INF/*.kotlin_module")
+        exclude("**/kotlin/**")
+        exclude("**/*.kotlin_builtins") 
     }
     
     compileOptions {
@@ -39,31 +51,41 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    // Add signing configurations for the release keystore
+    // Add signing configurations for production builds using key.properties
     signingConfigs {
         getByName("debug") {
-            keyAlias = "release"
-            keyPassword = "SrxnS@2005"
-            storeFile = file("duckbuck_release.jks")
-            storePassword = "SrxnS@2005"
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String  
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
         create("release") {
-            keyAlias = "release"
-            keyPassword = "SrxnS@2005"
-            storeFile = file("duckbuck_release.jks")
-            storePassword = "SrxnS@2005"
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
     defaultConfig {
         applicationId = "com.duckbuck.app"
-        minSdk = 27
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 27  // Android 8.1+ for better performance and security
+        targetSdk = 34  // Latest Android 14 for better compatibility
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
         // Add manifest placeholder for package name to ensure consistency
         manifestPlaceholders["appPackageName"] = "com.duckbuck.app"
+        
+        // Enable multidex for production builds with many dependencies
+        multiDexEnabled = true
+        
+        // Disable legacy multidex for better performance
+        vectorDrawables.useSupportLibrary = true
     }
 
     buildTypes {

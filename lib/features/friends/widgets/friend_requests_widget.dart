@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../providers/relationship_provider.dart';
+import '../../shared/providers/shared_friends_provider.dart';
 import 'empty_state_widget.dart';
 import 'dart:io' show Platform;
 
 /// Production-level widget for displaying friend requests with real-time updates
 /// 
 /// Features:
-/// - Real-time updates from RelationshipProvider
+/// - Real-time updates from SharedFriendsProvider
 /// - Accept/reject request functionality
 /// - Platform-specific design (iOS/Android)
 /// - Loading states and error handling
 /// - Optimistic UI updates
+/// - Unified caching and offline support
 /// 
 /// This widget handles all friend request interactions and automatically
 /// updates when requests are accepted, rejected, or new ones arrive.
@@ -21,22 +22,22 @@ class FriendRequestsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RelationshipProvider>(
-      builder: (context, relationshipProvider, child) {
+    return Consumer<SharedFriendsProvider>(
+      builder: (context, friendsProvider, child) {
         // Handle loading state
-        if (relationshipProvider.isLoadingPendingRequests && 
-            relationshipProvider.pendingRequests.isEmpty) {
+        if (friendsProvider.isLoadingPendingRequests && 
+            friendsProvider.pendingRequests.isEmpty) {
           return _buildLoadingState();
         }
 
         // Handle error state
-        if (relationshipProvider.error != null && 
-            relationshipProvider.pendingRequests.isEmpty) {
-          return _buildErrorState(context, relationshipProvider);
+        if (friendsProvider.error != null && 
+            friendsProvider.pendingRequests.isEmpty) {
+          return _buildErrorState(context, friendsProvider);
         }
 
         // Build requests list (even if empty)
-        return _buildRequestsList(context, relationshipProvider);
+        return _buildRequestsList(context, friendsProvider);
       },
     );
   }
@@ -55,7 +56,7 @@ class FriendRequestsWidget extends StatelessWidget {
   }
 
   /// Builds the error state with retry functionality
-  Widget _buildErrorState(BuildContext context, RelationshipProvider provider) {
+  Widget _buildErrorState(BuildContext context, SharedFriendsProvider provider) {
     return EmptyStateWidget(
       icon: Platform.isIOS ? CupertinoIcons.exclamationmark_triangle : Icons.error_outline,
       title: 'Unable to Load Requests',
@@ -66,7 +67,7 @@ class FriendRequestsWidget extends StatelessWidget {
   }
 
   /// Builds the friend requests list
-  Widget _buildRequestsList(BuildContext context, RelationshipProvider provider) {
+  Widget _buildRequestsList(BuildContext context, SharedFriendsProvider provider) {
     final requests = provider.pendingRequests;
 
     return ListView.builder(
@@ -86,7 +87,7 @@ class FriendRequestsWidget extends StatelessWidget {
 /// Individual friend request tile with proper action filtering based on direction
 class _FriendRequestTile extends StatelessWidget {
   final Map<String, dynamic> request;
-  final RelationshipProvider provider;
+  final SharedFriendsProvider provider;
 
   const _FriendRequestTile({
     required this.request,

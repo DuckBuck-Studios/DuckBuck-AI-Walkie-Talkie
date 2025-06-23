@@ -1,5 +1,5 @@
 name: duckbuck
-description: A new Flutter project.
+description: DuckBuck - AI-powered Walkie-Talkie app with real-time voice communication, AI assistant, and smart proximity sensor features for seamless hands-free conversations.
 publish_to: none
 
 version: 1.0.0+1
@@ -45,7 +45,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   permission_handler: ^12.0.0+1 
-  proximity_sensor: ^1.3.8
+  proximity_sensor: ^1.3.8 
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +57,15 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Production-ready asset optimization
   assets:
     - assets/ 
-    - lib/core/legal/ 
+    - lib/core/legal/
+
+  # Font optimization for production
+  fonts:
+    # Include system fonts for better performance
+    - family: Roboto
+      fonts:
+        - asset: packages/font_awesome_flutter/lib/fonts/fa-solid-900.ttf
+          weight: 900

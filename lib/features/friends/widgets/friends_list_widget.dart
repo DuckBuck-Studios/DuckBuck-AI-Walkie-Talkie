@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../providers/relationship_provider.dart';
+import '../../shared/providers/shared_friends_provider.dart';
 import 'friend_list_tile.dart';
 import 'empty_state_widget.dart';
 import 'dart:io' show Platform;
@@ -9,11 +9,12 @@ import 'dart:io' show Platform;
 /// Production-level widget for displaying the friends list with real-time updates
 /// 
 /// Features:
-/// - Real-time updates from RelationshipProvider
+/// - Real-time updates from SharedFriendsProvider
 /// - Platform-specific design (iOS/Android)
 /// - Loading states and error handling
 /// - Pull-to-refresh functionality
 /// - Friend removal with confirmation dialogs
+/// - Unified caching and offline support
 /// 
 /// This widget automatically subscribes to relationship updates and rebuilds
 /// when the friends list changes in real-time.
@@ -22,20 +23,20 @@ class FriendsListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RelationshipProvider>(
-      builder: (context, relationshipProvider, child) {
+    return Consumer<SharedFriendsProvider>(
+      builder: (context, friendsProvider, child) {
         // Handle loading state
-        if (relationshipProvider.isLoadingFriends && relationshipProvider.friends.isEmpty) {
+        if (friendsProvider.isLoadingFriends && friendsProvider.friends.isEmpty) {
           return _buildLoadingState();
         }
 
         // Handle error state
-        if (relationshipProvider.error != null && relationshipProvider.friends.isEmpty) {
-          return _buildErrorState(context, relationshipProvider);
+        if (friendsProvider.error != null && friendsProvider.friends.isEmpty) {
+          return _buildErrorState(context, friendsProvider);
         }
 
         // Build friends list (even if empty)
-        return _buildFriendsList(context, relationshipProvider);
+        return _buildFriendsList(context, friendsProvider);
       },
     );
   }
@@ -54,7 +55,7 @@ class FriendsListWidget extends StatelessWidget {
   }
 
   /// Builds the error state with retry functionality
-  Widget _buildErrorState(BuildContext context, RelationshipProvider provider) {
+  Widget _buildErrorState(BuildContext context, SharedFriendsProvider provider) {
     return EmptyStateWidget(
       icon: Platform.isIOS ? CupertinoIcons.exclamationmark_triangle : Icons.error_outline,
       title: 'Unable to Load Friends',
@@ -65,7 +66,7 @@ class FriendsListWidget extends StatelessWidget {
   }
 
   /// Builds the friends list with pull-to-refresh
-  Widget _buildFriendsList(BuildContext context, RelationshipProvider provider) {
+  Widget _buildFriendsList(BuildContext context, SharedFriendsProvider provider) {
     final friends = provider.friends;
 
     if (Platform.isIOS) {
@@ -232,9 +233,9 @@ class FriendsListWidget extends StatelessWidget {
     }
   }
 
-  /// Removes a friend using the RelationshipProvider
+  /// Removes a friend using the SharedFriendsProvider
   Future<void> _removeFriend(BuildContext context, String userId) async {
-    final provider = Provider.of<RelationshipProvider>(context, listen: false);
+    final provider = Provider.of<SharedFriendsProvider>(context, listen: false);
     
     // Silent operation - no external error notifications
     await provider.removeFriend(userId);
@@ -298,9 +299,9 @@ class FriendsListWidget extends StatelessWidget {
     }
   }
 
-  /// Blocks a friend using the RelationshipProvider
+  /// Blocks a friend using the SharedFriendsProvider  
   Future<void> _blockFriend(BuildContext context, String userId, String friendName) async {
-    final provider = Provider.of<RelationshipProvider>(context, listen: false);
+    final provider = Provider.of<SharedFriendsProvider>(context, listen: false);
     
     // Silent operation - no external error or success notifications
     await provider.blockUser(userId);

@@ -8,8 +8,7 @@ import '../../features/call/providers/call_provider.dart';
 import '../../features/ai_agent/providers/ai_agent_provider.dart';
 
 import '../../features/settings/providers/settings_provider.dart';
-import '../../features/friends/providers/relationship_provider.dart';
-import '../../features/home/providers/home_provider.dart';
+import '../../features/shared/providers/shared_friends_provider.dart';
 
 /// Manages the app's providers in a centralized location
 ///
@@ -57,24 +56,12 @@ class ProviderRegistry {
         create: (_) => SettingsProvider(),
       ),
       
-      // Relationship provider for friends, blocking, and friend requests
-      ChangeNotifierProvider<RelationshipProvider>(
+      // Shared friends provider for unified friends and relationship management
+      // Replaces both RelationshipProvider and HomeProvider with a single, optimized provider
+      ChangeNotifierProvider<SharedFriendsProvider>(
         create: (_) {
-          final provider = RelationshipProvider();
-          // Initialize provider with real-time streams
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await provider.initialize();
-          });
-          return provider;
-        },
-      ),
-      
-      // Home provider for managing home screen state
-      // Uses RelationshipProvider through service locator and listener pattern
-      ChangeNotifierProvider<HomeProvider>(
-        create: (_) {
-          final provider = HomeProvider();
-          // Initialize provider which will ensure RelationshipProvider is ready
+          final provider = SharedFriendsProvider();
+          // Initialize provider with real-time streams and caching
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await provider.initialize();
           });

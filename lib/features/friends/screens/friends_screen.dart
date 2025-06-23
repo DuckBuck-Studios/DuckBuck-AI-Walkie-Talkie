@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../providers/relationship_provider.dart';
+import '../../shared/providers/shared_friends_provider.dart';
 import '../widgets/friends_list_widget.dart';
 import '../widgets/friend_requests_widget.dart';
 import '../widgets/search_user_bottom_sheet.dart';
 import '../widgets/user_uid_card.dart';
 import 'dart:io' show Platform;
 
-/// Production Friends Screen - Real-time friend management with RelationshipProvider
+/// Production Friends Screen - Real-time friend management with SharedFriendsProvider
 /// Features:
 /// - Real-time friends list with pull-to-refresh
 /// - Friend requests management (accept/reject)
@@ -16,8 +16,9 @@ import 'dart:io' show Platform;
 /// - Friend removal with confirmation
 /// - Platform-specific design (iOS/Android)
 /// - Loading states and error handling
+/// - Unified caching and offline support
 /// 
-/// UI Flow: FriendsScreen → RelationshipProvider → RelationshipRepository → Firebase
+/// UI Flow: FriendsScreen → SharedFriendsProvider → RelationshipRepository → Firebase
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
 
@@ -47,9 +48,9 @@ class _FriendsScreenState extends State<FriendsScreen>
       });
     }
     
-    // Initialize RelationshipProvider when screen loads
+    // Initialize SharedFriendsProvider when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<RelationshipProvider>();
+      final provider = context.read<SharedFriendsProvider>();
       provider.initialize();
     });
   }
@@ -170,7 +171,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                           horizontal: MediaQuery.of(context).size.width < 360 ? 16 : 24, 
                           vertical: 12
                         ),
-                        child: Consumer<RelationshipProvider>(
+                        child: Consumer<SharedFriendsProvider>(
                           builder: (context, provider, child) {
                             final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
                             final screenWidth = MediaQuery.of(context).size.width;
@@ -236,7 +237,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                 ),
                 
                 // User UID Card - stays constant outside tab switching
-                Consumer<RelationshipProvider>(
+                Consumer<SharedFriendsProvider>(
                   builder: (context, provider, child) {
                     return UserUidCard(
                       uid: provider.currentUserUid,
@@ -441,7 +442,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                               ]
                             : null,
                       ),
-                      child: Consumer<RelationshipProvider>(
+                      child: Consumer<SharedFriendsProvider>(
                         builder: (context, provider, child) {
                           final requestsCount = provider.pendingRequests.where((request) => request['isIncoming'] == true).length;
                           final screenWidth = MediaQuery.of(context).size.width;
@@ -510,7 +511,7 @@ class _FriendsScreenState extends State<FriendsScreen>
           ),
           
           // User UID Card - stays constant outside tab switching
-          Consumer<RelationshipProvider>(
+          Consumer<SharedFriendsProvider>(
             builder: (context, provider, child) {
               return UserUidCard(
                 uid: provider.currentUserUid,

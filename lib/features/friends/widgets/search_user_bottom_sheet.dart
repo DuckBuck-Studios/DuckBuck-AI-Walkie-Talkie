@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../providers/relationship_provider.dart';
+import '../../shared/providers/shared_friends_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import 'dart:io' show Platform;
 
@@ -1003,7 +1003,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     });
 
     try {
-      final provider = Provider.of<RelationshipProvider>(context, listen: false);
+      final provider = Provider.of<SharedFriendsProvider>(context, listen: false);
       final result = await provider.searchUserByUid(trimmedUid);
 
       if (!mounted) return;
@@ -1039,7 +1039,7 @@ class _SearchUserBottomSheetState extends State<SearchUserBottomSheet> {
     });
 
     try {
-      final provider = Provider.of<RelationshipProvider>(context, listen: false);
+      final provider = Provider.of<SharedFriendsProvider>(context, listen: false);
       final success = await provider.sendFriendRequest(userId);
 
       if (!mounted) return;

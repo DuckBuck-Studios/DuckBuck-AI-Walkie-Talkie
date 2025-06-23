@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
   // Database configuration
   static const String _databaseName = 'duckbuck_local.db';
-  static const int _databaseVersion = 6; // Incremented for agent_remaining_time column
+  static const int _databaseVersion = 7; // Incremented for photo_data columns in relationship tables
 
   // Table names
   static const String _usersTable = 'users';
@@ -126,6 +126,7 @@ class LocalDatabaseService {
           user_id TEXT NOT NULL,
           display_name TEXT,
           photo_url TEXT,
+          photo_data TEXT,
           relationship_id TEXT NOT NULL,
           cached_at INTEGER NOT NULL,
           PRIMARY KEY (uid, user_id),
@@ -140,6 +141,7 @@ class LocalDatabaseService {
           user_id TEXT NOT NULL,
           display_name TEXT,
           photo_url TEXT,
+          photo_data TEXT,
           relationship_id TEXT NOT NULL,
           cached_at INTEGER NOT NULL,
           PRIMARY KEY (uid, user_id),
@@ -154,6 +156,7 @@ class LocalDatabaseService {
           user_id TEXT NOT NULL,
           display_name TEXT,
           photo_url TEXT,
+          photo_data TEXT,
           relationship_id TEXT NOT NULL,
           cached_at INTEGER NOT NULL,
           PRIMARY KEY (uid, user_id),
@@ -279,6 +282,18 @@ class LocalDatabaseService {
         _logger.i(_tag, 'Added agent_remaining_time column for version 6');
       } catch (e) {
         _logger.w(_tag, 'Failed to add agent_remaining_time column, might already exist: ${e.toString()}');
+      }
+    }
+
+    if (oldVersion < 7) {
+      // Add photo_data columns to relationship tables for version 7
+      try {
+        await db.execute('ALTER TABLE $_friendsTable ADD COLUMN photo_data TEXT');
+        await db.execute('ALTER TABLE $_pendingRequestsTable ADD COLUMN photo_data TEXT');
+        await db.execute('ALTER TABLE $_blockedUsersTable ADD COLUMN photo_data TEXT');
+        _logger.i(_tag, 'Added photo_data columns to relationship tables for version 7');
+      } catch (e) {
+        _logger.w(_tag, 'Failed to add photo_data columns to relationship tables, might already exist: ${e.toString()}');
       }
     }
   }
@@ -946,7 +961,7 @@ class LocalDatabaseService {
 
   // --- Relationship Caching Methods ---
 
-  /// Cache friends list for a user
+  /// Cache friends list for a user with photo caching
   Future<void> cacheFriends(String uid, List<Map<String, dynamic>> friends) async {
     try {
       final db = await database;
@@ -955,19 +970,37 @@ class LocalDatabaseService {
       // Clear existing cached friends for this user
       await db.delete(_friendsTable, where: 'uid = ?', whereArgs: [uid]);
       
-      // Insert new friends data
+      _logger.i(_tag, 'Caching ${friends.length} friends for user: $uid');
+      
+      // Insert new friends data and download photos in parallel
       for (final friend in friends) {
+        final friendUid = friend['uid'] as String;
+        final photoURL = friend['photoURL'] as String?;
+        
+        // Download and cache friend's photo in background
+        String? cachedPhotoPath;
+        if (photoURL != null && photoURL.isNotEmpty) {
+          try {
+            cachedPhotoPath = await downloadAndCachePhoto(friendUid, photoURL);
+            _logger.d(_tag, 'Cached photo for friend: $friendUid');
+          } catch (e) {
+            _logger.w(_tag, 'Failed to cache photo for friend $friendUid: $e');
+          }
+        }
+        
+        // Insert friend data with cached photo path
         await db.insert(_friendsTable, {
           'uid': uid,
-          'user_id': friend['uid'] as String,
+          'user_id': friendUid,
           'display_name': friend['displayName'] as String?,
-          'photo_url': friend['photoURL'] as String?,
+          'photo_url': photoURL,
+          'photo_data': cachedPhotoPath, // Store local cached photo path
           'relationship_id': friend['relationshipId'] as String,
           'cached_at': now,
         });
       }
       
-      _logger.i(_tag, 'Cached ${friends.length} friends for user: $uid');
+      _logger.i(_tag, 'Successfully cached ${friends.length} friends with photos for user: $uid');
     } catch (e) {
       _logger.e(_tag, 'Failed to cache friends: ${e.toString()}');
     }

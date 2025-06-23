@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../providers/home_provider.dart';
+import '../../shared/providers/shared_friends_provider.dart';
 import '../widgets/home_friends_section.dart';
 import '../handlers/fullscreen_photo_handler.dart';
 import '../../../core/navigation/app_routes.dart';
@@ -35,9 +35,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onHideFullscreenOverlay: widget.onHideFullscreenOverlay,
     );
     
-    // Initialize HomeProvider when screen loads
+    // Initialize SharedFriendsProvider when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<HomeProvider>().initialize();
+      context.read<SharedFriendsProvider>().initialize();
     });
   }
 
@@ -51,8 +51,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HomeProvider>(
-      builder: (context, homeProvider, child) {
+    return Consumer<SharedFriendsProvider>(
+      builder: (context, friendsProvider, child) {
         final isIOS = Platform.isIOS;
         final theme = Theme.of(context);
         
@@ -67,8 +67,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
             child: SafeArea(
               child: HomeFriendsSection(
-                friends: homeProvider.friends, // Use real friends from HomeProvider
-                isLoading: homeProvider.isLoadingFriends, // Use real loading state
+                friends: friendsProvider.friends, // Use real friends from SharedFriendsProvider
+                isLoading: friendsProvider.isLoadingFriends, // Use real loading state
                 onFriendTap: _handleFriendTap,
                 onAiAgentTap: _handleAiAgentTap,
               ),
@@ -86,8 +86,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             body: SafeArea(
               child: HomeFriendsSection(
-                friends: homeProvider.friends, // Use real friends from HomeProvider
-                isLoading: homeProvider.isLoadingFriends, // Use real loading state
+                friends: friendsProvider.friends, // Use real friends from SharedFriendsProvider
+                isLoading: friendsProvider.isLoadingFriends, // Use real loading state
                 onFriendTap: _handleFriendTap,
                 onAiAgentTap: _handleAiAgentTap,
               ),
