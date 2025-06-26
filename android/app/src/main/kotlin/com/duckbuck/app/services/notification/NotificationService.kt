@@ -40,6 +40,12 @@ class NotificationService(private val context: Context) {
         private const val CALL_CHANNEL_NAME = "Ongoing Call"
         private const val CALL_CHANNEL_DESCRIPTION = "Ongoing walkie-talkie call notifications"
         private const val ONGOING_CALL_NOTIFICATION_ID = 2000
+        
+        // AI Agent notification constants
+        private const val AI_AGENT_CHANNEL_ID = "duckbuck_ai_agent"
+        private const val AI_AGENT_CHANNEL_NAME = "AI Agent"
+        private const val AI_AGENT_CHANNEL_DESCRIPTION = "Ongoing AI agent conversation notifications"
+        private const val AI_AGENT_NOTIFICATION_ID = 3000
     }
     
     init {
@@ -97,7 +103,17 @@ class NotificationService(private val context: Context) {
             }
             notificationManager.createNotificationChannel(callChannel)
             
-            Log.d(TAG, "✅ Notification channels created: $CHANNEL_ID, $CALL_CHANNEL_ID")
+            // Create AI agent notifications channel
+            val aiImportance = NotificationManager.IMPORTANCE_HIGH
+            val aiChannel = NotificationChannel(AI_AGENT_CHANNEL_ID, AI_AGENT_CHANNEL_NAME, aiImportance).apply {
+                description = AI_AGENT_CHANNEL_DESCRIPTION
+                enableVibration(false) // No vibration for ongoing AI conversations
+                setShowBadge(false)
+                setSound(null, null) // No sound for ongoing notifications
+            }
+            notificationManager.createNotificationChannel(aiChannel)
+            
+            Log.d(TAG, "✅ Notification channels created: $CHANNEL_ID, $CALL_CHANNEL_ID, $AI_AGENT_CHANNEL_ID")
         }
     }
     
@@ -294,6 +310,118 @@ class NotificationService(private val context: Context) {
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to show ongoing call notification", e)
+        }
+    }
+    
+    /**
+     * Show ongoing AI agent notification with DuckBuck AI Connected message and icon
+     * Called when AI agent session starts and app goes to background
+     */
+    fun showAiAgentNotification() {
+        try {
+            Log.i(TAG, "🤖 Showing AI Agent notification: DuckBuck AI Connected")
+            
+            // Create intent to open the app and show AI agent UI
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("opened_from_ai_notification", true)
+                putExtra("show_ai_agent", true)
+            }
+            
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                AI_AGENT_NOTIFICATION_ID,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            // Load the DuckBuck icon and show notification
+            showAiAgentNotificationWithIcon(pendingIntent)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to show AI agent notification", e)
+        }
+    }
+    
+    /**
+     * Clear AI agent notification
+     * Called when AI agent session ends
+     */
+    fun clearAiAgentNotification() {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(AI_AGENT_NOTIFICATION_ID)
+            Log.i(TAG, "✅ AI agent notification cleared")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to clear AI agent notification", e)
+        }
+    }
+    
+    /**
+     * Show AI agent notification with DuckBuck icon from assets
+     */
+    private fun showAiAgentNotificationWithIcon(pendingIntent: PendingIntent) {
+        try {
+            // Try to load icon from assets
+            val inputStream = context.assets.open("icon-ico.png")
+            val iconBitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            
+            val notification = NotificationCompat.Builder(context, AI_AGENT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setLargeIcon(iconBitmap)
+                .setContentTitle("DuckBuck AI Connected")
+                .setContentText("AI conversation in progress")
+                .setSubText("Tap to return to AI agent")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true) // Makes it persistent
+                .setAutoCancel(false) // Don't remove when clicked
+                .setContentIntent(pendingIntent)
+                .setShowWhen(false) // Don't show timestamp for ongoing sessions
+                .setColor(context.getColor(R.color.primary_color))
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+            
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(AI_AGENT_NOTIFICATION_ID, notification)
+            
+            Log.i(TAG, "✅ AI agent notification with icon displayed: DuckBuck AI Connected")
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Failed to load icon from assets, showing notification without icon", e)
+            // Fallback to showing without custom icon
+            showAiAgentNotificationWithoutIcon(pendingIntent)
+        }
+    }
+    
+    /**
+     * Show AI agent notification without custom icon (fallback)
+     */
+    private fun showAiAgentNotificationWithoutIcon(pendingIntent: PendingIntent) {
+        try {
+            val notification = NotificationCompat.Builder(context, AI_AGENT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("DuckBuck AI Connected")
+                .setContentText("AI conversation in progress")
+                .setSubText("Tap to return to AI agent")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true) // Makes it persistent
+                .setAutoCancel(false) // Don't remove when clicked
+                .setContentIntent(pendingIntent)
+                .setShowWhen(false) // Don't show timestamp for ongoing sessions
+                .setColor(context.getColor(R.color.primary_color))
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+            
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(AI_AGENT_NOTIFICATION_ID, notification)
+            
+            Log.i(TAG, "✅ AI agent notification displayed: DuckBuck AI Connected")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to show AI agent notification", e)
         }
     }
 }

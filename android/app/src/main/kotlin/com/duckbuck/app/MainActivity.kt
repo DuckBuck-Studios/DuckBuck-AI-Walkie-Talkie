@@ -2,6 +2,7 @@ package com.duckbuck.app
 
 import android.os.Bundle
 import com.duckbuck.app.bridges.AgoraBridge
+import com.duckbuck.app.bridges.AiAgentBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -9,6 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity: FlutterActivity() {
     
     private lateinit var agoraBridge: AgoraBridge
+    private lateinit var aiAgentBridge: AiAgentBridge
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -16,9 +18,16 @@ class MainActivity: FlutterActivity() {
         // Initialize Agora bridge
         agoraBridge = AgoraBridge(this)
         
+        // Initialize AI Agent bridge
+        aiAgentBridge = AiAgentBridge(this)
+        
         // Register method channel for Agora communication
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AgoraBridge.CHANNEL_NAME)
             .setMethodCallHandler(agoraBridge)
+            
+        // Register method channel for AI Agent communication
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AiAgentBridge.CHANNEL_NAME)
+            .setMethodCallHandler(aiAgentBridge)
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {

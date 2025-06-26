@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import '../api/api_service.dart';
 import '../logger/logger_service.dart';
 import '../service_locator.dart';
@@ -18,12 +19,20 @@ class AiAgentService implements AiAgentServiceInterface {
   final AgoraTokenService _agoraTokenService;
   final UserServiceInterface _userService;
   
+  // Method channel for background service communication
+  static const MethodChannel _channel = MethodChannel('com.duckbuck.app/ai_agent');
+  
   static const String _tag = 'AI_AGENT_SERVICE';
+  static const String _backgroundTag = 'AI_AGENT_BACKGROUND';
   static const String _userCollection = 'users';
   
   // Stream controllers for real-time updates
   final Map<String, StreamController<int>> _timeStreamControllers = {};
   final Map<String, StreamSubscription> _timeStreamSubscriptions = {};
+  
+  // Track audio states for AI conversations
+  bool _isMicrophoneMuted = false;
+  bool _isSpeakerEnabled = true;
   
   /// Creates a new AiAgentService
   AiAgentService({
@@ -40,60 +49,76 @@ class AiAgentService implements AiAgentServiceInterface {
        _userService = userService ?? serviceLocator<UserServiceInterface>();
 
   @override
-  @override
   Future<Map<String, dynamic>?> joinAgentWithAgoraSetup({
     required String uid,
   }) async {
     try {
-      _logger.i(_tag, 'Starting AI agent with Agora setup for user: $uid');
+      _logger.i(_tag, '🤖 Starting AI agent with Agora AI conversational setup for user: $uid');
       
       // Step 1: Create channel name using Firebase UID
       final channelName = 'ai_$uid';
-      _logger.i(_tag, 'Using channel name: $channelName');
+      _logger.i(_tag, '🤖 Using AI channel name: $channelName');
       
       // Step 2: Get Agora token (backend assigns UID)
-      _logger.i(_tag, 'Getting Agora token for channel: $channelName');
+      _logger.i(_tag, '🤖 Getting Agora token for AI channel: $channelName');
       final tokenResponse = await _agoraTokenService.generateToken(
         channelId: channelName,
       );
       
-      _logger.i(_tag, 'Received Agora token with UID: ${tokenResponse.uid}');
+      _logger.i(_tag, '🤖 Received Agora token with UID: ${tokenResponse.uid}');
       
-      // Step 3: Initialize Agora engine
-      final engineInitialized = await AgoraService.initializeEngine();
+      // Step 3: Initialize Agora engine with AI enhancements
+      final engineInitialized = await AgoraService.instance.initializeEngine();
       if (!engineInitialized) {
-        _logger.e(_tag, 'Failed to initialize Agora engine');
+        _logger.e(_tag, '❌ Failed to initialize Agora engine with AI enhancements');
         return null;
       }
+      _logger.i(_tag, '✅ Agora engine initialized with AI audio enhancements');
       
-      // Step 4: Join Agora channel with the UID from backend and AI agent flag
-      final agoraJoined = await AgoraService.joinChannel(
+      // Step 4: Set AI audio scenario for conversational AI
+      final aiScenarioSet = await AgoraService.instance.setAiAudioScenario();
+      if (aiScenarioSet) {
+        _logger.i(_tag, '🤖 AI audio scenario configured for conversational AI');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to set AI audio scenario, continuing with default');
+      }
+      
+      // Step 5: Configure AI audio parameters for optimal quality
+      final aiConfigSet = await AgoraService.instance.setAudioConfigParameters();
+      if (aiConfigSet) {
+        _logger.i(_tag, '🤖 AI audio parameters configured for optimal conversational quality');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to configure AI audio parameters, continuing with default');
+      }
+      
+      // Step 6: Join Agora channel with the UID from backend
+      final agoraJoined = await AgoraService.instance.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,
         uid: tokenResponse.uid,
-        isAiAgent: true, // Enable AI agent audio scenario
+        joinMuted: false, // Start unmuted for AI conversation
       );
       
       if (!agoraJoined) {
-        _logger.e(_tag, 'Failed to join Agora channel');
+        _logger.e(_tag, '❌ Failed to join Agora AI channel');
         return null;
       }
       
-      _logger.i(_tag, 'Successfully joined Agora channel: $channelName with UID: ${tokenResponse.uid}');
+      _logger.i(_tag, '🤖 Successfully joined Agora AI channel: $channelName with UID: ${tokenResponse.uid}');
       
       // Add 500ms delay after joining channel before inviting AI agent
-      _logger.d(_tag, 'Waiting 500ms before inviting AI agent to channel');
+      _logger.d(_tag, '⏳ Waiting 500ms before inviting AI agent to channel');
       await Future.delayed(const Duration(milliseconds: 500));
       
-      // Step 5: Get user's remaining time
+      // Step 7: Get user's remaining time
       final remainingTime = await getUserRemainingTime(uid);
       if (!hasRemainingTime(remainingTime)) {
-        _logger.w(_tag, 'User has no remaining time');
-        await AgoraService.leaveChannel();
+        _logger.w(_tag, '❌ User has no remaining AI agent time');
+        await AgoraService.instance.leaveChannel();
         return null;
       }
       
-      // Step 6: Join AI agent to the channel (backend call)
+      // Step 8: Join AI agent to the channel (backend call)
       final agentResponse = await joinAgent(
         uid: uid,
         channelName: channelName,
@@ -101,17 +126,30 @@ class AiAgentService implements AiAgentServiceInterface {
       );
       
       if (agentResponse == null) {
-        _logger.e(_tag, 'Failed to join AI agent to channel');
-        await AgoraService.leaveChannel();
+        _logger.e(_tag, '❌ Failed to join AI agent to channel');
+        await AgoraService.instance.leaveChannel();
         return null;
       }
       
-      _logger.i(_tag, 'AI agent setup completed successfully');
-      return agentResponse; // Return the backend response data instead of just true
+      // Step 9: Start background service for session management
+      _logger.i(_tag, '🤖 Starting AI agent background service');
+      final backgroundServiceStarted = await _startAiAgentService(
+        userId: uid,
+        channelName: channelName,
+      );
+      
+      if (backgroundServiceStarted) {
+        _logger.i(_tag, '✅ AI agent background service started successfully');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to start AI agent background service, continuing without it');
+      }
+      
+      _logger.i(_tag, '🤖 AI agent setup with conversational AI enhancements completed successfully');
+      return agentResponse; // Return the backend response data
     } catch (e) {
-      _logger.e(_tag, 'Error in joinAgentWithAgoraSetup: $e');
+      _logger.e(_tag, '❌ Error in joinAgentWithAgoraSetup: $e');
       // Clean up on error
-      await AgoraService.leaveChannel();
+      await AgoraService.instance.leaveChannel();
       return null;
     }
   }
@@ -119,15 +157,25 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<bool> stopAgentAndLeaveChannel() async {
     try {
-      _logger.i(_tag, 'Stopping AI agent and leaving Agora channel');
+      _logger.i(_tag, '🤖 Stopping AI agent and leaving Agora channel');
+      
+      // Stop background service first
+      _logger.i(_tag, '🛑 Stopping AI agent background service');
+      final backgroundServiceStopped = await _stopAiAgentService();
+      
+      if (backgroundServiceStopped) {
+        _logger.i(_tag, '✅ AI agent background service stopped successfully');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to stop AI agent background service');
+      }
       
       // Leave Agora channel
-      await AgoraService.leaveChannel();
+      await AgoraService.instance.leaveChannel();
       
-      _logger.i(_tag, 'Successfully left Agora channel');
+      _logger.i(_tag, '✅ Successfully left Agora AI channel');
       return true;
     } catch (e) {
-      _logger.e(_tag, 'Error in stopAgentAndLeaveChannel: $e');
+      _logger.e(_tag, '❌ Error in stopAgentAndLeaveChannel: $e');
       return false;
     }
   }
@@ -135,10 +183,20 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<bool> toggleMicrophone() async {
     try {
-      _logger.d(_tag, 'Toggling microphone');
-      return await AgoraService.toggleMicrophone();
+      _logger.d(_tag, '🎤 Toggling microphone for AI conversation');
+      
+      // Toggle mute state
+      final newMutedState = !_isMicrophoneMuted;
+      final success = await AgoraService.instance.muteLocalAudio(newMutedState);
+      
+      if (success) {
+        _isMicrophoneMuted = newMutedState;
+        _logger.i(_tag, '🎤 Microphone ${_isMicrophoneMuted ? 'muted' : 'unmuted'} for AI conversation');
+      }
+      
+      return success;
     } catch (e) {
-      _logger.e(_tag, 'Error toggling microphone: $e');
+      _logger.e(_tag, '❌ Error toggling microphone: $e');
       return false;
     }
   }
@@ -146,32 +204,48 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<bool> toggleSpeaker() async {
     try {
-      _logger.d(_tag, 'Toggling speaker');
-      return await AgoraService.toggleSpeaker();
+      _logger.d(_tag, '🔊 Toggling speaker for AI conversation');
+      
+      // Toggle speaker state
+      final newSpeakerState = !_isSpeakerEnabled;
+      final success = await AgoraService.instance.setSpeakerphoneEnabled(newSpeakerState);
+      
+      if (success) {
+        _isSpeakerEnabled = newSpeakerState;
+        _logger.i(_tag, '🔊 Speaker ${_isSpeakerEnabled ? 'enabled' : 'disabled'} for AI conversation');
+        
+        // Reconfigure AI audio when audio route changes
+        await AgoraService.instance.reconfigureAiAudioForRoute();
+        _logger.d(_tag, '🤖 AI audio reconfigured for new audio route');
+      }
+      
+      return success;
     } catch (e) {
-      _logger.e(_tag, 'Error toggling speaker: $e');
+      _logger.e(_tag, '❌ Error toggling speaker: $e');
       return false;
     }
   }
 
   @override
   bool isMicrophoneMuted() {
-    // Sync method - deprecated but kept for compatibility
-    return false; // Default to not muted for sync calls
+    // Return current tracked state
+    return _isMicrophoneMuted;
   }
 
   @override
   bool isSpeakerEnabled() {
-    // Sync method - deprecated but kept for compatibility
-    return true; // Default to enabled for sync calls
+    // Return current tracked state
+    return _isSpeakerEnabled;
   }
 
   @override
   Future<bool> isMicrophoneMutedAsync() async {
     try {
-      return await AgoraService.isMicrophoneMuted();
+      _logger.d(_tag, '🎤 Getting microphone mute status for AI conversation');
+      // Return locally tracked state for consistency
+      return _isMicrophoneMuted;
     } catch (e) {
-      _logger.e(_tag, 'Error getting microphone status: $e');
+      _logger.e(_tag, '❌ Error getting microphone status: $e');
       return false; // Default to not muted
     }
   }
@@ -179,10 +253,191 @@ class AiAgentService implements AiAgentServiceInterface {
   @override
   Future<bool> isSpeakerEnabledAsync() async {
     try {
-      return await AgoraService.isSpeakerEnabled();
+      _logger.d(_tag, '🔊 Getting speaker status for AI conversation');
+      // Return locally tracked state for consistency
+      return _isSpeakerEnabled;
     } catch (e) {
-      _logger.e(_tag, 'Error getting speaker status: $e');
+      _logger.e(_tag, '❌ Error getting speaker status: $e');
       return true; // Default to enabled
+    }
+  }
+
+  // Background Service Methods
+  // These methods handle communication with the Android foreground service
+
+  /// Start AI agent background service
+  /// This keeps the app alive and shows notification when backgrounded
+  Future<bool> _startAiAgentService({
+    required String userId,
+    required String channelName,
+  }) async {
+    try {
+      _logger.i(_backgroundTag, '🤖 Starting AI agent background service - User: $userId, Channel: $channelName');
+      
+      final result = await _channel.invokeMethod('startAiAgentService', {
+        'userId': userId,
+        'channelName': channelName,
+      });
+      
+      if (result == true) {
+        _logger.i(_backgroundTag, '✅ AI agent background service started successfully');
+        return true;
+      } else {
+        _logger.e(_backgroundTag, '❌ Failed to start AI agent background service');
+        return false;
+      }
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error starting AI agent service: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error starting AI agent service: $e');
+      return false;
+    }
+  }
+  
+  /// Stop AI agent background service
+  Future<bool> _stopAiAgentService() async {
+    try {
+      _logger.i(_backgroundTag, '🛑 Stopping AI agent background service');
+      
+      final result = await _channel.invokeMethod('stopAiAgentService');
+      
+      if (result == true) {
+        _logger.i(_backgroundTag, '✅ AI agent background service stopped successfully');
+        return true;
+      } else {
+        _logger.e(_backgroundTag, '❌ Failed to stop AI agent background service');
+        return false;
+      }
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error stopping AI agent service: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error stopping AI agent service: $e');
+      return false;
+    }
+  }
+  
+  /// Check if AI agent service is currently running
+  Future<bool> isAiAgentServiceRunning() async {
+    try {
+      final result = await _channel.invokeMethod('isAiAgentServiceRunning');
+      final isRunning = result == true;
+      
+      _logger.d(_backgroundTag, '📊 AI agent service running: $isRunning');
+      return isRunning;
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error checking AI agent service status: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error checking AI agent service status: $e');
+      return false;
+    }
+  }
+  
+  /// Get current AI agent session information
+  Future<Map<String, dynamic>?> getAiAgentSessionInfo() async {
+    try {
+      final result = await _channel.invokeMethod('getAiAgentSessionInfo');
+      
+      if (result is Map) {
+        final sessionInfo = Map<String, dynamic>.from(result);
+        _logger.d(_backgroundTag, '📋 AI agent session info: $sessionInfo');
+        return sessionInfo;
+      } else {
+        _logger.w(_backgroundTag, '⚠️ Invalid session info format received');
+        return null;
+      }
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error getting AI agent session info: ${e.message}');
+      return null;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error getting AI agent session info: $e');
+      return null;
+    }
+  }
+  
+  /// Notify Android that app went to background
+  /// This triggers foreground service and notification
+  Future<bool> onAppBackgrounded() async {
+    try {
+      _logger.i(_backgroundTag, '📱 Notifying Android: App backgrounded');
+      
+      final result = await _channel.invokeMethod('onAppBackgrounded');
+      final notificationShown = result == true;
+      
+      if (notificationShown) {
+        _logger.i(_backgroundTag, '✅ Background notification shown for active AI session');
+      } else {
+        _logger.d(_backgroundTag, '📱 No active AI session, no notification needed');
+      }
+      
+      return notificationShown;
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error handling app background: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error handling app background: $e');
+      return false;
+    }
+  }
+  
+  /// Notify Android that app came to foreground
+  /// This can clear notification if desired
+  Future<bool> onAppForegrounded() async {
+    try {
+      _logger.i(_backgroundTag, '📱 Notifying Android: App foregrounded');
+      
+      final result = await _channel.invokeMethod('onAppForegrounded');
+      
+      _logger.d(_backgroundTag, '✅ App foreground state handled');
+      return result == true;
+      
+    } on PlatformException catch (e) {
+      _logger.e(_backgroundTag, '❌ Platform error handling app foreground: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Unexpected error handling app foreground: $e');
+      return false;
+    }
+  }
+  
+  /// Get formatted session duration for UI display
+  Future<String> getSessionDuration() async {
+    try {
+      final sessionInfo = await getAiAgentSessionInfo();
+      
+      if (sessionInfo != null && sessionInfo['isActive'] == true) {
+        return sessionInfo['formattedDuration'] ?? '0s';
+      } else {
+        return '0s';
+      }
+      
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Error getting session duration: $e');
+      return '0s';
+    }
+  }
+  
+  /// Get session duration in seconds for calculations
+  Future<int> getSessionDurationSeconds() async {
+    try {
+      final sessionInfo = await getAiAgentSessionInfo();
+      
+      if (sessionInfo != null && sessionInfo['isActive'] == true) {
+        return sessionInfo['duration'] ?? 0;
+      } else {
+        return 0;
+      }
+      
+    } catch (e) {
+      _logger.e(_backgroundTag, '❌ Error getting session duration seconds: $e');
+      return 0;
     }
   }
 
@@ -461,44 +716,62 @@ class AiAgentService implements AiAgentServiceInterface {
     required String uid,
   }) async {
     try {
-      _logger.i(_tag, 'Joining Agora channel only for user: $uid');
+      _logger.i(_tag, '🤖 Joining Agora AI channel only for user: $uid');
       
       // Step 1: Create channel name using Firebase UID
       final channelName = 'ai_$uid';
-      _logger.i(_tag, 'Using channel name: $channelName');
+      _logger.i(_tag, '🤖 Using AI channel name: $channelName');
       
       // Step 2: Get Agora token (backend assigns UID)
-      _logger.i(_tag, 'Getting Agora token for channel: $channelName');
+      _logger.i(_tag, '🤖 Getting Agora token for AI channel: $channelName');
       final tokenResponse = await _agoraTokenService.generateToken(
         channelId: channelName,
       );
       
-      _logger.i(_tag, 'Received Agora token with UID: ${tokenResponse.uid}');
+      _logger.i(_tag, '🤖 Received Agora token with UID: ${tokenResponse.uid}');
       
-      // Step 3: Initialize Agora engine
-      final engineInitialized = await AgoraService.initializeEngine();
+      // Step 3: Initialize Agora engine with AI enhancements
+      final engineInitialized = await AgoraService.instance.initializeEngine();
       if (!engineInitialized) {
-        _logger.e(_tag, 'Failed to initialize Agora engine');
+        _logger.e(_tag, '❌ Failed to initialize Agora engine with AI enhancements');
         return false;
       }
+      _logger.i(_tag, '✅ Agora engine initialized with AI audio enhancements');
       
-      // Step 4: Join Agora channel with the UID from backend and AI agent flag
-      final agoraJoined = await AgoraService.joinChannel(
+      // Step 4: Set AI audio scenario for conversational AI
+      final aiScenarioSet = await AgoraService.instance.setAiAudioScenario();
+      if (aiScenarioSet) {
+        _logger.i(_tag, '🤖 AI audio scenario configured for conversational AI');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to set AI audio scenario, continuing with default');
+      }
+      
+      
+      // Step 5: Configure AI audio parameters for optimal quality
+      final aiConfigSet = await AgoraService.instance.setAudioConfigParameters();
+      if (aiConfigSet) {
+        _logger.i(_tag, '🤖 AI audio parameters configured for optimal conversational quality');
+      } else {
+        _logger.w(_tag, '⚠️ Failed to configure AI audio parameters, continuing with default');
+      }
+      
+      // Step 6: Join Agora channel with the UID from backend
+      final agoraJoined = await AgoraService.instance.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,
         uid: tokenResponse.uid,
-        isAiAgent: true, // Enable AI agent audio scenario
+        joinMuted: false, // Start unmuted for AI conversation
       );
       
       if (!agoraJoined) {
-        _logger.e(_tag, 'Failed to join Agora channel');
+        _logger.e(_tag, '❌ Failed to join Agora AI channel');
         return false;
       }
       
-      _logger.i(_tag, 'Successfully joined Agora channel: $channelName with UID: ${tokenResponse.uid}');
+      _logger.i(_tag, '🤖 Successfully joined Agora AI channel: $channelName with UID: ${tokenResponse.uid}');
       return true;
     } catch (e) {
-      _logger.e(_tag, 'Error in joinAgoraChannelOnly: $e');
+      _logger.e(_tag, '❌ Error in joinAgoraChannelOnly: $e');
       return false;
     }
   }
