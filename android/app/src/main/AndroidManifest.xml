@@ -90,22 +90,32 @@
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
             
-        <!-- Walkie-Talkie FCM Service (handles all FCM operations through orchestrator) -->
+        <!-- FCM Service for handling Firebase Cloud Messaging -->
         <service
-            android:name=".presentation.services.FcmServiceOrchestrator"
+            android:name=".services.fcm.FCMService"
             android:enabled="true"
-            android:exported="false">
+            android:exported="false"
+            android:priority="1">
             <intent-filter android:priority="1">
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
         
-        <!-- Walkie-Talkie Service (starts only when FCM received, stops when all leave) -->
+        <!-- Walkie-Talkie Foreground Service for handling ongoing calls -->
         <service
-            android:name=".presentation.services.WalkieTalkieService"
+            android:name=".services.walkietalkie.WalkieTalkieService"
             android:enabled="true"
             android:exported="false"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="microphone">
+        </service>
+        
+        <!-- AI Agent Foreground Service for handling ongoing AI conversations -->
+        <service
+            android:name=".services.aiagent.AiAgentService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone">
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

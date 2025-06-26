@@ -22,7 +22,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.duckbuck.app"
     compileSdk = 35  // Updated to latest Android 15 for plugin compatibility
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "29.0.13599879"
     
     // Add packagingOptions to handle native libraries properly for Agora SDK and production
     packagingOptions {
@@ -45,13 +45,13 @@ android {
     }
     
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17 
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21 
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = JavaVersion.VERSION_21.toString()
     }
 
     // Add signing configurations for production builds using key.properties
@@ -144,6 +144,12 @@ dependencies {
     // Required dependencies for Apple Sign In on Android
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("androidx.browser:browser:1.6.0")
+    
+    // Glide for image loading in notifications
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    
+    // Kotlin coroutines for async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
 
 flutter {
