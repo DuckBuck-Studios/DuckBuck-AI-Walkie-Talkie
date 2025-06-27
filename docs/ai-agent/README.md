@@ -1,6 +1,6 @@
 # AI Agent Documentation
 
-The AI Agent feature enables users to have voice conversations with an AI assistant through real-time audio communication using Agora RTC integration.
+The AI Agent feature enables users to have voice conversations with an AI assistant through real-time audio communication using Agora RTC integration with AI-enhanced audio quality.
 
 ## Table of Contents
 
@@ -10,14 +10,23 @@ The AI Agent feature enables users to have voice conversations with an AI assist
 - [Backend Integration](./ai_agent_backend_integration.md)
 - [Time Management System](./ai_agent_time_management.md)
 - [Error Handling](./ai_agent_error_handling.md)
+- [AI Audio Configuration](./ai_audio_configuration.md) ⭐ **NEW**
 
 ## Key Features
 
 ### 🎙️ Real-Time Voice Communication
-- Agora RTC integration for high-quality audio
-- Microphone and speaker controls
+- Agora RTC integration with AI audio enhancements
+- AI-powered noise suppression and echo cancellation
+- Microphone and speaker controls with intelligent audio routing
 - Real-time audio state management
 - Proximity sensor integration for earpiece mode
+
+### 🤖 AI Audio Enhancements ⭐ **NEW**
+- **AI Denoising**: Intelligent background noise removal
+- **AI Echo Cancellation**: Advanced echo elimination for clearer conversations
+- **AI Audio Scenario**: Optimized audio parameters for conversational AI
+- **Dynamic Reconfiguration**: Automatic audio optimization on route changes
+- **Fallback Support**: Graceful degradation when AI features are unavailable
 
 ### ⏱️ Time-Based Usage System
 - Users receive 1 hour of AI agent time by default

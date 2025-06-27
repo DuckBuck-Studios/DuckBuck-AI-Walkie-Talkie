@@ -1,3 +1,35 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    
+    // Configure VS Code to use Android Studio bundled Java and tools
+    "java.jdt.ls.java.home": "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+    
+    // Kotlin configuration to use Android Studio bundled Kotlin compiler
+    "kotlin.compiler.path": "/Applications/Android Studio.app/Contents/plugins/Kotlin/kotlinc/bin",
+    
+    // Android SDK configuration
+    "android.sdk.path": "/Users/rudra/Library/Android/sdk",
+    "android.ndk.path": "/Users/rudra/Library/Android/sdk/ndk/29.0.13599879",
+    
+    // Flutter configuration
+    "dart.flutterSdkPath": "/opt/homebrew/Caskroom/flutter/3.32.4/flutter",
+    
+    // Java Language Server configuration
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-21",
+            "path": "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+            "default": true
+        }
+    ],
+    
+    // Gradle configuration to use Android Studio bundled Java
+    "java.import.gradle.java.home": "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+    
+    // File associations for better Android development
+    "files.associations": {
+        "*.gradle": "groovy",
+        "*.gradle.kts": "kotlin"
+    }
 }

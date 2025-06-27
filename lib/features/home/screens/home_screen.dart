@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../../shared/providers/shared_friends_provider.dart';
 import '../widgets/home_friends_section.dart';
-import '../handlers/fullscreen_photo_handler.dart';
 import '../../../core/navigation/app_routes.dart';
 import 'dart:io' show Platform;
 
@@ -21,19 +20,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  late FullscreenPhotoHandler _photoHandler;
-
+class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    
-    // Initialize photo handler
-    _photoHandler = FullscreenPhotoHandler(
-      context: context,
-      onShowFullscreenOverlay: widget.onShowFullscreenOverlay,
-      onHideFullscreenOverlay: widget.onHideFullscreenOverlay,
-    );
     
     // Initialize SharedFriendsProvider when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,15 +31,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  @override
-  void dispose() {
-    // Note: Removed Provider access from dispose as it's unsafe during widget disposal
-    // Memory optimization will be handled by the provider's own lifecycle management
-    super.dispose();
-  }
-
   void _handleFriendTap(Map<String, dynamic> friend) {
-    _photoHandler.showPhotoViewer(friend);
+    // Show friend photo in fullscreen overlay
+    if (widget.onShowFullscreenOverlay != null) {
+      widget.onShowFullscreenOverlay!(
+        _FriendPhotoOverlay(
+          friend: friend,
+          onClose: () => widget.onHideFullscreenOverlay?.call(),
+        ),
+      );
+    }
   }
 
   void _handleAiAgentTap() {
@@ -102,6 +93,84 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         }
       },
+    );
+  }
+}
+
+/// Simple fullscreen friend photo overlay
+class _FriendPhotoOverlay extends StatelessWidget {
+  final Map<String, dynamic> friend;
+  final VoidCallback onClose;
+  
+  const _FriendPhotoOverlay({
+    required this.friend,
+    required this.onClose,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onClose,
+      child: Container(
+        color: Colors.black,
+        child: Center(
+          child: Hero(
+            tag: 'friend_photo_${friend['displayName'] ?? 'Unknown User'}',
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Large friend photo
+                Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[800],
+                  ),
+                  child: ClipOval(
+                    child: friend['photoURL'] != null
+                        ? Image.network(
+                            friend['photoURL'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.person,
+                                size: 150,
+                                color: Colors.grey[400],
+                              );
+                            },
+                          )
+                        : Icon(
+                            Icons.person,
+                            size: 150,
+                            color: Colors.grey[400],
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Friend name
+                Text(
+                  friend['displayName'] ?? 'Unknown User',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Tap to close hint
+                Text(
+                  'Tap anywhere to close',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -20,8 +20,8 @@ class _MainNavigationState extends State<MainNavigation> {
   // Define the screens for the GNav
   List<Widget> get _widgetOptions => <Widget>[
     HomeScreen(onShowFullscreenOverlay: _showFullscreenOverlay, onHideFullscreenOverlay: _hideFullscreenOverlay),     // Home tab
-    const FriendsScreen(),  // Friends tab
-    const SettingsScreen(), // Settings tab
+    const FriendsScreen(),  
+    const SettingsScreen(), 
   ];
 
   @override
