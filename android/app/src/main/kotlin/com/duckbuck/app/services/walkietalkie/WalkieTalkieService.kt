@@ -39,6 +39,29 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
         // Intent extras for FCM data
         const val EXTRA_FCM_DATA = "fcm_data"
         
+        // Call failure reasons
+        private const val REASON_TIMESTAMP_EXPIRED = "timestamp_expired"
+        private const val REASON_ALREADY_IN_CALL = "already_in_call"
+        private const val REASON_CHANNEL_EMPTY = "channel_empty"
+        private const val REASON_JOIN_FAILED = "join_failed"
+        private const val REASON_USER_LEFT = "user_left"
+        private const val REASON_EVERYONE_LEFT = "everyone_left"
+        
+        // Timing constants
+        private const val AUTO_LEAVE_DELAY_MS = 2000L
+        
+        // FCM data field names
+        private const val FCM_FIELD_TIMESTAMP = "timestamp"
+        private const val FCM_FIELD_TYPE = "type"
+        private const val FCM_FIELD_TIMESTAMP_ISO = "timestampISO"
+        private const val FCM_FIELD_SERVER_TIMESTAMP = "serverTimestamp"
+        private const val FCM_FIELD_PRIORITY = "priority"
+        private const val FCM_FIELD_CALL_NAME = "call_name"
+        private const val FCM_FIELD_CALLER_PHOTO = "caller_photo"
+        private const val FCM_FIELD_AGORA_CHANNEL_ID = "agora_channelid"
+        private const val FCM_FIELD_AGORA_TOKEN = "agora_token"
+        private const val FCM_FIELD_AGORA_UID = "agora_uid"
+        
         /**
          * Start the walkie-talkie service with FCM data
          */
@@ -222,7 +245,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
             Log.d(TAG, "📻 Data: $data")
             
             // Extract timestamp and validate first
-            val timestamp = data["timestamp"]
+            val timestamp = data[FCM_FIELD_TIMESTAMP]
             
             // Validate timestamp - reject if older than 25 seconds
             if (!timestampValidator.isTimestampValid(timestamp)) {
@@ -230,7 +253,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
                 Log.d(TAG, "🚫 Timestamp difference: ${timestampValidator.getTimestampDifference(timestamp)}")
                 
                 // Clear SharedPreferences - call failed due to old timestamp
-                WalkieTalkiePrefsUtil.clearCallFailed(this, "timestamp_expired")
+                WalkieTalkiePrefsUtil.clearCallFailed(this, REASON_TIMESTAMP_EXPIRED)
                 
                 return // Exit early - don't process expired notification
             }
@@ -244,7 +267,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
                 Log.d(TAG, "🚫 Cannot interrupt ongoing call with new invite")
                 
                 // Clear SharedPreferences - call failed due to already in call
-                WalkieTalkiePrefsUtil.clearCallFailed(this, "already_in_call")
+                WalkieTalkiePrefsUtil.clearCallFailed(this, REASON_ALREADY_IN_CALL)
                 
                 return // Exit early - don't interrupt ongoing call
             }
@@ -252,17 +275,14 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
             Log.i(TAG, "✅ No active channel connection - proceeding with invite")
             
             // Extract all the data fields that backend sends
-            val type = data["type"] // "data_only"
-            val timestampISO = data["timestampISO"]
-            val serverTimestamp = data["serverTimestamp"]
-            val priority = data["priority"] // "high"
-            
+            val type = data[FCM_FIELD_TYPE] // "data_only"
+            val priority = data[FCM_FIELD_PRIORITY] // "high"
             // Invite-specific data (if present)
-            val callName = data["call_name"]
-            val callerPhoto = data["caller_photo"]
-            val agoraChannelId = data["agora_channelid"]
-            val agoraToken = data["agora_token"]
-            val agoraUid = data["agora_uid"]
+            val callName = data[FCM_FIELD_CALL_NAME]
+            val callerPhoto = data[FCM_FIELD_CALLER_PHOTO]
+            val agoraChannelId = data[FCM_FIELD_AGORA_CHANNEL_ID]
+            val agoraToken = data[FCM_FIELD_AGORA_TOKEN]
+            val agoraUid = data[FCM_FIELD_AGORA_UID]
             
             Log.d(TAG, "📻 Type: $type, Priority: $priority")
             Log.d(TAG, "📻 Timestamp: $timestamp")
@@ -279,7 +299,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
                 handleInviteAndJoinChannel(agoraChannelId, agoraToken, agoraUid, callName, callerPhoto)
             } else {
                 Log.i(TAG, "📊 Processing other walkie-talkie data")
-                // TODO: Handle other walkie-talkie data types
+                // Handle other walkie-talkie data types here if needed in the future
             }
             
         } catch (e: Exception) {
@@ -327,13 +347,13 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
             if (joinSuccess) {
                 Log.i(TAG, "✅ Agora channel join initiated successfully")
                 Log.i(TAG, "🔇 Joined in muted state with speakerphone enabled")
-                Log.i(TAG, "📋 Initial empty check + WhatsApp-like auto-leave enabled")
+                Log.i(TAG, "📋 Instant empty check + WhatsApp-like auto-leave enabled")
                 
                 // Store call data temporarily - will save to SharedPreferences only if call succeeds
                 pendingCallData = PendingCallData(channelId, callerName, callerPhoto, token, uidString)
-                Log.d(TAG, "📋 Stored pending call data - waiting for initial empty check")
+                Log.d(TAG, "📋 Stored pending call data - performing instant empty check")
                 
-                // Schedule initial empty channel check after 3 seconds
+                // Perform instant empty channel check
                 scheduleInitialEmptyChannelCheck()
             } else {
                 Log.e(TAG, "❌ Failed to join Agora channel")
@@ -349,7 +369,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
                 notificationService.clearOngoingCallNotification()
                 
                 // Clear SharedPreferences - call failed to join
-                WalkieTalkiePrefsUtil.clearCallFailed(this, "join_failed")
+                WalkieTalkiePrefsUtil.clearCallFailed(this, REASON_JOIN_FAILED)
             }
             
         } catch (e: Exception) {
@@ -358,15 +378,13 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
     }
     
     /**
-     * Schedule initial empty channel check after joining
+     * Perform initial empty channel check immediately after joining
      */
     private fun scheduleInitialEmptyChannelCheck() {
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (!hasCheckedInitialEmpty && currentChannelId != null) {
-                checkInitialChannelEmpty()
-            }
-        }, 1500) // 1.5-second delay to allow other users to join
-        Log.d(TAG, "⏰ Scheduled initial empty channel check in 1.5 seconds")
+        if (!hasCheckedInitialEmpty && currentChannelId != null) {
+            checkInitialChannelEmpty()
+        }
+        Log.d(TAG, "⚡ Performing instant initial empty channel check")
     }
     
     /**
@@ -388,7 +406,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
             Log.d(TAG, "🧹 Cleared pending call data - channel was empty")
             
             // Clear SharedPreferences - call failed due to empty channel
-            WalkieTalkiePrefsUtil.clearCallFailed(this, "channel_empty")
+            WalkieTalkiePrefsUtil.clearCallFailed(this, REASON_CHANNEL_EMPTY)
             
             leaveChannel()
         } else {
@@ -430,7 +448,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
             notificationService.clearOngoingCallNotification()
             
             // Clear SharedPreferences - call ended (local user or others)
-            WalkieTalkiePrefsUtil.clearCallEnded(this, "user_left")
+            WalkieTalkiePrefsUtil.clearCallEnded(this, REASON_USER_LEFT)
             
             val leaveSuccess = agoraService.leaveChannel()
             if (leaveSuccess) {
