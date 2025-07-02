@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.duckbuck.app.services.agora.AgoraService
 import com.duckbuck.app.services.walkietalkie.utils.WalkieTalkiePrefsUtil
+import io.agora.rtc2.Constants
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -243,7 +244,7 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
     // ================================
     
     private fun setAudioScenario(call: MethodCall, result: Result) {
-        val scenario = call.argument<Int>("scenario") ?: io.agora.rtc2.Constants.AUDIO_SCENARIO_CHATROOM_GAMING
+        val scenario = call.argument<Int>("scenario") ?: 7 // AUDIO_SCENARIO_CHATROOM_ENTERTAINMENT
         val success = agoraService.setAudioScenario(scenario)
         Log.d(TAG, "🎵 Set audio scenario: $scenario, result: $success")
         result.success(success)

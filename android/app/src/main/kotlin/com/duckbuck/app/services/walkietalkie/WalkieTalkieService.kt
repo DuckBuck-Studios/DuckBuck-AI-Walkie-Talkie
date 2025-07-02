@@ -10,10 +10,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import io.flutter.plugin.common.MethodChannel
 import com.duckbuck.app.MainActivity
 import com.duckbuck.app.R
+import com.duckbuck.app.bridges.CallUIBridge
 import com.duckbuck.app.services.agora.AgoraService
 import com.duckbuck.app.services.notification.NotificationService
 import com.duckbuck.app.services.walkietalkie.utils.TimestampValidator
@@ -31,6 +35,9 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
         private const val FOREGROUND_SERVICE_ID = 3000
         private const val CHANNEL_ID = "walkie_talkie_service"
         private const val CHANNEL_NAME = "Walkie-Talkie Service"
+        
+        // Method channel for Flutter communication
+        private const val CALL_UI_CHANNEL = "com.duckbuck.app/call_ui"
         
         // Intent actions
         const val ACTION_START_CALL = "START_CALL"
@@ -95,6 +102,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
     private val timestampValidator = TimestampValidator()
     private lateinit var agoraService: AgoraService
     private lateinit var notificationService: NotificationService
+    private lateinit var callUIBridge: CallUIBridge
     
     // Track current channel and participants for initial empty check
     private var currentChannelId: String? = null
@@ -123,6 +131,7 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
         // Initialize services
         agoraService = AgoraService.getInstance(this)
         notificationService = NotificationService(this)
+        callUIBridge = CallUIBridge.getInstance(this)
         
         // Create notification channel for foreground service
         createForegroundServiceChannel()
@@ -429,6 +438,16 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
                 Log.i(TAG, "📞 Showing ongoing call notification")
                 notificationService.showOngoingCallNotification(callData.callerName, callData.callerPhoto)
                 
+                // ✨ NEW: Trigger Flutter call UI for incoming call
+                Log.i(TAG, "🎯 Triggering Flutter call UI - incoming call")
+                callUIBridge.showIncomingCallUI(
+                    channelId = callData.channelId,
+                    callerName = callData.callerName,
+                    callerPhoto = callData.callerPhoto,
+                    agoraToken = callData.agoraToken,
+                    agoraUid = callData.agoraUid
+                )
+                
                 // Clear pending data as it's now saved
                 pendingCallData = null
             } ?: run {
@@ -443,6 +462,10 @@ class WalkieTalkieService : Service(), AgoraService.ChannelParticipantListener, 
     private fun leaveChannel() {
         try {
             Log.i(TAG, "🚪 Leaving channel: $currentChannelId")
+            
+            // ✨ NEW: Hide Flutter call UI when leaving
+            Log.i(TAG, "🎯 Hiding Flutter call UI - call ending")
+            callUIBridge.hideCallUI("user_left")
             
             // Clear ongoing call notification
             notificationService.clearOngoingCallNotification()

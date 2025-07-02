@@ -5,6 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../../features/settings/providers/crashlytics_consent_provider.dart';
 import '../../features/auth/providers/auth_state_provider.dart';  
 import '../../features/ai_agent/providers/ai_agent_provider.dart';
+import '../../features/walkie_talkie/providers/call_provider.dart';
 
 import '../../features/settings/providers/settings_provider.dart';
 import '../../features/shared/providers/shared_friends_provider.dart';
@@ -44,6 +45,12 @@ class ProviderRegistry {
       ChangeNotifierProvider<AiAgentProvider>(
         create: (_) => AiAgentProvider(),
         lazy: true, // Only create when AI agent is accessed
+      ),
+      
+      // Call provider for managing walkie-talkie call state and UI
+      ChangeNotifierProvider<CallProvider>(
+        create: (_) => CallProvider(),
+        lazy: false, // Keep immediately available for incoming calls
       ),
       
       // Call initiator provider for handling call initiation (caller side)

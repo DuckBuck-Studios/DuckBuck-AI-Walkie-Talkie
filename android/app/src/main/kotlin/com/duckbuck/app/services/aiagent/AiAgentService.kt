@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import com.duckbuck.app.services.notification.NotificationService
 import com.duckbuck.app.services.aiagent.utils.AiAgentPrefsUtil
@@ -177,11 +178,11 @@ class AiAgentService : Service() {
             
             // We need to create a notification for startForeground
             // Let's create a basic one and then update it with the full notification
-            val notification = android.app.NotificationCompat.Builder(this, "duckbuck_ai_agent")
+            val notification = NotificationCompat.Builder(this, "duckbuck_ai_agent")
                 .setSmallIcon(com.duckbuck.app.R.drawable.ic_notification)
                 .setContentTitle("DuckBuck AI Connected")
                 .setContentText("AI conversation in progress")
-                .setPriority(android.app.NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .build()
             

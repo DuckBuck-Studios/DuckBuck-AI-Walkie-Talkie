@@ -8,7 +8,8 @@ import 'core/services/auth/auth_security_manager.dart';
 import 'core/services/firebase/firebase_crashlytics_service.dart';
 import 'core/services/logger/logger_service.dart';
 import 'core/services/service_locator.dart';
-import 'core/services/ai_agent/ai_agent_lifecycle_service.dart'; 
+import 'core/services/ai_agent/ai_agent_lifecycle_service.dart';
+import 'features/walkie_talkie/widgets/call_overlay.dart'; 
 
 /// Main entry point for the application
 void main() async {
@@ -109,15 +110,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Use the centralized provider registry to manage all app providers
       // This makes it easier to add/remove providers and ensures consistency
       providers: ProviderRegistry.getProviders(),
-      child: MaterialApp(
-        title: 'DuckBuck',
-        theme: AppTheme.blackTheme,
-        darkTheme: AppTheme.blackTheme,
-        themeMode: ThemeMode.system, // Uses system theme preference
-        debugShowCheckedModeBanner: false,
-        navigatorKey: AppRoutes.navigatorKey,
-        initialRoute: _determineInitialRoute(),
-        onGenerateRoute: AppRoutes.generateRoute, 
+      child: CallOverlay(
+        child: MaterialApp(
+          title: 'DuckBuck',
+          theme: AppTheme.blackTheme,
+          darkTheme: AppTheme.blackTheme,
+          themeMode: ThemeMode.system, // Uses system theme preference
+          debugShowCheckedModeBanner: false,
+          navigatorKey: AppRoutes.navigatorKey,
+          initialRoute: _determineInitialRoute(),
+          onGenerateRoute: AppRoutes.generateRoute, 
+        ),
       ),
     );
   }

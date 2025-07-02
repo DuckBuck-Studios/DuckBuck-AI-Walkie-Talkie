@@ -141,6 +141,10 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.core:core-ktx:1.12.0")
     
+    // Lifecycle components for LifecycleService
+    implementation("androidx.lifecycle:lifecycle-service:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    
     // Required dependencies for Apple Sign In on Android
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("androidx.browser:browser:1.6.0")

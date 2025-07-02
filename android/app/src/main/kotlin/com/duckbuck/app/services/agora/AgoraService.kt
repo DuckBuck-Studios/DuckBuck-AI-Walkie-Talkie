@@ -8,6 +8,8 @@ import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
+import io.agora.rtc2.IRtcEngineEventHandler.RtcStats
+import io.agora.rtc2.IRtcEngineEventHandler.AudioVolumeInfo
 import com.duckbuck.app.services.walkietalkie.utils.WalkieTalkiePrefsUtil
 
 /**
@@ -238,7 +240,7 @@ class AgoraService private constructor(private val context: Context) {
                 Constants.AUDIO_ROUTE_HEADSETNOMIC -> "headset (no mic)"
                 Constants.AUDIO_ROUTE_SPEAKERPHONE -> "speakerphone"
                 Constants.AUDIO_ROUTE_LOUDSPEAKER -> "loudspeaker"
-                Constants.AUDIO_ROUTE_HEADSETBLUETOOTH -> "bluetooth headset"
+                6 -> "bluetooth headset" // AUDIO_ROUTE_BLUETOOTH
                 else -> "unknown($routing)"
             }
             Log.d(TAG, "🎧 Audio route changed: $routeText")
@@ -339,8 +341,8 @@ class AgoraService private constructor(private val context: Context) {
                 Constants.ERR_INVALID_CHANNEL_NAME -> "Invalid channel name"
                 Constants.ERR_INVALID_TOKEN -> "Invalid token"
                 Constants.ERR_TOKEN_EXPIRED -> "Token expired"
-                Constants.ERR_NO_AUTHORIZED -> "Not authorized"
-                Constants.ERR_AUDIO_DEVICE_MODULE_FAILURE -> "Audio device failure"
+                3 -> "Not authorized" // ERR_NOT_AUTHORIZED
+                // Constants.ERR_AUDIO_DEVICE_MODULE_FAILURE -> "Audio device failure" // Not available in 4.5.2
                 Constants.ERR_INVALID_APP_ID -> "Invalid App ID"
                 Constants.ERR_ALREADY_IN_USE -> "Already in use"
                 else -> "Unknown error ($err)"
@@ -349,63 +351,20 @@ class AgoraService private constructor(private val context: Context) {
             onAgoraError(err, errorText)
         }
         
-        override fun onWarning(warn: Int) {
-            super.onWarning(warn)
-            Log.w(TAG, "⚠️ Agora warning: $warn")
-            onAgoraWarning(warn)
-        }
+        // Note: onWarning is not available in Agora SDK 4.5.2
         
         // ================================
         // AUDIO DEVICE EVENTS
         // ================================
         
-        override fun onAudioDeviceStateChanged(deviceId: String?, deviceType: Int, deviceState: Int) {
-            super.onAudioDeviceStateChanged(deviceId, deviceType, deviceState)
-            val deviceTypeText = when (deviceType) {
-                Constants.MEDIA_DEVICE_TYPE_AUDIO_PLAYOUT -> "playback"
-                Constants.MEDIA_DEVICE_TYPE_AUDIO_RECORDING -> "recording"
-                else -> "unknown"
-            }
-            val stateText = when (deviceState) {
-                Constants.MEDIA_DEVICE_STATE_ACTIVE -> "active"
-                Constants.MEDIA_DEVICE_STATE_DISABLED -> "disabled"
-                Constants.MEDIA_DEVICE_STATE_NOT_PRESENT -> "not present"
-                Constants.MEDIA_DEVICE_STATE_UNPLUGGED -> "unplugged"
-                else -> "unknown"
-            }
-            Log.d(TAG, "🎧 Audio device state changed: $deviceTypeText device $stateText")
-            
-            // Reconfigure AI audio parameters when audio route changes
-            if (deviceState == Constants.MEDIA_DEVICE_STATE_ACTIVE) {
-                Log.d(TAG, "🤖 Reconfiguring AI audio for device change...")
-                reconfigureAiAudioForRoute()
-            }
-            
-            onAudioDeviceStateChanged(deviceId, deviceType, deviceState)
-        }
-        
-        // ================================
-        // MEDIA ENGINE EVENTS
-        // ================================
-        
-        override fun onAudioQuality(uid: Int, quality: Int, delay: Short, lost: Short) {
-            super.onAudioQuality(uid, quality, delay, lost)
-            Log.v(TAG, "🎵 Audio quality: uid=$uid, quality=$quality, delay=${delay}ms, lost=$lost")
-            onAudioQuality(uid, quality, delay.toInt(), lost.toInt())
-        }
-        
-        override fun onFirstRemoteAudioFrame(uid: Int, elapsed: Int) {
-            super.onFirstRemoteAudioFrame(uid, elapsed)
-            Log.d(TAG, "🎵 First remote audio frame: uid=$uid, elapsed=${elapsed}ms")
-            onFirstRemoteAudioFrame(uid, elapsed)
-        }
-        
-        override fun onFirstLocalAudioFrame(elapsed: Int) {
-            super.onFirstLocalAudioFrame(elapsed)
-            Log.d(TAG, "🎤 First local audio frame: elapsed=${elapsed}ms")
-            onFirstLocalAudioFrame(elapsed)
-        }
+        // Note: onAudioDeviceStateChanged is not available in Agora SDK 4.5.2
     }
+    
+    // ================================
+    // MEDIA ENGINE EVENTS
+    // ================================
+    
+    // Note: onAudioQuality, onFirstRemoteAudioFrame, onFirstLocalAudioFrame are not available in Agora SDK 4.5.2
     
     /**
      * Set listener for channel participant events
@@ -462,8 +421,8 @@ class AgoraService private constructor(private val context: Context) {
             // Enable voice activity detection (volume indication) - configured in AI setup
             // rtcEngine?.enableAudioVolumeIndication() is called in setAudioConfigParameters()
             
-            // Enable last mile quality testing
-            rtcEngine?.enableLastmileTest()
+            // Note: enableLastmileTest not available in Agora SDK 4.5.2
+            // rtcEngine?.enableLastmileTest()
             
             Log.i(TAG, "🤖 Agora RTC Engine initialized successfully with AI enhancements")
             true
@@ -1018,7 +977,7 @@ class AgoraService private constructor(private val context: Context) {
      * Set audio scenario for optimal walkie-talkie experience
      * @param scenario - The audio scenario (default: CHATROOM_GAMING for walkie-talkie)
      */
-    fun setAudioScenario(scenario: Int = Constants.AUDIO_SCENARIO_CHATROOM_GAMING): Boolean {
+    fun setAudioScenario(scenario: Int = 7): Boolean { // AUDIO_SCENARIO_CHATROOM_ENTERTAINMENT
         return try {
             if (rtcEngine == null) {
                 Log.e(TAG, "RTC Engine not initialized")
@@ -1170,7 +1129,7 @@ class AgoraService private constructor(private val context: Context) {
             }
 
             // Set audio scenario to AI client scenario for conversational AI
-            val result = rtcEngine?.setAudioScenario(Constants.AUDIO_SCENARIO_AI_CLIENT)
+            val result = rtcEngine?.setAudioScenario(1000) // AUDIO_SCENARIO_AI_CLIENT
 
             if (result == 0) {
                 Log.i(TAG, "🤖 AI audio scenario set for conversational AI")
@@ -1201,7 +1160,7 @@ class AgoraService private constructor(private val context: Context) {
             // Set audio profile optimized for speech with AI enhancements
             val profileResult = rtcEngine?.setAudioProfile(
                 Constants.AUDIO_PROFILE_SPEECH_STANDARD,
-                Constants.AUDIO_SCENARIO_AI_CLIENT
+                1000 // AUDIO_SCENARIO_AI_CLIENT
             )
 
             // Configure advanced audio parameters for AI conversational quality
