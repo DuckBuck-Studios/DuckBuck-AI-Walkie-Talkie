@@ -30,6 +30,7 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
             when (call.method) {
                 // Engine lifecycle methods
                 "initializeEngine" -> initializeEngine(result)
+                "initializeAiEngine" -> initializeAiEngine(result)
                 "destroyEngine" -> destroyEngine(result)
                 
                 // Channel management methods
@@ -72,6 +73,13 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
                 "getActiveCallData" -> getActiveCallData(result)
                 "clearActiveCallData" -> clearActiveCallData(result)
                 
+                // Debug and status methods
+                "resetAgoraService" -> resetAgoraService(result)
+                "validateAgoraSetup" -> validateAgoraSetup(result)
+                "forceCleanInitialization" -> forceCleanInitialization(result)
+                "getAiModeStatus" -> getAiModeStatus(result)
+                "getCurrentEngineMode" -> getCurrentEngineMode(result)
+                
                 else -> {
                     Log.w(TAG, "⚠️ Unknown method: ${call.method}")
                     result.notImplemented()
@@ -91,6 +99,12 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
     private fun initializeEngine(result: Result) {
         val success = agoraService.initializeEngine()
         Log.d(TAG, "🔧 Initialize engine result: $success")
+        result.success(success)
+    }
+    
+    private fun initializeAiEngine(result: Result) {
+        val success = agoraService.initializeAiEngine()
+        Log.d(TAG, "🤖 Initialize AI engine result: $success")
         result.success(success)
     }
     
@@ -318,5 +332,39 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
         WalkieTalkiePrefsUtil.clearCallEnded(context, "flutter_requested")
         Log.d(TAG, "🧹 Cleared active call data from Flutter request")
         result.success(true)
+    }
+    
+    // ================================
+    // DEBUG METHODS
+    // ================================
+    
+    private fun resetAgoraService(result: Result) {
+        AgoraService.resetInstance()
+        Log.d(TAG, "🔄 Agora service reset")
+        result.success(true)
+    }
+    
+    private fun validateAgoraSetup(result: Result) {
+        val isValid = agoraService.validateSetup()
+        Log.d(TAG, "🔍 Agora setup validation: $isValid")
+        result.success(isValid)
+    }
+    
+    private fun forceCleanInitialization(result: Result) {
+        val success = agoraService.forceCleanInitialization()
+        Log.d(TAG, "🧹 Force clean initialization: $success")
+        result.success(success)
+    }
+    
+    private fun getAiModeStatus(result: Result) {
+        val status = agoraService.getAiModeStatus()
+        Log.d(TAG, "🤖 AI mode status: $status")
+        result.success(status)
+    }
+    
+    private fun getCurrentEngineMode(result: Result) {
+        val mode = agoraService.getCurrentEngineMode()
+        Log.d(TAG, "🔧 Current engine mode: $mode")
+        result.success(mode)
     }
 }

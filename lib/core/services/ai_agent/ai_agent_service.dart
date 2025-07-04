@@ -67,31 +67,39 @@ class AiAgentService implements AiAgentServiceInterface {
       
       _logger.i(_tag, '🤖 Received Agora token with UID: ${tokenResponse.uid}');
       
-      // Step 3: Initialize Agora engine with AI enhancements
-      final engineInitialized = await AgoraService.instance.initializeEngine();
-      if (!engineInitialized) {
-        _logger.e(_tag, '❌ Failed to initialize Agora engine with AI enhancements');
+      // Step 3: Initialize Agora engine with AI optimizations
+      _logger.i(_tag, '🔍 Validating Agora setup first...');
+      final setupValid = await AgoraService.instance.validateAgoraSetup();
+      if (!setupValid) {
+        _logger.e(_tag, '❌ Agora setup validation failed');
         return null;
       }
-      _logger.i(_tag, '✅ Agora engine initialized with AI audio enhancements');
+      _logger.i(_tag, '✅ Agora setup validation passed');
       
-      // Step 4: Set AI audio scenario for conversational AI
-      final aiScenarioSet = await AgoraService.instance.setAiAudioScenario();
-      if (aiScenarioSet) {
-        _logger.i(_tag, '🤖 AI audio scenario configured for conversational AI');
-      } else {
-        _logger.w(_tag, '⚠️ Failed to set AI audio scenario, continuing with default');
+      _logger.i(_tag, '🤖 Initializing AI engine...');
+      var engineInitialized = await AgoraService.instance.initializeAiEngine();
+      
+      // If normal initialization fails, try force clean initialization
+      if (!engineInitialized) {
+        _logger.w(_tag, '⚠️ Normal AI engine initialization failed, trying force clean initialization...');
+        engineInitialized = await AgoraService.instance.forceCleanInitialization();
+        
+        if (engineInitialized) {
+          _logger.i(_tag, '✅ Force clean initialization successful, applying AI enhancements...');
+          // Apply AI enhancements after successful clean initialization
+          await AgoraService.instance.initializeAiAudioEnhancements();
+          await AgoraService.instance.setAiAudioScenario();
+          await AgoraService.instance.setAudioConfigParameters();
+        }
       }
       
-      // Step 5: Configure AI audio parameters for optimal quality
-      final aiConfigSet = await AgoraService.instance.setAudioConfigParameters();
-      if (aiConfigSet) {
-        _logger.i(_tag, '🤖 AI audio parameters configured for optimal conversational quality');
-      } else {
-        _logger.w(_tag, '⚠️ Failed to configure AI audio parameters, continuing with default');
+      if (!engineInitialized) {
+        _logger.e(_tag, '❌ Failed to initialize Agora AI engine with conversational optimizations');
+        return null;
       }
+      _logger.i(_tag, '✅ Agora AI engine initialized with all conversational optimizations');
       
-      // Step 6: Join Agora channel with the UID from backend
+      // Step 4: Join Agora channel with the UID from backend
       final agoraJoined = await AgoraService.instance.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,
@@ -110,7 +118,7 @@ class AiAgentService implements AiAgentServiceInterface {
       _logger.d(_tag, '⏳ Waiting 500ms before inviting AI agent to channel');
       await Future.delayed(const Duration(milliseconds: 500));
       
-      // Step 7: Get user's remaining time
+      // Step 5: Get user's remaining time
       final remainingTime = await getUserRemainingTime(uid);
       if (!hasRemainingTime(remainingTime)) {
         _logger.w(_tag, '❌ User has no remaining AI agent time');
@@ -118,7 +126,7 @@ class AiAgentService implements AiAgentServiceInterface {
         return null;
       }
       
-      // Step 8: Join AI agent to the channel (backend call)
+      // Step 6: Join AI agent to the channel (backend call)
       final agentResponse = await joinAgent(
         uid: uid,
         channelName: channelName,
@@ -131,7 +139,7 @@ class AiAgentService implements AiAgentServiceInterface {
         return null;
       }
       
-      // Step 9: Start background service for session management
+      // Step 7: Start background service for session management
       _logger.i(_tag, '🤖 Starting AI agent background service');
       final backgroundServiceStarted = await _startAiAgentService(
         userId: uid,
@@ -730,32 +738,15 @@ class AiAgentService implements AiAgentServiceInterface {
       
       _logger.i(_tag, '🤖 Received Agora token with UID: ${tokenResponse.uid}');
       
-      // Step 3: Initialize Agora engine with AI enhancements
-      final engineInitialized = await AgoraService.instance.initializeEngine();
+      // Step 3: Initialize Agora engine with AI optimizations
+      final engineInitialized = await AgoraService.instance.initializeAiEngine();
       if (!engineInitialized) {
-        _logger.e(_tag, '❌ Failed to initialize Agora engine with AI enhancements');
+        _logger.e(_tag, '❌ Failed to initialize Agora AI engine with conversational optimizations');
         return false;
       }
-      _logger.i(_tag, '✅ Agora engine initialized with AI audio enhancements');
+      _logger.i(_tag, '✅ Agora AI engine initialized with all conversational optimizations');
       
-      // Step 4: Set AI audio scenario for conversational AI
-      final aiScenarioSet = await AgoraService.instance.setAiAudioScenario();
-      if (aiScenarioSet) {
-        _logger.i(_tag, '🤖 AI audio scenario configured for conversational AI');
-      } else {
-        _logger.w(_tag, '⚠️ Failed to set AI audio scenario, continuing with default');
-      }
-      
-      
-      // Step 5: Configure AI audio parameters for optimal quality
-      final aiConfigSet = await AgoraService.instance.setAudioConfigParameters();
-      if (aiConfigSet) {
-        _logger.i(_tag, '🤖 AI audio parameters configured for optimal conversational quality');
-      } else {
-        _logger.w(_tag, '⚠️ Failed to configure AI audio parameters, continuing with default');
-      }
-      
-      // Step 6: Join Agora channel with the UID from backend
+      // Step 4: Join Agora channel with the UID from backend
       final agoraJoined = await AgoraService.instance.joinChannel(
         token: tokenResponse.token,
         channelName: channelName,

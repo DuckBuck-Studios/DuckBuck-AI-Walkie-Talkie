@@ -134,8 +134,11 @@ dependencies {
     // Firebase Messaging for FCM notifications
     implementation("com.google.firebase:firebase-messaging:23.4.0")
     
-    // Agora SDK 4.5.2 for voice and video calls with necessary components
-    implementation("io.agora.rtc:full-rtc-basic:4.5.2")
+    // Agora SDK 4.5.2 for voice and video calls with AI extensions
+    implementation("io.agora.rtc:full-sdk:4.5.2")
+    
+    // Additional Agora extensions (if available separately)
+    // Note: AI extensions might be included in the full-sdk or available as separate dependencies
     // Add Agora supporting libraries
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")

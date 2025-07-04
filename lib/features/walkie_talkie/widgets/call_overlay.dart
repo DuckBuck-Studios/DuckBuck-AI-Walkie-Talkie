@@ -16,17 +16,20 @@ class CallOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<CallProvider>(
       builder: (context, callProvider, _) {
-        return Stack(
-          children: [
-            // Main app content
-            child,
-            
-            // Call screen overlay (only shown when call is active)
-            if (callProvider.isCallActive)
-              const Positioned.fill(
-                child: CallScreen(),
-              ),
-          ],
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: Stack(
+            children: [
+              // Main app content
+              child,
+              
+              // Call screen overlay (only shown when call is active)
+              if (callProvider.isCallActive)
+                const Positioned.fill(
+                  child: CallScreen(),
+                ),
+            ],
+          ),
         );
       },
     );

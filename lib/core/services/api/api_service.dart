@@ -41,7 +41,7 @@ class ApiService {
   bool _circuitBreakerOpen = false;
   DateTime? _circuitBreakerOpenTime;
   static const Duration _circuitBreakerTimeout = Duration(minutes: 1);
-  static const int _circuitBreakerFailureThreshold = 5;
+  static const int _circuitBreakerFailureThreshold = 5;  
   int _consecutiveFailures = 0;
   
   // Rate limiting
@@ -60,7 +60,7 @@ class ApiService {
     LoggerService? logger,
     Dio? dio,
   }) : 
-    _baseUrl = 'https://ab23-117-194-126-233.ngrok-free.app',
+    _baseUrl = 'https://firm-bluegill-engaged.ngrok-free.app',
     _apiKey = apiKey ?? const String.fromEnvironment('DUCKBUCK_API_KEY'),
     _authService = authService ?? serviceLocator<AuthServiceInterface>(),
     _logger = logger ?? serviceLocator<LoggerService>(),
@@ -583,7 +583,12 @@ class ApiService {
       await _handleRateLimit();
 
       _logger.i(_tag, 'Generating Agora token for channel: $channelId');
-
+      
+      // Log the full request details for debugging
+      _logger.d(_tag, 'Request URL: ${_dio.options.baseUrl}/api/agora/token');
+      _logger.d(_tag, 'Request method: POST');
+      _logger.d(_tag, 'Request body: {channel_name: $channelId}');
+      
       final response = await _dio.post(
         '/api/agora/token',
         data: {
@@ -628,6 +633,13 @@ class ApiService {
       _onRequestFailure();
       _logger.e(_tag, 'DioException generating Agora token: ${e.message}');
       
+      // Log response details for server errors to help debug backend issues
+      if (e.response?.statusCode == 500) {
+        _logger.e(_tag, 'Server error response body: ${e.response?.data}');
+        _logger.e(_tag, 'Request data sent: {channel_name: $channelId}');
+        _logger.e(_tag, 'Request headers: Authorization Bearer [token], x-api-key: ${_apiKey.substring(0, 8)}...');
+      }
+      
       if (e.response?.statusCode == 401) {
         throw const ApiException(
           'Authentication failed - invalid Firebase token',
@@ -645,6 +657,12 @@ class ApiService {
           'Bad request - invalid parameters: ${e.response?.data?['message'] ?? 'Unknown error'}',
           statusCode: 400,
           errorCode: 'BAD_REQUEST',
+        );
+      } else if (e.response?.statusCode == 500) {
+        throw ApiException(
+          'Backend server error - please check server logs. Response: ${e.response?.data}',
+          statusCode: 500,
+          errorCode: 'SERVER_ERROR',
         );
       } else {
         throw ApiException(

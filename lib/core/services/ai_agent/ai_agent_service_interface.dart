@@ -87,4 +87,16 @@ abstract class AiAgentServiceInterface {
   Future<bool> joinAgoraChannelOnly({
     required String uid,
   });
+
+  /// Handle app being foregrounded
+  Future<bool> onAppForegrounded();
+  
+  /// Handle app being backgrounded
+  Future<bool> onAppBackgrounded();
+  
+  /// Check if AI agent service is running
+  Future<bool> isAiAgentServiceRunning();
+  
+  /// Get AI agent session information
+  Future<Map<String, dynamic>?> getAiAgentSessionInfo();
 }

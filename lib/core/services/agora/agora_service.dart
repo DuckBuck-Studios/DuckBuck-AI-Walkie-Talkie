@@ -31,6 +31,18 @@ class AgoraService {
     }
   }
 
+  /// Initialize the Agora RTC Engine with AI optimizations for conversational AI
+  /// This method applies all AI-specific configurations in one call
+  Future<bool> initializeAiEngine() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('initializeAiEngine');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('❌ Error initializing AI engine: $e');
+      return false;
+    }
+  }
+
   /// Destroy the Agora RTC Engine and cleanup resources
   Future<bool> destroyEngine() async {
     try {
@@ -421,5 +433,53 @@ class AgoraService {
     final callData = await getActiveCallData();
     final callerPhoto = callData['caller_photo'] as String?;
     return (callerPhoto?.isNotEmpty == true) ? callerPhoto : null;
+  }
+
+  /// Test Agora setup validation without creating engine
+  Future<bool> validateAgoraSetup() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('validateAgoraSetup');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('❌ Error validating Agora setup: $e');
+      return false;
+    }
+  }
+
+  /// Force clean Agora engine initialization
+  Future<bool> forceCleanInitialization() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('forceCleanInitialization');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('❌ Error with force clean initialization: $e');
+      return false;
+    }
+  }
+
+  // ================================
+  // DEBUG AND STATUS METHODS
+  // ================================
+
+  /// Check if AI mode is currently enabled
+  Future<bool> getAiModeStatus() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('getAiModeStatus');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('❌ Error getting AI mode status: $e');
+      return false;
+    }
+  }
+
+  /// Get description of current engine mode
+  Future<String> getCurrentEngineMode() async {
+    try {
+      final result = await _channel.invokeMethod<String>('getCurrentEngineMode');
+      return result ?? 'Unknown';
+    } catch (e) {
+      debugPrint('❌ Error getting current engine mode: $e');
+      return 'Unknown';
+    }
   }
 }

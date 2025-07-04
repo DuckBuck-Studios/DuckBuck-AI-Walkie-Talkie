@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/services/service_locator.dart';
 import '../../../core/services/logger/logger_service.dart';
@@ -21,8 +20,7 @@ class ProfileCompletionScreen extends StatefulWidget {
       _ProfileCompletionScreenState();
 }
 
-class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> 
-    with TickerProviderStateMixin {
+class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   // Step tracking
   int _currentStep = 0; // 0 = photo, 1 = name
 
@@ -32,23 +30,6 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
   File? _selectedImage;
   bool _isLoading = false;
   String? _errorMessage;
-
-  // Premium Animation Controllers
-  late AnimationController _stepTransitionController;
-  late AnimationController _photoAnimationController;
-  late AnimationController _contentAnimationController;
-  late AnimationController _loadingAnimationController;
-  
-  // Track disposal state to prevent double disposal
-  bool _isDisposed = false;
-  
-  // Sophisticated Animations
-  late Animation<double> _photoScaleAnimation;
-  late Animation<double> _photoSlideAnimation;
-  late Animation<double> _photoFadeAnimation;
-  late Animation<double> _photoShimmerAnimation;
-  late Animation<double> _contentSlideAnimation;
-  late Animation<Offset> _buttonSlideAnimation;
 
   // Repository and Services
   late final UserRepository _userRepository;
@@ -61,123 +42,15 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
     // Initialize repository and services
     _userRepository = serviceLocator<UserRepository>();
     _logger = serviceLocator<LoggerService>();
-
-    // Initialize premium animation controllers
-    _stepTransitionController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    
-    _photoAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
-    
-    _contentAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    
-    _loadingAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
-      vsync: this,
-    );
-
-    // Create sophisticated animations
-    _photoScaleAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _photoAnimationController,
-      curve: Curves.elasticOut,
-    ));
-    
-    _photoSlideAnimation = Tween<double>(
-      begin: 50.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _photoAnimationController,
-      curve: const Interval(0.2, 0.8, curve: Curves.easeOutExpo),
-    ));
-    
-    _photoFadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _photoAnimationController,
-      curve: const Interval(0.1, 0.7, curve: Curves.easeOut),
-    ));
-    
-    _photoShimmerAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _photoAnimationController,
-      curve: const Interval(0.6, 1.0, curve: Curves.easeInOut),
-    ));
-    
-    _contentSlideAnimation = Tween<double>(
-      begin: 30.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _contentAnimationController,
-      curve: Curves.easeOutExpo,
-    ));
-    
-    _buttonSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _contentAnimationController,
-      curve: const Interval(0.4, 1.0, curve: Curves.easeOutBack),
-    ));
-
-    // Start initial animations
-    _startInitialAnimations();
-
-    // Premium haptic feedback sequence
-    _performPremiumHaptics();
-  }
-
-  /// Perform sophisticated haptic feedback sequence
-  void _performPremiumHaptics() async {
-    HapticFeedback.mediumImpact();
-    await Future.delayed(const Duration(milliseconds: 100));
-    HapticFeedback.lightImpact();
-    await Future.delayed(const Duration(milliseconds: 200));
-    HapticFeedback.lightImpact();
-  }
-
-  /// Start initial premium animations
-  void _startInitialAnimations() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    _contentAnimationController.forward();
-    await Future.delayed(const Duration(milliseconds: 200));
-    _photoAnimationController.forward();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    
-    // Safely dispose animation controllers
-    if (!_isDisposed) {
-      if (_stepTransitionController.isAnimating) _stepTransitionController.stop();
-      if (_photoAnimationController.isAnimating) _photoAnimationController.stop();
-      if (_contentAnimationController.isAnimating) _contentAnimationController.stop();
-      if (_loadingAnimationController.isAnimating) _loadingAnimationController.stop();
-      
-      _stepTransitionController.dispose();
-      _photoAnimationController.dispose();
-      _contentAnimationController.dispose();
-      _loadingAnimationController.dispose();
-      _isDisposed = true;
-    }
-    
     super.dispose();
   }
 
-  // Move to the next step with premium animation
+  // Move to the next step with simple feedback
   void _nextStep() async {
     if (_currentStep == 0) {
       if (_selectedImage == null) {
@@ -186,23 +59,13 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
         return;
       }
       
-      // Add sophisticated haptic feedback sequence
-      HapticFeedback.mediumImpact();
-      await Future.delayed(const Duration(milliseconds: 50));
+      // Simple haptic feedback
       HapticFeedback.lightImpact();
       
-      // Start sophisticated step transition animation
-      _stepTransitionController.forward();
-      
-      // Move from photo to name step with animation
+      // Move from photo to name step
       setState(() {
         _currentStep = 1;
       });
-      
-      // Start content animations for the name step
-      await Future.delayed(const Duration(milliseconds: 300));
-      _contentAnimationController.reset();
-      _contentAnimationController.forward();
       
     } else if (_currentStep == 1) {
       // Complete profile
@@ -415,111 +278,12 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
     );
   }
 
-  /// Navigate to home screen with premium transition
+  /// Navigate to home screen with simple transition
   void _navigateToHome() {
-    // Safely dispose animation controllers to free memory before navigation
-    if (!_isDisposed) {
-      if (_stepTransitionController.isAnimating) _stepTransitionController.stop();
-      if (_photoAnimationController.isAnimating) _photoAnimationController.stop();
-      if (_contentAnimationController.isAnimating) _contentAnimationController.stop();
-      if (_loadingAnimationController.isAnimating) _loadingAnimationController.stop();
-      
-      _stepTransitionController.dispose();
-      _photoAnimationController.dispose();
-      _contentAnimationController.dispose();
-      _loadingAnimationController.dispose();
-      _isDisposed = true;
-    }
-    
     Navigator.pushReplacement(
       context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => 
-          const MainNavigation(),
-        transitionDuration: const Duration(milliseconds: 1200),
-        reverseTransitionDuration: const Duration(milliseconds: 800),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // Premium "profile completion" to "home" celebration transition
-          return Stack(
-            children: [
-              // Celebration gradient background
-              AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment.center,
-                        radius: 2.0 * animation.value,
-                        colors: [
-                          Colors.green.shade400.withValues(alpha: animation.value * 0.3),
-                          Colors.blue.shade600.withValues(alpha: animation.value * 0.2),
-                          Colors.purple.shade800.withValues(alpha: animation.value * 0.1),
-                          Colors.black,
-                        ],
-                        stops: [0.0, 0.3, 0.7, 1.0],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              // Floating particles effect
-              ...List.generate(12, (index) {
-                final delay = (index * 0.05);
-                return AnimatedBuilder(
-                  animation: animation,
-                  builder: (context, _) {
-                    final animationWithDelay = Curves.easeOutExpo.transform(
-                      (animation.value - delay).clamp(0.0, 1.0),
-                    );
-                    return Positioned(
-                      left: 50.0 + (index * 30) * animationWithDelay,
-                      top: 100.0 + (index % 3 * 150) * animationWithDelay,
-                      child: Opacity(
-                        opacity: animationWithDelay * (1 - animationWithDelay),
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: [
-                              Colors.blue.shade300,
-                              Colors.purple.shade300,
-                              Colors.green.shade300,
-                            ][index % 3],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              }),
-              
-              // Main content with celebration scale and slide
-              Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.001)
-                  ..scale(
-                    0.7 + (animation.value * 0.3), // Scale from 70% to 100%
-                  )
-                  ..translate(
-                    0.0,
-                    (1 - animation.value) * 150, // Slide up from bottom
-                    0.0,
-                  ),
-                child: FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-                  ),
-                  child: child,
-                ),
-              ),
-            ],
-          );
-        },
+      MaterialPageRoute(
+        builder: (context) => const MainNavigation(),
       ),
     );
   }
@@ -628,12 +392,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                               // Step indicator
                               ProfileStepIndicator(
                                 currentStep: _currentStep,
-                                stepTransitionController: _stepTransitionController,
                               ),
                               
                               const SizedBox(height: 32),
                               
-                              // Current step UI content with smooth transitions
+                              // Current step UI content with simple transitions
                               Flexible(
                                 child: Container(
                                   width: double.infinity,
@@ -641,91 +404,40 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                                     maxWidth: MediaQuery.of(context).size.width - 48,
                                   ),
                                   child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 600),
-                                  switchInCurve: Curves.easeOutExpo,
-                                  switchOutCurve: Curves.easeInExpo,
-                                  transitionBuilder: (Widget child, Animation<double> animation) {
-                                    // Right to left slide transition with overflow clipping
-                                    final slideAnimation = Tween<Offset>(
-                                      begin: const Offset(1.0, 0.0), // Full slide distance from right
-                                      end: Offset.zero, // End at center
-                                    ).animate(CurvedAnimation(
-                                      parent: animation,
-                                      curve: Curves.easeOutExpo,
-                                    ));
-                                    
-                                    // Fade transition for smooth overlay
-                                    final fadeAnimation = Tween<double>(
-                                      begin: 0.0,
-                                      end: 1.0,
-                                    ).animate(CurvedAnimation(
-                                      parent: animation,
-                                      curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
-                                    ));
-                                    
-                                    return ClipRect(
-                                      child: SlideTransition(
-                                        position: slideAnimation,
-                                        child: FadeTransition(
-                                          opacity: fadeAnimation,
-                                          child: child,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
-                                    return SizedBox(
-                                      width: MediaQuery.of(context).size.width - 48, // Account for padding
-                                      child: Stack(
-                                        alignment: Alignment.centerLeft,
-                                        clipBehavior: Clip.hardEdge, // Prevent overflow
-                                        children: <Widget>[
-                                          ...previousChildren,
-                                          if (currentChild != null) currentChild,
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                  child: _currentStep == 0
-                                    ? ProfilePhotoSection(
-                                        key: const Key('photo_step'),
-                                        selectedImage: _selectedImage,
-                                        onImageSelected: (file) {
-                                          if (file != null) {
+                                    duration: const Duration(milliseconds: 300),
+                                    child: _currentStep == 0
+                                      ? ProfilePhotoSection(
+                                          key: const Key('photo_step'),
+                                          selectedImage: _selectedImage,
+                                          onImageSelected: (file) {
+                                            if (file != null) {
+                                              setState(() {
+                                                _selectedImage = file;
+                                              });
+                                            }
+                                          },
+                                          onError: (error) {
                                             setState(() {
-                                              _selectedImage = file;
+                                              _errorMessage = error;
                                             });
-                                          }
-                                        },
-                                        onError: (error) {
-                                          setState(() {
-                                            _errorMessage = error;
-                                          });
-                                        },
-                                        photoAnimationController: _photoAnimationController,
-                                        photoScaleAnimation: _photoScaleAnimation,
-                                        photoSlideAnimation: _photoSlideAnimation,
-                                        photoFadeAnimation: _photoFadeAnimation,
-                                        photoShimmerAnimation: _photoShimmerAnimation,
-                                        isIOS: isIOS,
-                                        onEditPhoto: () {
-                                          // Show photo selection options when edit icon is tapped
-                                          _showPhotoSelectionOptions();
-                                        },
-                                      )
-                                    : ProfileNameSection(
-                                        key: const Key('name_step'),
-                                        nameController: _nameController,
-                                        formKey: _formKey,
-                                        contentAnimationController: _contentAnimationController,
-                                        contentSlideAnimation: _contentSlideAnimation,
-                                        isIOS: isIOS,
-                                        onNameChanged: () {
-                                          setState(() {
-                                            // Trigger rebuild to update progress indicators
-                                          });
-                                        },
-                                      ),
+                                          },
+                                          isIOS: isIOS,
+                                          onEditPhoto: () {
+                                            // Show photo selection options when edit icon is tapped
+                                            _showPhotoSelectionOptions();
+                                          },
+                                        )
+                                      : ProfileNameSection(
+                                          key: const Key('name_step'),
+                                          nameController: _nameController,
+                                          formKey: _formKey,
+                                          isIOS: isIOS,
+                                          onNameChanged: () {
+                                            setState(() {
+                                              // Trigger rebuild to update progress indicators
+                                            });
+                                          },
+                                        ),
                                   ),
                                 ),
                               ),
@@ -738,7 +450,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
                       ),
                     ),
                     
-                    // Fixed bottom button area with proper SafeArea
+                    // Fixed bottom button area
                     _buildBottomButtonArea(isIOS),
                   ],
                 ),
@@ -753,34 +465,26 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
     );
   }
 
-  /// Build the fixed bottom button area with premium animations
+  /// Build the fixed bottom button area
   Widget _buildBottomButtonArea(bool isIOS) {
-    return AnimatedBuilder(
-      animation: _contentAnimationController,
-      builder: (context, child) {
-        return SlideTransition(
-          position: _buttonSlideAnimation,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.backgroundBlack.withValues(alpha: 0.0),
-                  AppColors.backgroundBlack.withValues(alpha: 0.8),
-                  AppColors.backgroundBlack,
-                ],
-              ),
-            ),
-            child: SafeArea(
-              top: false,
-              child: _buildUnifiedActionButton(isIOS),
-            ),
-          ),
-        );
-      },
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.backgroundBlack.withValues(alpha: 0.0),
+            AppColors.backgroundBlack.withValues(alpha: 0.8),
+            AppColors.backgroundBlack,
+          ],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: _buildUnifiedActionButton(isIOS),
+      ),
     );
   }
 
@@ -919,7 +623,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen>
               ),
             ],
           ),
-        ).animate().fadeIn(duration: 300.milliseconds),
+        ),
       ),
     );
   }

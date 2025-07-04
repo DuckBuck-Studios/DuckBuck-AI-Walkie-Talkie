@@ -7,8 +7,6 @@ import '../../../../core/theme/app_colors.dart';
 class ProfileNameSection extends StatelessWidget {
   final TextEditingController nameController;
   final GlobalKey<FormState> formKey;
-  final AnimationController contentAnimationController;
-  final Animation<double> contentSlideAnimation;
   final bool isIOS;
   final VoidCallback? onNameChanged;
 
@@ -16,8 +14,6 @@ class ProfileNameSection extends StatelessWidget {
     super.key,
     required this.nameController,
     required this.formKey,
-    required this.contentAnimationController,
-    required this.contentSlideAnimation,
     required this.isIOS,
     this.onNameChanged,
   });  @override
@@ -31,116 +27,60 @@ class ProfileNameSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min, // Take minimum space needed
           children: [
-            // Section Header with right-to-left slide animation
-            AnimatedBuilder(
-              animation: contentAnimationController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(
-                    (1.0 - contentAnimationController.value) * 100, // Slide from right
-                    contentSlideAnimation.value,
-                  ),
-                  child: Opacity(
-                    opacity: contentAnimationController.value,
-                    child: Column(
-                      children: [
-                        // Section title with gradient text
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.purple.shade300,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ).createShader(bounds),
-                          child: Text(
-                            'Step 2: Display Name',
-                            style: TextStyle(
-                              fontSize: isIOS ? 22 : 24,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 8),
-                        
-                        // Section subtitle
-                        Text(
-                          'Choose how you\'d like to be displayed to other users',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: isIOS ? 16 : 17,
-                            letterSpacing: 0.3,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+            // Section Header
+            Column(
+              children: [
+                // Section title with gradient text
+                ShaderMask(
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: [
+                      Colors.white,
+                      Colors.purple.shade300,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ).createShader(bounds),
+                  child: Text(
+                    'Step 2: Display Name',
+                    style: TextStyle(
+                      fontSize: isIOS ? 22 : 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: Colors.white,
                     ),
                   ),
-                );
-              },
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Section subtitle
+                Text(
+                  'Choose how you\'d like to be displayed to other users',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: isIOS ? 16 : 17,
+                    letterSpacing: 0.3,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
             
             const SizedBox(height: 32),
             
-            // Display name input component with right-to-left slide animation
-            AnimatedBuilder(
-              animation: contentAnimationController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(
-                    (1.0 - contentAnimationController.value) * 80, // Slide from right, less distance
-                    contentSlideAnimation.value,
-                  ),
-                  child: Opacity(
-                    opacity: contentAnimationController.value,
-                    child: _buildNameInput(context), // Pass context
-                  ),
-                );
-              },
-            ),
+            // Display name input component
+            _buildNameInput(context),
             
             const SizedBox(height: 24),
             
-            // Progress indicator with right-to-left slide animation
-            AnimatedBuilder(
-              animation: contentAnimationController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(
-                    (1.0 - contentAnimationController.value) * 60, // Slide from right, even less distance
-                    0,
-                  ),
-                  child: Opacity(
-                    opacity: contentAnimationController.value,
-                    child: _buildNameStepProgress(),
-                  ),
-                );
-              },
-            ),
+            // Progress indicator
+            _buildNameStepProgress(),
             
             const SizedBox(height: 16),
             
-            // Name requirements hint with right-to-left slide animation
-            AnimatedBuilder(
-              animation: contentAnimationController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(
-                    (1.0 - contentAnimationController.value) * 40, // Slide from right, minimal distance
-                    contentSlideAnimation.value * 0.5,
-                  ),
-                  child: Opacity(
-                    opacity: contentAnimationController.value * 0.8,
-                    child: _buildNameRequirements(),
-                  ),
-                );
-              },
-            ),
+            // Name requirements hint
+            _buildNameRequirements(),
           ],
         ),
       ),

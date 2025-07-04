@@ -1,12 +1,12 @@
 import 'package:flutter/widgets.dart';
 import '../logger/logger_service.dart';
 import '../service_locator.dart';
-import 'ai_agent_service.dart';
+import 'ai_agent_service_interface.dart';
 
 /// Service for handling app lifecycle events and AI agent background management
 class AiAgentLifecycleService with WidgetsBindingObserver {
   final LoggerService _logger;
-  final AiAgentService _aiAgentService;
+  final AiAgentServiceInterface _aiAgentService;
   
   static const String _tag = 'AI_AGENT_LIFECYCLE';
   
@@ -18,7 +18,7 @@ class AiAgentLifecycleService with WidgetsBindingObserver {
   
   AiAgentLifecycleService._() : 
     _logger = serviceLocator<LoggerService>(),
-    _aiAgentService = serviceLocator<AiAgentService>();
+    _aiAgentService = serviceLocator<AiAgentServiceInterface>();
   
   bool _isInitialized = false;
   

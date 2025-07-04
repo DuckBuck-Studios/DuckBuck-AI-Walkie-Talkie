@@ -9,11 +9,6 @@ class ProfilePhotoSection extends StatelessWidget {
   final File? selectedImage;
   final Function(File?) onImageSelected;
   final Function(String) onError;
-  final AnimationController photoAnimationController;
-  final Animation<double> photoScaleAnimation;
-  final Animation<double> photoSlideAnimation;
-  final Animation<double> photoFadeAnimation;
-  final Animation<double> photoShimmerAnimation;
   final bool isIOS;
   final VoidCallback? onEditPhoto;
 
@@ -22,11 +17,6 @@ class ProfilePhotoSection extends StatelessWidget {
     required this.selectedImage,
     required this.onImageSelected,
     required this.onError,
-    required this.photoAnimationController,
-    required this.photoScaleAnimation,
-    required this.photoSlideAnimation,
-    required this.photoFadeAnimation,
-    required this.photoShimmerAnimation,
     required this.isIOS,
     this.onEditPhoto,
   });
@@ -40,89 +30,56 @@ class ProfilePhotoSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Section Header
-          AnimatedBuilder(
-            animation: photoAnimationController,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, photoSlideAnimation.value),
-                child: Opacity(
-                  opacity: photoFadeAnimation.value,
-                  child: Column(
-                    children: [
-                      // Section title with gradient text
-                      ShaderMask(
-                        shaderCallback: (bounds) => LinearGradient(
-                          colors: [
-                            Colors.white,
-                            Colors.blue.shade300,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: Text(
-                          'Step 1: Profile Photo',
-                          style: TextStyle(
-                            fontSize: isIOS ? 22 : 24,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 8),
-                      
-                      // Section subtitle
-                      Text(
-                        selectedImage == null 
-                            ? 'Add a photo so your friends can recognize you'
-                            : 'Great! Your profile photo looks perfect',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: isIOS ? 16 : 17,
-                          letterSpacing: 0.3,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+          Column(
+            children: [
+              // Section title with gradient text
+              ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [
+                    Colors.white,
+                    Colors.blue.shade300,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ).createShader(bounds),
+                child: Text(
+                  'Step 1: Profile Photo',
+                  style: TextStyle(
+                    fontSize: isIOS ? 22 : 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Colors.white,
                   ),
                 ),
-              );
-            },
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Section subtitle
+              Text(
+                selectedImage == null 
+                    ? 'Add a photo so your friends can recognize you'
+                    : 'Great! Your profile photo looks perfect',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: isIOS ? 16 : 17,
+                  letterSpacing: 0.3,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
           
           const SizedBox(height: 32),
           
           // Photo selector component
-          AnimatedBuilder(
-            animation: photoAnimationController,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(0, photoSlideAnimation.value),
-                child: Transform.scale(
-                  scale: photoScaleAnimation.value,
-                  child: Opacity(
-                    opacity: photoFadeAnimation.value,
-                    child: _buildPhotoDisplay(),
-                  ),
-                ),
-              );
-            },
-          ),
+          _buildPhotoDisplay(),
           
           const SizedBox(height: 24),
           
           // Progress indicator for photo step
-          AnimatedBuilder(
-            animation: photoAnimationController,
-            builder: (context, child) {
-              return Opacity(
-                opacity: photoFadeAnimation.value,
-                child: _buildPhotoStepProgress(),
-              );
-            },
-          ),
+          _buildPhotoStepProgress(),
         ],
       ),
     );

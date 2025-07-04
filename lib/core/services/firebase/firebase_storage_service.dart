@@ -180,7 +180,7 @@ class FirebaseStorageService {
   }) async {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final path = 'profile_images/$userId/$timestamp.jpg';
+      final path = 'users/$userId/profile/$timestamp.jpg';
       
       _logger.i(_tag, 'Uploading profile image for user: $userId');
 
