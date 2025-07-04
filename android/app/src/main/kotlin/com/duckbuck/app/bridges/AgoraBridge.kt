@@ -65,9 +65,8 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
                 "enableAiDenoising" -> enableAiDenoising(call, result)
                 "enableAiEchoCancellation" -> enableAiEchoCancellation(call, result)
                 "setAiAudioScenario" -> setAiAudioScenario(result)
-                "setAudioConfigParameters" -> setAudioConfigParameters(result)
                 "initializeAiAudioEnhancements" -> initializeAiAudioEnhancements(result)
-                "reconfigureAiAudioForRoute" -> reconfigureAiAudioForRoute(result)
+                // Removed: "setAudioConfigParameters" and "reconfigureAiAudioForRoute" - deprecated methods
                 
                 // Walkie-talkie utility methods
                 "getActiveCallData" -> getActiveCallData(result)
@@ -300,21 +299,9 @@ class AgoraBridge(private val context: Context) : MethodCallHandler {
         result.success(success)
     }
     
-    private fun setAudioConfigParameters(result: Result) {
-        val success = agoraService.setAudioConfigParameters()
-        Log.d(TAG, "🤖 Set audio config parameters result: $success")
-        result.success(success)
-    }
-    
     private fun initializeAiAudioEnhancements(result: Result) {
         val success = agoraService.initializeAiAudioEnhancements()
         Log.d(TAG, "🤖 Initialize AI audio enhancements result: $success")
-        result.success(success)
-    }
-    
-    private fun reconfigureAiAudioForRoute(result: Result) {
-        val success = agoraService.reconfigureAiAudioForRoute()
-        Log.d(TAG, "🤖 Reconfigure AI audio for route result: $success")
         result.success(success)
     }
     
