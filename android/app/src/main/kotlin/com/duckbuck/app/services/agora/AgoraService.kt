@@ -1763,28 +1763,7 @@ class AgoraService private constructor(private val context: Context) {
         }
     }
 
-    /**
-     * Configure recommended audio parameters for AI conversational experience
-     * DEPRECATED: Not needed - AI filters persist across audio route changes
-     */
-    // fun setAudioConfigParameters(routing: Int = mAudioRouting): Boolean {
-    //     // REMOVED: This method is no longer needed
-    //     // AI filters (setAINSMode, audio profile, scenario) are engine-level settings
-    //     // that persist across audio route changes and don't need re-application
-    //     Log.d(TAG, "🎯 setAudioConfigParameters called but not needed - AI filters persist")
-    //     return true
-    // }
 
-    /**
-     * Reconfigure AI audio parameters (call on audio route changes)
-     * DEPRECATED: Not needed - AI filters persist across audio route changes
-     */
-    // fun reconfigureAiAudioForRoute(): Boolean {
-    //     // REMOVED: This method is no longer needed
-    //     // AI filters are engine-level settings that don't need reconfiguration
-    //     Log.d(TAG, "🎯 reconfigureAiAudioForRoute called but not needed - AI filters persist")
-    //     return true
-    // }
 
     /**
      * Enable basic noise suppression (non-AI) for walkie-talkie
