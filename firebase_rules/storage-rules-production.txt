@@ -3,25 +3,7 @@ service firebase.storage {
   match /b/{bucket}/o {
     
     // ===========================================
-    // USER PROFILE PHOTOS - NEW PATH STRUCTURE
-    // ===========================================
-    match /profile_images/{userId}/{fileName} {
-      // READ: Allow any authenticated user to read profile photos
-      // This enables showing friend photos, search results, etc.
-      allow read: if request.auth != null;
-      
-      // WRITE: Only allow users to upload/update their own profile photos
-      allow write: if request.auth != null 
-        && request.auth.uid == userId
-        && isValidProfilePhoto(request.resource);
-      
-      // DELETE: Only allow users to delete their own profile photos
-      allow delete: if request.auth != null 
-        && request.auth.uid == userId;
-    }
-    
-    // ===========================================
-    // USER PROFILE PHOTOS - LEGACY PATH STRUCTURE
+    // USER PROFILE PHOTOS ONLY
     // ===========================================
     match /users/{userId}/profile/{fileName} {
       // READ: Allow any authenticated user to read profile photos

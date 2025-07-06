@@ -129,6 +129,8 @@ class AgoraService private constructor(private val context: Context) {
             Log.d(TAG, "🧹 Channel participants list cleared on leave")
             
             onChannelLeft(stats)
+            
+            onChannelLeft(stats)
         }
         
         override fun onConnectionStateChanged(state: Int, reason: Int) {
@@ -351,7 +353,7 @@ class AgoraService private constructor(private val context: Context) {
             super.onRtcStats(stats)
             // Only log stats occasionally to avoid spam
             stats?.let {
-                if (it.totalDuration % 10 == 0) { // Log every 10 seconds
+                if (it.totalDuration % 30 == 0) { // Log every 30 seconds
                     Log.d(TAG, "📊 RTC Stats: Users=${it.users}, Duration=${it.totalDuration}s, CPU=${it.cpuAppUsage}%")
                 }
                 onRtcStats(it)

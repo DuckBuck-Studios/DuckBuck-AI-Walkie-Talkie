@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import com.duckbuck.app.services.aiagent.AiAgentService
 import com.duckbuck.app.services.aiagent.utils.AiAgentPrefsUtil
+import com.duckbuck.app.services.agora.AgoraService
 
 /**
  * AiAgentBridge - Flutter MethodChannel bridge for AI Agent Service communication
@@ -186,32 +187,54 @@ class AiAgentBridge(private val context: Context) : MethodCallHandler {
      */
     private fun handleAppBackgrounded(result: Result) {
         try {
-            Log.i(TAG, "🤖 App backgrounded - checking for active AI agent session")
+            Log.i(TAG, "🤖 App backgrounded - checking for active AI call")
             
-            val sessionData = prefsUtil.getAiAgentSession()
-            if (sessionData != null) {
-                Log.i(TAG, "🤖 Active AI agent session found, ensuring foreground service is running")
+            val agoraService = AgoraService.getInstance(context)
+            
+            // Check if there's an active AI call
+            if (agoraService.isChannelConnected() && agoraService.getAiModeStatus()) {
+                Log.i(TAG, "🤖 Active AI call detected, starting AI agent service for background mode")
                 
-                // Create intent to ensure foreground service is running
+                val channelName = agoraService.getCurrentChannelName()
+                val userId = "ai_user_${System.currentTimeMillis()}" // Generate unique ID for AI session
+                
                 val intent = Intent(context, AiAgentService::class.java).apply {
                     action = AiAgentService.ACTION_START_AI_AGENT
-                    putExtra(AiAgentService.EXTRA_USER_ID, sessionData.userId)
-                    putExtra(AiAgentService.EXTRA_CHANNEL_NAME, sessionData.channelName)
-                    putExtra(AiAgentService.EXTRA_SESSION_START_TIME, sessionData.startTime)
+                    putExtra(AiAgentService.EXTRA_USER_ID, userId)
+                    putExtra(AiAgentService.EXTRA_CHANNEL_NAME, channelName)
+                    putExtra(AiAgentService.EXTRA_SESSION_START_TIME, System.currentTimeMillis())
                 }
                 
-                // Start foreground service to keep app alive
                 context.startForegroundService(intent)
-                
-                Log.i(TAG, "✅ AI agent foreground service ensured for background operation")
+                Log.i(TAG, "✅ AI agent service started for background mode")
                 result.success(true)
             } else {
-                Log.d(TAG, "🤖 No active AI agent session, no foreground service needed")
-                result.success(false)
+                // Fallback: Check if there's already a saved AI agent session
+                val sessionData = prefsUtil.getAiAgentSession()
+                if (sessionData != null) {
+                    Log.i(TAG, "🤖 Saved AI agent session found, ensuring foreground service is running")
+                    
+                    // Create intent to ensure foreground service is running
+                    val intent = Intent(context, AiAgentService::class.java).apply {
+                        action = AiAgentService.ACTION_START_AI_AGENT
+                        putExtra(AiAgentService.EXTRA_USER_ID, sessionData.userId)
+                        putExtra(AiAgentService.EXTRA_CHANNEL_NAME, sessionData.channelName)
+                        putExtra(AiAgentService.EXTRA_SESSION_START_TIME, sessionData.startTime)
+                    }
+                    
+                    // Start foreground service to keep app alive
+                    context.startForegroundService(intent)
+                    
+                    Log.i(TAG, "✅ AI agent foreground service ensured for background operation")
+                    result.success(true)
+                } else {
+                    Log.d(TAG, "💡 No active AI call or session, AI agent service not needed")
+                    result.success(false)
+                }
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error handling app backgrounded", e)
+            Log.e(TAG, "❌ Error checking for AI call and starting service", e)
             result.error("APP_BACKGROUND_ERROR", "Failed to handle app backgrounded: ${e.message}", null)
         }
     }
@@ -236,6 +259,80 @@ class AiAgentBridge(private val context: Context) : MethodCallHandler {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling app foregrounded", e)
             result.error("APP_FOREGROUND_ERROR", "Failed to handle app foregrounded: ${e.message}", null)
+        }
+    }
+    
+    /**
+     * Public method to handle app going to background (called from MainActivity)
+     */
+    fun onAppBackgrounded() {
+        try {
+            Log.i(TAG, "🤖 App backgrounded - checking for active AI call")
+            
+            val agoraService = AgoraService.getInstance(context)
+            
+            // Check if there's an active AI call
+            if (agoraService.isChannelConnected() && agoraService.getAiModeStatus()) {
+                Log.i(TAG, "🤖 Active AI call detected, starting AI agent service for background mode")
+                
+                val channelName = agoraService.getCurrentChannelName()
+                val userId = "ai_user_${System.currentTimeMillis()}" // Generate unique ID for AI session
+                
+                val intent = Intent(context, AiAgentService::class.java).apply {
+                    action = AiAgentService.ACTION_START_AI_AGENT
+                    putExtra(AiAgentService.EXTRA_USER_ID, userId)
+                    putExtra(AiAgentService.EXTRA_CHANNEL_NAME, channelName)
+                    putExtra(AiAgentService.EXTRA_SESSION_START_TIME, System.currentTimeMillis())
+                }
+                
+                context.startForegroundService(intent)
+                Log.i(TAG, "✅ AI agent service started for background mode")
+            } else {
+                // Fallback: Check if there's already a saved AI agent session
+                val sessionData = prefsUtil.getAiAgentSession()
+                if (sessionData != null) {
+                    Log.i(TAG, "🤖 Saved AI agent session found, ensuring foreground service is running")
+                    
+                    // Create intent to ensure foreground service is running
+                    val intent = Intent(context, AiAgentService::class.java).apply {
+                        action = AiAgentService.ACTION_START_AI_AGENT
+                        putExtra(AiAgentService.EXTRA_USER_ID, sessionData.userId)
+                        putExtra(AiAgentService.EXTRA_CHANNEL_NAME, sessionData.channelName)
+                        putExtra(AiAgentService.EXTRA_SESSION_START_TIME, sessionData.startTime)
+                    }
+                    
+                    // Start foreground service to keep app alive
+                    context.startForegroundService(intent)
+                    
+                    Log.i(TAG, "✅ AI agent foreground service ensured for background operation")
+                } else {
+                    Log.d(TAG, "💡 No active AI call or session, AI agent service not needed")
+                }
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking for AI call and starting service", e)
+        }
+    }
+    
+    /**
+     * Public method to handle app coming to foreground (called from MainActivity)
+     */
+    fun onAppForegrounded() {
+        try {
+            Log.i(TAG, "🤖 App foregrounded - AI agent session can continue in app")
+            
+            // Update last updated timestamp to keep session fresh
+            prefsUtil.updateLastUpdated()
+            
+            // Note: We keep the foreground service running even when app is in foreground
+            // This ensures consistent behavior and notification presence
+            // The service will only stop when AI agent session actually ends
+            
+            Log.d(TAG, "✅ App foreground state handled")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error handling app foregrounded", e)
         }
     }
 }

@@ -179,7 +179,7 @@ class AiAgentService : Service() {
             // We need to create a notification for startForeground
             // Let's create a basic one and then update it with the full notification
             val notification = NotificationCompat.Builder(this, "duckbuck_ai_agent")
-                .setSmallIcon(com.duckbuck.app.R.drawable.ic_notification)
+                .setSmallIcon(com.duckbuck.app.R.drawable.ic_speaker)
                 .setContentTitle("DuckBuck AI Connected")
                 .setContentText("AI conversation in progress")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)

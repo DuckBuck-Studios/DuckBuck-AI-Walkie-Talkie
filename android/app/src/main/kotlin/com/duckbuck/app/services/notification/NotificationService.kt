@@ -401,7 +401,7 @@ class NotificationService(private val context: Context) {
     private fun showAiAgentNotificationWithoutIcon(pendingIntent: PendingIntent) {
         try {
             val notification = NotificationCompat.Builder(context, AI_AGENT_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification)
+                .setSmallIcon(R.drawable.ic_speaker)
                 .setContentTitle("DuckBuck AI Connected")
                 .setContentText("AI conversation in progress")
                 .setSubText("Tap to return to AI agent")

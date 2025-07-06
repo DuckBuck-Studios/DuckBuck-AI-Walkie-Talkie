@@ -1,6 +1,7 @@
 package com.duckbuck.app
 
 import android.os.Bundle
+import android.util.Log
 import com.duckbuck.app.bridges.AgoraBridge
 import com.duckbuck.app.bridges.AiAgentBridge
 import com.duckbuck.app.bridges.CallUIBridge
@@ -9,6 +10,10 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
+    
+    companion object {
+        private const val TAG = "MainActivity"
+    }
     
     private lateinit var agoraBridge: AgoraBridge
     private lateinit var aiAgentBridge: AiAgentBridge
@@ -49,6 +54,22 @@ class MainActivity: FlutterActivity() {
         handleNotificationIntent()
     }
     
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "📱 App going to background")
+        
+        // Notify AiAgentBridge that app is going to background
+        aiAgentBridge.onAppBackgrounded()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "📱 App coming to foreground")
+        
+        // Notify AiAgentBridge that app is coming to foreground
+        aiAgentBridge.onAppForegrounded()
+    }
+    
     /**
      * Handle app opening from notification (ongoing call or normal notification)
      */
@@ -61,7 +82,7 @@ class MainActivity: FlutterActivity() {
             if (openedFromNotification || openedFromCallNotification || showOngoingCall) {
                 // TODO: Send intent data to Flutter to handle navigation
                 // This will be implemented when Flutter side is ready
-                android.util.Log.d("MainActivity", "📱 App opened from notification")
+                Log.d(TAG, "📱 App opened from notification")
             }
         }
     }
